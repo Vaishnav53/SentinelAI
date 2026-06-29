@@ -1,0 +1,41 @@
+# Node.js
+node_modules/
+dist/
+build/
+.svelte-kit/
+.next/
+.cache/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# Databases and storage
+*.db
+*.sqlite
+*.sqlite3
+backend/storage/*.db
+backend/storage/*.sqlite
+backend/storage/reports/*
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDEs and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
