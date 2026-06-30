@@ -12,7 +12,8 @@ import {
   AlertTriangle,
   Menu,
   X,
-  Database
+  Database,
+  BookOpen
 } from 'lucide-react';
 import apiClient from '../api/client';
 import './DashboardLayout.css';
@@ -90,6 +91,7 @@ export default function DashboardLayout() {
     { name: 'Sensors Lab', path: '/sensors', icon: Radio },
     { name: 'AI Assistant', path: '/agent', icon: Terminal },
     { name: 'Reports', path: '/reports', icon: FileText },
+    { name: 'Blueprint', path: '/blueprint', icon: BookOpen },
     { name: 'Settings', path: '/settings', icon: Settings },
   ];
 
