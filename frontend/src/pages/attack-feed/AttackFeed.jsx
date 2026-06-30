@@ -1,10 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Search, Filter, ShieldCheck, ChevronRight } from 'lucide-react';
+import { Shield, Search, Filter, ShieldCheck, ChevronRight, RefreshCw, AlertOctagon } from 'lucide-react';
 import apiClient from '../../api/client';
 import './AttackFeed.css';
 
+// Loading skeleton loader matching layout columns
+function AttackFeedSkeleton() {
+  return (
+    <div className="feed-root skeleton-root">
+      <div className="filter-bar card-cyber skeleton-card animate-skeleton" style={{ height: '54px' }}></div>
+      <div className="feed-grid">
+        <div className="list-box card-cyber skeleton-card animate-skeleton" style={{ height: '400px' }}></div>
+        <div className="details-drawer card-cyber skeleton-card animate-skeleton" style={{ height: '400px' }}></div>
+      </div>
+    </div>
+  );
+}
+
 export default function AttackFeed() {
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [attacks, setAttacks] = useState([]);
   const [selectedAttack, setSelectedAttack] = useState(null);
   const [severityFilter, setSeverityFilter] = useState('');
@@ -26,9 +40,11 @@ export default function AttackFeed() {
   };
 
   // Fetch attacks
-  const fetchAttacks = async () => {
+  const fetchAttacks = async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
+      setIsSyncing(true);
+      
       const data = await apiClient.get('/attacks', {
         params: {
           severity: severityFilter || undefined,
@@ -46,13 +62,23 @@ export default function AttackFeed() {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
+      setIsSyncing(false);
     }
   };
 
+  // Poll for changes when filters change
   useEffect(() => {
     fetchAttacks();
   }, [severityFilter, serviceFilter, statusFilter, searchQuery]);
+
+  // Dynamic background polling every 5 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchAttacks(true);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [severityFilter, serviceFilter, statusFilter, searchQuery, selectedAttack]);
 
   // Update status
   const handleUpdateStatus = async (id, newStatus) => {
@@ -67,12 +93,16 @@ export default function AttackFeed() {
     }
   };
 
+  if (loading && attacks.length === 0) {
+    return <AttackFeedSkeleton />;
+  }
+
   return (
     <div className="feed-root">
-      {/* Filters row */}
+      {/* Filters row with refresh indicator */}
       <div className="filter-bar card-cyber">
         <div className="search-box">
-          <Search size={16} className="search-icon" />
+          <Search size={14} className="search-icon" />
           <input 
             type="text" 
             placeholder="Search IP, payload signatures..." 
@@ -105,6 +135,15 @@ export default function AttackFeed() {
             <option value="RESOLVED">Resolved</option>
             <option value="IGNORED">Ignored</option>
           </select>
+
+          {/* Sync indicator */}
+          <button 
+            className={`sync-btn ${isSyncing ? 'syncing' : ''}`}
+            onClick={() => fetchAttacks(true)}
+            title="Force telemetry synchronization"
+          >
+            <RefreshCw size={14} />
+          </button>
         </div>
       </div>
 
@@ -112,32 +151,35 @@ export default function AttackFeed() {
       <div className="feed-grid">
         {/* Attacks List */}
         <div className="list-box card-cyber">
-          {loading && attacks.length === 0 ? (
-            <div className="feed-loading">Loading telemetry events...</div>
-          ) : (
-            <div className="feed-table-container">
-              <table className="feed-table">
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Source IP</th>
-                    <th>Attack Type</th>
-                    <th>Service</th>
-                    <th>Severity</th>
-                    <th>Status</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {attacks.map((attack) => (
+          <div className="feed-table-container">
+            <table className="feed-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Source IP</th>
+                  <th>Attack Type</th>
+                  <th>Service</th>
+                  <th>Severity</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {attacks.map((attack) => {
+                  const isSelected = selectedAttack?.id === attack.id;
+                  
+                  // Highlight events less than 20 seconds old
+                  const isNew = (new Date() - new Date(attack.created_at)) < 20000;
+                  
+                  return (
                     <tr 
                       key={attack.id} 
-                      className={selectedAttack?.id === attack.id ? 'active-row' : ''}
+                      className={`${isSelected ? 'active-row' : ''} ${isNew ? 'newly-captured-row' : ''}`}
                       onClick={() => setSelectedAttack(attack)}
                     >
                       <td className="font-mono">{new Date(attack.created_at).toLocaleTimeString()}</td>
                       <td className="font-mono">{attack.source_ip}</td>
-                      <td>{attack.attack_type}</td>
+                      <td className={attack.severity === 'CRITICAL' ? 'text-red font-bold' : ''}>{attack.attack_type}</td>
                       <td><span className="service-tag font-mono">{attack.target_service}</span></td>
                       <td>
                         <span className={`badge badge-${attack.severity.toLowerCase()}`}>
@@ -151,22 +193,28 @@ export default function AttackFeed() {
                       </td>
                       <td><ChevronRight size={14} className="chevron-row" /></td>
                     </tr>
-                  ))}
-                  {attacks.length === 0 && (
-                    <tr>
-                      <td colSpan="7" className="text-center text-muted">No telemetry events found matching filters</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  );
+                })}
+                {attacks.length === 0 && (
+                  <tr>
+                    <td colSpan="7">
+                      <div className="empty-state-container font-mono">
+                        <AlertOctagon className="text-muted text-lg" size={32} />
+                        <h4>NO THREAT SIGNATURES DETECTED</h4>
+                        <p className="text-muted">No telemetry events match your selected filters.</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Selected Attack Details Drawer */}
         <div className="details-drawer card-cyber">
           {selectedAttack ? (
-            <div className="details-content">
+            <div className="details-content animate-slide-in">
               <div className="drawer-header">
                 <Shield className={`header-icon text-${selectedAttack.severity.toLowerCase()}`} size={24} />
                 <div className="drawer-title-box">

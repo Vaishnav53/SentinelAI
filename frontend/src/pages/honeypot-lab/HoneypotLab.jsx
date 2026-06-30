@@ -113,6 +113,15 @@ export default function HoneypotLab() {
         </div>
       </div>
 
+      {/* Safety Banner */}
+      <div className="safety-warning-banner card-cyber">
+        <AlertTriangle className="text-yellow" size={18} />
+        <div className="safety-text">
+          <span className="font-mono text-yellow font-bold safety-title">SAFETY DIRECTIVE: LOCAL RESEARCH LAB ONLY</span>
+          <p className="text-muted text-xs">This honeypot decoy is configured exclusively for local capture and defensive log parsing. Do not expose this port directly to public networks or use this tool for offensive penetration probes.</p>
+        </div>
+      </div>
+
       {/* Main HTTP Honeypot card controls */}
       <div className="main-honeypot-controller card-cyber">
         <div className="hp-control-header">

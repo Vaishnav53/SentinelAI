@@ -4,6 +4,66 @@ import { ShieldAlert, Radio, Cpu, Clock, Terminal } from 'lucide-react';
 import apiClient from '../../api/client';
 import './Dashboard.css';
 
+// Animated Number Increment Helper
+const AnimatedNumber = ({ value, suffix = "" }) => {
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    const end = parseFloat(value);
+    if (isNaN(end)) {
+      setCurrent(value);
+      return;
+    }
+    
+    if (end === 0) {
+      setCurrent(0);
+      return;
+    }
+
+    let start = 0;
+    const duration = 400; // ms
+    const stepTime = Math.max(Math.floor(duration / Math.abs(end)), 15);
+    
+    const timer = setInterval(() => {
+      start += Math.ceil(end / 20);
+      if (start >= end) {
+        clearInterval(timer);
+        setCurrent(end);
+      } else {
+        setCurrent(start);
+      }
+    }, stepTime);
+
+    return () => clearInterval(timer);
+  }, [value]);
+
+  if (typeof current === 'number' && !Number.isInteger(current)) {
+    return <span>{current.toFixed(1)}{suffix}</span>;
+  }
+  return <span>{current}{suffix}</span>;
+};
+
+// Skeleton Loader component matching SOC panels
+function DashboardSkeleton() {
+  return (
+    <div className="dashboard-root skeleton-root">
+      <div className="telemetry-cards">
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} className="telemetry-card skeleton-card animate-skeleton" style={{ height: '76px' }}></div>
+        ))}
+      </div>
+      <div className="charts-grid">
+        <div className="chart-box card-cyber skeleton-card animate-skeleton" style={{ height: '260px' }}></div>
+        <div className="chart-box card-cyber skeleton-card animate-skeleton" style={{ height: '260px' }}></div>
+      </div>
+      <div className="details-grid">
+        <div className="card-cyber details-box skeleton-card animate-skeleton" style={{ height: '250px' }}></div>
+        <div className="card-cyber details-box skeleton-card animate-skeleton" style={{ height: '250px' }}></div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -12,43 +72,43 @@ export default function Dashboard() {
   const [sensorCount, setSensorCount] = useState(0);
   const [recentAttacks, setRecentAttacks] = useState([]);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [statsData, metricsData, sensorsData, attacksList] = await Promise.all([
-          apiClient.get('/attacks/stats'),
-          apiClient.get('/monitoring/current'),
-          apiClient.get('/sensors'),
-          apiClient.get('/attacks?page_size=5')
-        ]);
-        
-        setStats(statsData);
-        setMetrics(metricsData);
-        setSensorCount(sensorsData.length);
-        setRecentAttacks(attacksList);
-        setError(null);
-      } catch (err) {
-        setError(err.message || 'Failed to fetch dashboard data');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchData = async (isSilent = false) => {
+    try {
+      if (!isSilent) setLoading(true);
+      const [statsData, metricsData, sensorsData, attacksList] = await Promise.all([
+        apiClient.get('/attacks/stats'),
+        apiClient.get('/monitoring/current'),
+        apiClient.get('/sensors'),
+        apiClient.get('/attacks?page_size=5')
+      ]);
+      
+      setStats(statsData);
+      setMetrics(metricsData);
+      setSensorCount(sensorsData.length);
+      setRecentAttacks(attacksList);
+      setError(null);
+    } catch (err) {
+      setError(err.message || 'Failed to fetch dashboard data');
+    } finally {
+      if (!isSilent) setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 10000);
+    // Real-time efficient background polling refresh every 5 seconds
+    const interval = setInterval(() => fetchData(true), 5000);
     return () => clearInterval(interval);
   }, []);
 
   if (loading && !stats) {
-    return <div className="loading-state">Initialising Command Center Telemetry...</div>;
+    return <DashboardSkeleton />;
   }
 
   if (error && !stats) {
-    return <div className="error-state">Error: {error}</div>;
+    return <div className="error-state">Error loading SOC metrics: {error}</div>;
   }
 
-  // Formatting helper for uptime
   const formatUptime = (sec) => {
     if (!sec) return '0s';
     const hrs = Math.floor(sec / 3600);
@@ -56,7 +116,6 @@ export default function Dashboard() {
     return `${hrs}h ${mins}m`;
   };
 
-  // Severity Chart colors mapping
   const severityColors = {
     LOW: '#00ff88',
     MEDIUM: '#ffd32a',
@@ -70,48 +129,54 @@ export default function Dashboard() {
   })) || [];
 
   return (
-    <div className="dashboard-root">
+    <div className="dashboard-root animate-fade-in">
       {/* Top Telemetry row */}
       <div className="telemetry-cards">
-        <div className="telemetry-card">
+        <div className="telemetry-card glow-border">
           <div className="card-header-icon bg-red-dim">
             <ShieldAlert className="text-red" size={20} />
           </div>
           <div className="card-details">
             <span className="card-label">Total Detections</span>
-            <span className="card-value">{stats?.total_count || 0}</span>
+            <span className="card-value text-red">
+              <AnimatedNumber value={stats?.total_count || 0} />
+            </span>
           </div>
         </div>
 
-        <div className="telemetry-card">
+        <div className="telemetry-card glow-border">
           <div className="card-header-icon bg-cyan-dim">
-            <Radio className="text-cyan" size={20} />
+            <Radio className="text-cyan pulse" size={20} />
           </div>
           <div className="card-details">
             <span className="card-label">Active Sensors</span>
-            <span className="card-value">{sensorCount || 0}</span>
+            <span className="card-value text-cyan">
+              <AnimatedNumber value={sensorCount || 0} />
+            </span>
           </div>
         </div>
 
-        <div className="telemetry-card">
+        <div className="telemetry-card glow-border">
           <div className="card-header-icon bg-purple-dim">
             <Cpu className="text-purple" size={20} />
           </div>
           <div className="card-details">
             <span className="card-label">Host CPU / RAM</span>
-            <span className="card-value">
-              {metrics?.cpu_percent || 0}% / {metrics?.memory_percent || 0}%
+            <span className="card-value text-purple">
+              <AnimatedNumber value={metrics?.cpu_percent || 0} suffix="%" />
+              <span className="divider-val"> / </span>
+              <AnimatedNumber value={metrics?.memory_percent || 0} suffix="%" />
             </span>
           </div>
         </div>
 
-        <div className="telemetry-card">
+        <div className="telemetry-card glow-border">
           <div className="card-header-icon bg-blue-dim">
             <Clock className="text-blue" size={20} />
           </div>
           <div className="card-details">
             <span className="card-label">Engine Uptime</span>
-            <span className="card-value">{formatUptime(metrics?.uptime_seconds)}</span>
+            <span className="card-value text-blue">{formatUptime(metrics?.uptime_seconds)}</span>
           </div>
         </div>
       </div>
@@ -165,12 +230,12 @@ export default function Dashboard() {
               </ResponsiveContainer>
             </div>
             
-            <div className="pie-legend">
+            <div className="pie-legend font-mono">
               {severityPieData.map((entry, idx) => (
                 <div key={entry.name} className="legend-item">
                   <span className="legend-dot" style={{ backgroundColor: severityColors[entry.name] }}></span>
                   <span className="legend-label">{entry.name}:</span>
-                  <span className="legend-value font-mono">{entry.value}</span>
+                  <span className="legend-value"><AnimatedNumber value={entry.value} /></span>
                 </div>
               ))}
               {severityPieData.length === 0 && <div className="legend-item text-muted">No telemetry</div>}
@@ -196,22 +261,25 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {recentAttacks.map((attack) => (
-                  <tr key={attack.id}>
-                    <td className="font-mono">{new Date(attack.created_at).toLocaleTimeString()}</td>
-                    <td className="font-mono">{attack.source_ip}</td>
-                    <td>{attack.attack_type}</td>
-                    <td><span className="service-tag font-mono">{attack.target_service}</span></td>
-                    <td>
-                      <span className={`badge badge-${attack.severity.toLowerCase()}`}>
-                        {attack.severity}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {recentAttacks.map((attack) => {
+                  const isCritical = attack.severity === 'CRITICAL';
+                  return (
+                    <tr key={attack.id} className={isCritical ? 'critical-pulse-row' : ''}>
+                      <td className="font-mono">{new Date(attack.created_at).toLocaleTimeString()}</td>
+                      <td className="font-mono">{attack.source_ip}</td>
+                      <td className={isCritical ? 'text-red font-bold' : ''}>{attack.attack_type}</td>
+                      <td><span className="service-tag font-mono">{attack.target_service}</span></td>
+                      <td>
+                        <span className={`badge badge-${attack.severity.toLowerCase()}`}>
+                          {attack.severity}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {recentAttacks.length === 0 && (
                   <tr>
-                    <td colSpan="5" className="text-center text-muted">No incoming attack signatures detected</td>
+                    <td colSpan="5" className="text-center text-muted font-mono">No incoming attack signatures detected</td>
                   </tr>
                 )}
               </tbody>
@@ -231,7 +299,7 @@ export default function Dashboard() {
             </p>
             <div className="ai-advisor-footer">
               <span className="ai-status-pulse"></span>
-              <span className="ai-status-label">LLM Advisory Active</span>
+              <span className="ai-status-label font-mono">LLM Advisory Active</span>
             </div>
           </div>
         </div>

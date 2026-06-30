@@ -216,3 +216,91 @@
 .text-red { color: var(--critical-red); }
 .text-yellow { color: var(--yellow); }
 .text-purple { color: var(--purple); }
+
+/* Header Clock Widget */
+.header-clock-widget {
+  background-color: var(--surface-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  box-shadow: var(--glow-subtle);
+  min-width: 140px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.clock-date {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.clock-time {
+  font-size: 12px;
+  color: var(--cyan-primary);
+  font-weight: 700;
+  text-shadow: 0 0 4px rgba(0, 212, 255, 0.4);
+}
+
+/* Sidebar system monitor widgets */
+.sidebar-system-monitor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+  background-color: rgba(2, 6, 23, 0.4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+
+.sidebar.closed .sidebar-system-monitor {
+  display: none;
+}
+
+.sys-mon-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  width: 100%;
+}
+
+.sys-mon-label {
+  color: var(--text-muted);
+  width: 30px;
+  font-weight: 700;
+}
+
+.sys-mon-bar-bg {
+  flex: 1;
+  height: 4px;
+  background-color: var(--bg-deep);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.sys-mon-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width var(--transition-normal);
+}
+
+.fill-cyan { background-color: var(--cyan-primary); box-shadow: 0 0 4px var(--cyan-primary); }
+.fill-purple { background-color: var(--purple); box-shadow: 0 0 4px var(--purple); }
+
+.sys-mon-value {
+  color: var(--text-secondary);
+  width: 32px;
+  text-align: right;
+}
+
+.sys-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+

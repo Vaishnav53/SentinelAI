@@ -37,3 +37,31 @@
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
 }
+
+/* Animation Keyframes */
+@keyframes pulse-skeleton {
+  0% { background-color: rgba(11, 25, 48, 0.5); }
+  50% { background-color: rgba(11, 25, 48, 0.85); }
+  100% { background-color: rgba(11, 25, 48, 0.5); }
+}
+
+@keyframes pulse-glow-critical {
+  0% { border-color: rgba(255, 56, 96, 0.2); box-shadow: 0 0 5px rgba(255, 56, 96, 0.1); }
+  50% { border-color: rgba(255, 56, 96, 0.75); box-shadow: 0 0 12px rgba(255, 56, 96, 0.35); }
+  100% { border-color: rgba(255, 56, 96, 0.2); box-shadow: 0 0 5px rgba(255, 56, 96, 0.1); }
+}
+
+@keyframes spin-sync {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Utility Animations */
+.animate-skeleton {
+  animation: pulse-skeleton 1.6s infinite ease-in-out;
+}
+
+.animate-glow-critical {
+  animation: pulse-glow-critical 2.2s infinite ease-in-out;
+}
+

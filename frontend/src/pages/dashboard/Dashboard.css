@@ -282,3 +282,33 @@
 .error-state {
   color: var(--critical-red);
 }
+
+/* Critical Pulse Row Alert Glow */
+.critical-pulse-row {
+  border-left: 2px solid var(--critical-red);
+  background-color: rgba(255, 56, 96, 0.03);
+}
+
+.critical-pulse-row td {
+  border-bottom-color: rgba(255, 56, 96, 0.2) !important;
+}
+
+.critical-pulse-row:hover td {
+  background-color: rgba(255, 56, 96, 0.07) !important;
+}
+
+/* Skeleton Loader Cards */
+.skeleton-root {
+  pointer-events: none;
+}
+
+.skeleton-card {
+  border: 1px solid rgba(0, 212, 255, 0.04) !important;
+  box-shadow: none !important;
+}
+
+.divider-val {
+  color: var(--text-muted);
+  font-weight: normal;
+}
+

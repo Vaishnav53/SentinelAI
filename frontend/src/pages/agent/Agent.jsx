@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Terminal, Send, Cpu, ShieldAlert, BookOpen, RefreshCw } from 'lucide-react';
+import { Terminal, Send, Cpu, ShieldAlert, BookOpen, RefreshCw, Server } from 'lucide-react';
 import apiClient from '../../api/client';
 import './Agent.css';
 
 export default function Agent() {
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: 'Hello! I am your local cyber defense assistant. I analyze honeypot payloads, log entries, and suggest active mitigation mitigations. Ask me anything about current platform events.' }
+    { role: 'assistant', content: 'Hello! I am your local cyber defense assistant. I analyze honeypot payloads, log entries, and suggest active mitigation tactics. Ask me anything about current platform events.' }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [modelName, setModelName] = useState('llama3.1');
@@ -75,14 +75,14 @@ export default function Agent() {
       {/* Top Header info */}
       <div className="agent-header card-cyber">
         <div className="agent-header-info">
-          <Terminal className="text-purple" size={24} />
+          <Terminal className="text-purple pulse" size={22} />
           <div className="agent-header-title">
             <h4 className="title-cyber">AI Cyber Analyst Console</h4>
             <p className="text-muted">Query local language models to classify payloads and formulate incident responses.</p>
           </div>
         </div>
 
-        <div className="agent-model-selector">
+        <div className="agent-model-selector font-mono">
           <Cpu className="text-muted" size={16} />
           <span className="model-label">Active LLM:</span>
           <select 
@@ -116,9 +116,13 @@ export default function Agent() {
             ))}
             {loading && (
               <div className="message-row assistant">
-                <div className="message-bubble font-mono loading-bubble">
-                  <span className="pulse-ai"></span>
-                  <span>AI is formulating response...</span>
+                <div className="message-bubble font-mono typing-bubble">
+                  <div className="bubble-sender">CYBER_ANALYST_AI</div>
+                  <div className="typing-indicator">
+                    <span className="typing-dot"></span>
+                    <span className="typing-dot"></span>
+                    <span className="typing-dot"></span>
+                  </div>
                 </div>
               </div>
             )}
@@ -139,25 +143,51 @@ export default function Agent() {
               onClick={() => handleSendMessage()}
               disabled={loading || !inputValue.trim()}
             >
-              <Send size={16} />
+              <Send size={14} />
             </button>
           </div>
         </div>
 
-        {/* Quick action prompts sidebar */}
-        <div className="quick-prompts-sidebar card-cyber">
-          <h5 className="section-title"><BookOpen size={14} /> Quick Analysis Prompts</h5>
-          <div className="prompts-list">
-            {quickPrompts.map((p, idx) => (
-              <button 
-                key={idx} 
-                className="prompt-btn font-mono"
-                onClick={() => handleSendMessage(p.query)}
-                disabled={loading}
-              >
-                {p.label}
-              </button>
-            ))}
+        {/* Quick action prompts & active status sidebar */}
+        <div className="quick-prompts-sidebar">
+          {/* Active Profile panel */}
+          <div className="card-cyber profile-card">
+            <h5 className="section-title"><Server size={14} /> Local LLM Service Profile</h5>
+            <div className="profile-details font-mono text-xs">
+              <div className="profile-row">
+                <span className="profile-label">Ollama Host:</span>
+                <span className="profile-value text-cyan">http://127.0.0.1:11434</span>
+              </div>
+              <div className="profile-row">
+                <span className="profile-label">Model Target:</span>
+                <span className="profile-value">{modelName}</span>
+              </div>
+              <div className="profile-row">
+                <span className="profile-label">Temperature:</span>
+                <span className="profile-value text-purple">0.7 (Locked)</span>
+              </div>
+              <div className="profile-row">
+                <span className="profile-label">System Mode:</span>
+                <span className="profile-value text-green">Zero-Trust SOC</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Prompts list */}
+          <div className="card-cyber prompts-card">
+            <h5 className="section-title"><BookOpen size={14} /> Quick Action Prompts</h5>
+            <div className="prompts-list">
+              {quickPrompts.map((p, idx) => (
+                <button 
+                  key={idx} 
+                  className="prompt-btn font-mono"
+                  onClick={() => handleSendMessage(p.query)}
+                  disabled={loading}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
