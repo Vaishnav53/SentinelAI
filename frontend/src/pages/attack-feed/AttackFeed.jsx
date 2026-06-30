@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Search, Filter, ShieldCheck, ChevronRight, RefreshCw, AlertOctagon } from 'lucide-react';
+import { Shield, Search, Filter, ShieldCheck, ChevronRight, RefreshCw, AlertOctagon, Cpu } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
 import './AttackFeed.css';
 
@@ -17,6 +18,7 @@ function AttackFeedSkeleton() {
 }
 
 export default function AttackFeed() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [attacks, setAttacks] = useState([]);
@@ -267,6 +269,18 @@ export default function AttackFeed() {
                   <p className="recommendation-text font-mono">{getMetadata(selectedAttack.raw_metadata).recommendation}</p>
                 </div>
               )}
+
+              {/* Copilot Analysis Action */}
+              <div className="drawer-actions" style={{ marginBottom: '12px' }}>
+                <button 
+                  className="btn-action btn-analyze-ai"
+                  style={{ width: '100%', borderColor: 'rgba(139, 92, 246, 0.4)', color: 'var(--purple)', backgroundColor: 'rgba(139, 92, 246, 0.05)' }}
+                  onClick={() => navigate(`/agent?analyze_attack=${selectedAttack.id}`)}
+                >
+                  <Cpu size={14} style={{ marginRight: '6px' }} />
+                  Analyze with AI
+                </button>
+              </div>
 
               {/* Status Actions */}
               <div className="drawer-actions">

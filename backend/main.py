@@ -29,6 +29,20 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(bind=engine)
         logging.info("Database tables initialized successfully.")
         
+        # Add new columns to existing SQLite files if they do not exist
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            try:
+                conn.execute(text("ALTER TABLE ai_conversations ADD COLUMN model_used VARCHAR;"))
+                conn.commit()
+            except Exception:
+                pass
+            try:
+                conn.execute(text("ALTER TABLE ai_conversations ADD COLUMN linked_attack_id INTEGER;"))
+                conn.commit()
+            except Exception:
+                pass
+
         # Populate initial/demo data
         db = SessionLocal()
         try:

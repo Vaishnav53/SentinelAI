@@ -317,18 +317,18 @@ export default function Blueprint() {
                 <span className="timeline-dot"></span>
                 <div className="timeline-node-header">
                   <span className="timeline-phase-title font-mono text-green">PHASE 4B: Interactive Blueprint Console</span>
-                  <span className="badge badge-low">Active</span>
+                  <span className="badge badge-low">Completed</span>
                 </div>
                 <p className="timeline-desc">Designed an interactive dashboard explaining network flows, data schemas, regex rules, and completed timeline charts.</p>
               </div>
 
-              <div className="timeline-node-item upcoming">
+              <div className="timeline-node-item completed">
                 <span className="timeline-dot"></span>
                 <div className="timeline-node-header">
-                  <span className="timeline-phase-title font-mono text-purple">PHASE 4C: AI Agent Ingestion</span>
-                  <span className="badge badge-high">Upcoming</span>
+                  <span className="timeline-phase-title font-mono text-green">PHASE 4C: AI Security Copilot</span>
+                  <span className="badge badge-low">Completed</span>
                 </div>
-                <p className="timeline-desc">Connect chat input to local Ollama llama3.1 backend model, mapping ingested threat alerts dynamically.</p>
+                <p className="timeline-desc">Implemented persistent conversation database logs, multi-panel copilot workspace, dynamic alert investigation links, and model switch settings.</p>
               </div>
 
               <div className="timeline-node-item upcoming">

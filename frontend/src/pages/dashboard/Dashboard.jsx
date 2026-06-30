@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { ShieldAlert, Radio, Cpu, Clock, Terminal } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
 import './Dashboard.css';
 
@@ -65,6 +66,7 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState(null);
@@ -128,8 +130,28 @@ export default function Dashboard() {
     value: item.count
   })) || [];
 
+  const latestCritical = recentAttacks.find(a => a.severity === 'CRITICAL');
+
   return (
     <div className="dashboard-root animate-fade-in">
+      {/* Dynamic Critical Alert Banner */}
+      {latestCritical && (
+        <div className="critical-alert-banner animate-glow-critical">
+          <div className="alert-content">
+            <ShieldAlert size={18} className="text-red pulse" />
+            <span className="font-mono text-xs">
+              <strong className="text-red">CRITICAL THREAT INGESTION:</strong> {latestCritical.attack_type} detected from {latestCritical.source_ip} targeting port {latestCritical.destination_port}
+            </span>
+          </div>
+          <button 
+            className="btn-alert-action font-mono text-xs"
+            onClick={() => navigate(`/agent?analyze_attack=${latestCritical.id}`)}
+          >
+            Investigate with Copilot →
+          </button>
+        </div>
+      )}
+
       {/* Top Telemetry row */}
       <div className="telemetry-cards">
         <div className="telemetry-card glow-border">

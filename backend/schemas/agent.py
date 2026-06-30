@@ -26,3 +26,47 @@ class ModelRead(BaseModel):
 class AgentStatus(BaseModel):
     status: str  # ONLINE, OFFLINE
     models_available: List[str]
+
+class MessageRead(BaseModel):
+    id: int
+    role: str
+    content: str
+    model: Optional[str] = None
+    latency: Optional[float] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+class ConversationRead(BaseModel):
+    id: int
+    conversation_key: str
+    title: Optional[str] = None
+    model_used: Optional[str] = None
+    linked_attack_id: Optional[int] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+class ConversationDetail(BaseModel):
+    id: int
+    conversation_key: str
+    title: Optional[str] = None
+    model_used: Optional[str] = None
+    linked_attack_id: Optional[int] = None
+    created_at: datetime
+    messages: List[MessageRead]
+
+    model_config = {"from_attributes": True}
+
+class AnalysisResponse(BaseModel):
+    executive_summary: str
+    technical_explanation: str
+    risk_level: str
+    mitre_mapping: str
+    potential_impact: str
+    recommended_actions: str
+    containment: str
+    recovery_steps: str
+    references: str
+    conversation_id: str
+

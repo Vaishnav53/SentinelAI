@@ -283,6 +283,44 @@
   color: var(--critical-red);
 }
 
+/* Critical Alert Banner Widget */
+.critical-alert-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: rgba(255, 56, 96, 0.05);
+  border: 1px solid rgba(255, 56, 96, 0.3);
+  border-radius: var(--radius-md);
+  padding: 12px 20px;
+  animation: pulse-glow-critical 2.5s infinite ease-in-out;
+  margin-bottom: 8px;
+}
+
+.alert-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-primary);
+}
+
+.btn-alert-action {
+  background-color: var(--critical-red);
+  border: none;
+  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 700;
+  transition: all var(--transition-fast);
+  box-shadow: 0 0 10px rgba(255, 56, 96, 0.3);
+}
+
+.btn-alert-action:hover {
+  background-color: #ff4d6d;
+  box-shadow: 0 0 15px rgba(255, 56, 96, 0.6);
+}
+
+
 /* Critical Pulse Row Alert Glow */
 .critical-pulse-row {
   border-left: 2px solid var(--critical-red);

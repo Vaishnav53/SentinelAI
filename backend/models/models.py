@@ -96,6 +96,8 @@ class AIConversation(Base, DBBaseModel):
     
     conversation_key = Column(String, unique=True, index=True, nullable=False)
     title = Column(String, nullable=True)
+    model_used = Column(String, nullable=True)
+    linked_attack_id = Column(Integer, nullable=True)
     
     messages = relationship("AIMessage", back_populates="conversation", cascade="all, delete-orphan")
 
