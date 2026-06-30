@@ -1,0 +1,218 @@
+.layout-root {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--bg-deep);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+/* Sidebar navigation styling */
+.sidebar {
+  width: 240px;
+  background-color: var(--surface-primary);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  transition: width var(--transition-normal);
+  flex-shrink: 0;
+  z-index: 100;
+}
+
+.sidebar.closed {
+  width: 60px;
+}
+
+.sidebar-logo {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+
+.logo-icon {
+  flex-shrink: 0;
+}
+
+.sidebar.closed .logo-text {
+  display: none;
+}
+
+.logo-text {
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+  gap: 12px;
+}
+
+.nav-item:hover {
+  background-color: var(--surface-secondary);
+  color: var(--cyan-primary);
+}
+
+.nav-item.active {
+  background-color: var(--surface-elevated);
+  color: var(--cyan-primary);
+  border-left: 2px solid var(--cyan-primary);
+  font-weight: 600;
+}
+
+.sidebar.closed .item-name {
+  display: none;
+}
+
+.sidebar-footer {
+  padding: 16px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.sidebar.closed .sidebar-footer {
+  display: none;
+}
+
+/* Main Viewport styling */
+.main-viewport {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.viewport-header {
+  height: 64px;
+  border-bottom: 1px solid var(--border-subtle);
+  background-color: var(--surface-primary);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.toggle-sidebar-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+
+.toggle-sidebar-btn:hover {
+  background-color: var(--surface-elevated);
+  color: var(--cyan-primary);
+}
+
+.header-meta {
+  flex: 1;
+}
+
+.current-route-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Status Indicators */
+.header-status-indicators {
+  display: flex;
+  gap: 20px;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.status-name {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.online {
+  background-color: var(--green);
+  box-shadow: 0 0 8px var(--green);
+}
+
+.status-dot.active {
+  background-color: var(--green);
+  box-shadow: 0 0 8px var(--green);
+}
+
+.status-dot.idle {
+  background-color: var(--blue);
+  box-shadow: 0 0 8px var(--blue);
+}
+
+.status-dot.checking {
+  background-color: var(--purple);
+  box-shadow: 0 0 8px var(--purple);
+}
+
+.status-dot.offline {
+  background-color: var(--critical-red);
+  box-shadow: 0 0 8px var(--critical-red);
+}
+
+.status-dot.error {
+  background-color: var(--critical-red);
+  box-shadow: 0 0 8px var(--critical-red);
+}
+
+.status-text {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Viewport content shell */
+.viewport-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background-color: var(--bg-deep);
+}
+
+/* Helper text colors */
+.text-cyan { color: var(--cyan-primary); }
+.text-green { color: var(--green); }
+.text-red { color: var(--critical-red); }
+.text-yellow { color: var(--yellow); }
+.text-purple { color: var(--purple); }

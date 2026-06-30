@@ -14,7 +14,7 @@ from backend.core.errors import (
     http_exception_handler,
     validation_exception_handler
 )
-from backend.database.session import engine
+from backend.database.session import engine, SessionLocal, populate_demo_data
 from backend.models.base import Base
 from backend.api.router import api_router
 
@@ -28,8 +28,16 @@ async def lifespan(app: FastAPI):
     try:
         Base.metadata.create_all(bind=engine)
         logging.info("Database tables initialized successfully.")
+        
+        # Populate initial/demo data
+        db = SessionLocal()
+        try:
+            populate_demo_data(db)
+            logging.info("Demo data populated successfully.")
+        finally:
+            db.close()
     except Exception as e:
-        logging.error(f"Failed to initialize database tables: {e}", exc_info=True)
+        logging.error(f"Failed to initialize database tables or populate demo data: {e}", exc_info=True)
     yield
     # Cleanup tasks (if any) go here on Shutdown
     logging.info("Shutting down SentinelAI API backend...")
