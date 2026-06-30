@@ -336,3 +336,24 @@
   font-size: 13px;
   font-family: var(--font-mono);
 }
+
+.mitre-tag {
+  background-color: rgba(139, 92, 246, 0.15);
+  border: 1px solid var(--purple);
+  color: var(--purple);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.recommendation-text {
+  background-color: var(--bg-deep);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+

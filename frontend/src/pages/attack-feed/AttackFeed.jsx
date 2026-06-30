@@ -12,6 +12,19 @@ export default function AttackFeed() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
+  const getMetadata = (metaString) => {
+    if (!metaString) return { mitreId: null, recommendation: null };
+    try {
+      const parsed = JSON.parse(metaString);
+      return {
+        mitreId: parsed.mitre_id || null,
+        recommendation: parsed.recommendation || null
+      };
+    } catch (e) {
+      return { mitreId: null, recommendation: null };
+    }
+  };
+
   // Fetch attacks
   const fetchAttacks = async () => {
     try {
@@ -184,6 +197,14 @@ export default function AttackFeed() {
                   <div className="info-value">{selectedAttack.country || 'Unknown'}, {selectedAttack.city || 'Unknown'}</div>
                   <div className="info-label">Sensor Identity:</div>
                   <div className="info-value">{selectedAttack.sensor_id}</div>
+                  {getMetadata(selectedAttack.raw_metadata).mitreId && (
+                    <>
+                      <div className="info-label">MITRE ATT&CK:</div>
+                      <div className="info-value">
+                        <span className="mitre-tag">{getMetadata(selectedAttack.raw_metadata).mitreId}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -191,6 +212,13 @@ export default function AttackFeed() {
                 <h5 className="section-title">Ingested Payload Data</h5>
                 <pre className="payload-box font-mono">{selectedAttack.payload || 'No raw payload captured'}</pre>
               </div>
+
+              {getMetadata(selectedAttack.raw_metadata).recommendation && (
+                <div className="drawer-section">
+                  <h5 className="section-title">Defensive Recommendation</h5>
+                  <p className="recommendation-text font-mono">{getMetadata(selectedAttack.raw_metadata).recommendation}</p>
+                </div>
+              )}
 
               {/* Status Actions */}
               <div className="drawer-actions">

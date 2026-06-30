@@ -19,18 +19,24 @@ export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [backendStatus, setBackendStatus] = useState('CHECKING');
   const [ollamaStatus, setOllamaStatus] = useState('CHECKING');
+  const [honeypotStatus, setHoneypotStatus] = useState('CHECKING');
   const location = useLocation();
 
-  // Query health and agent status on mount and periodic intervals
+  // Query health, agent, and honeypot status on mount and periodic intervals
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        const health = await apiClient.get('/health/services');
+        const [health, hpStatus] = await Promise.all([
+          apiClient.get('/health/services'),
+          apiClient.get('/honeypot/status')
+        ]);
         setBackendStatus(health.database.status === 'ONLINE' ? 'ONLINE' : 'DEGRADED');
         setOllamaStatus(health.ollama.status);
+        setHoneypotStatus(hpStatus.status);
       } catch (e) {
         setBackendStatus('OFFLINE');
         setOllamaStatus('OFFLINE');
+        setHoneypotStatus('OFFLINE');
       }
     };
 
@@ -110,6 +116,13 @@ export default function DashboardLayout() {
               <span className="status-name">LOCAL AI:</span>
               <span className={`status-dot ${ollamaStatus.toLowerCase()}`}></span>
               <span className="status-text">{ollamaStatus}</span>
+            </div>
+
+            {/* HTTP Honeypot Indicator */}
+            <div className="status-indicator">
+              <span className="status-name">HONEY DECOY:</span>
+              <span className={`status-dot ${honeypotStatus.toLowerCase()}`}></span>
+              <span className="status-text">{honeypotStatus}</span>
             </div>
           </div>
         </header>

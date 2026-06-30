@@ -155,3 +155,128 @@
   50% { transform: scale(1.05); opacity: 1; }
   100% { transform: scale(1); opacity: 0.8; }
 }
+
+/* Main Honeypot Controller Card styling */
+.main-honeypot-controller {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background-color: var(--surface-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+.hp-control-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hp-meta-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hp-meta-desc h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.hp-power-btn {
+  background-color: var(--surface-secondary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  outline: none;
+}
+
+.hp-power-btn:hover {
+  border-color: var(--border-active);
+  color: var(--text-primary);
+  box-shadow: var(--glow-subtle);
+}
+
+.hp-power-btn.active {
+  background-color: rgba(0, 255, 136, 0.1);
+  color: var(--green);
+  border-color: var(--green);
+  box-shadow: var(--glow-green);
+}
+
+/* Instructions Testing Guide styling */
+.instructions-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.text-sm {
+  font-size: 12px;
+}
+
+.payload-test-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.payload-item {
+  background-color: var(--bg-deep);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.payload-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.payload-title {
+  font-size: 11px;
+  color: var(--cyan-primary);
+  font-weight: 600;
+}
+
+.copy-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  outline: none;
+  transition: color var(--transition-fast);
+}
+
+.copy-btn:hover {
+  color: var(--cyan-primary);
+}
+
+.payload-cmd {
+  background-color: #020617;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow-x: auto;
+  border-left: 2px solid var(--border-active);
+}
+
