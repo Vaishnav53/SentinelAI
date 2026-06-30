@@ -1,23 +1,48 @@
-import os
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 
-# Load env variables from .env file
-# FastAPI looks for .env in the current working directory, we use python-dotenv to find it.
-try:
-    from dotenv import load_dotenv
-    load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
-except ImportError:
-    pass
+from backend.core.config import settings
+from backend.core.logging_config import setup_logging
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from backend.core.errors import (
+    SentinelException,
+    sentinel_exception_handler,
+    general_exception_handler,
+    http_exception_handler,
+    validation_exception_handler
+)
+from backend.database.session import engine
+from backend.models.base import Base
+from backend.api.router import api_router
+
+# Initialize Logging
+setup_logging()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Idempotent Database Initialization on Startup
+    logging.info("Initializing database tables...")
+    try:
+        Base.metadata.create_all(bind=engine)
+        logging.info("Database tables initialized successfully.")
+    except Exception as e:
+        logging.error(f"Failed to initialize database tables: {e}", exc_info=True)
+    yield
+    # Cleanup tasks (if any) go here on Shutdown
+    logging.info("Shutting down SentinelAI API backend...")
 
 app = FastAPI(
-    title=os.getenv("APP_NAME", "SentinelAI"),
-    version="0.1.0"
+    title=settings.APP_NAME,
+    version="0.1.0",
+    lifespan=lifespan
 )
 
-# CORS setup
+# CORS Setup
 origins = [
-    os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
+    settings.FRONTEND_ORIGIN
 ]
 
 app.add_middleware(
@@ -28,31 +53,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/api/health")
-async def get_health():
-    """Basic platform health check."""
-    return {
-        "status": "ONLINE",
-        "version": "0.1.0",
-        "environment": os.getenv("APP_ENV", "development")
-    }
+# Mount API Routers
+app.include_router(api_router, prefix="/api")
 
-@app.get("/api/health/services")
-async def get_services_health():
-    """Detailed services health check."""
-    # For now in Phase 0, we report standard state. 
-    # The actual implementation will verify DB, Ollama, and collectors in subsequent phases.
-    return {
-        "database": {
-            "status": "ONLINE",
-            "details": "Initialized"
-        },
-        "ollama": {
-            "status": "CHECKING",
-            "details": "Discovery pending"
-        },
-        "collectors": {
-            "status": "ACTIVE",
-            "details": "Ready"
-        }
-    }
+# Centralized Exception Boundaries
+app.add_exception_handler(SentinelException, sentinel_exception_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
+
+logging.info(f"SentinelAI backend application started in [{settings.APP_ENV}] mode.")
