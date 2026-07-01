@@ -5,18 +5,22 @@
   background-color: var(--bg-deep);
   color: var(--text-primary);
   overflow: hidden;
+  position: relative;
 }
 
-/* Sidebar navigation styling */
+/* Glassmorphism Sidebar */
 .sidebar {
   width: 240px;
-  background-color: var(--surface-primary);
+  background: rgba(4, 10, 20, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   transition: width var(--transition-normal);
   flex-shrink: 0;
   z-index: 100;
+  position: relative;
 }
 
 .sidebar.closed {
@@ -44,6 +48,7 @@
 .logo-text {
   font-size: 16px;
   white-space: nowrap;
+  letter-spacing: 0.1em;
 }
 
 .sidebar-nav {
@@ -54,6 +59,7 @@
   gap: 6px;
 }
 
+/* Nav Item Evolution */
 .nav-item {
   display: flex;
   align-items: center;
@@ -62,18 +68,22 @@
   color: var(--text-secondary);
   transition: all var(--transition-fast);
   gap: 12px;
+  border: 1px solid transparent;
 }
 
 .nav-item:hover {
-  background-color: var(--surface-secondary);
+  background-color: rgba(0, 229, 255, 0.05);
   color: var(--cyan-primary);
+  border-color: rgba(0, 229, 255, 0.15);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.05);
 }
 
 .nav-item.active {
-  background-color: var(--surface-elevated);
+  background-color: rgba(0, 229, 255, 0.08);
   color: var(--cyan-primary);
-  border-left: 2px solid var(--cyan-primary);
+  border: 1px solid rgba(0, 229, 255, 0.25);
   font-weight: 600;
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.08);
 }
 
 .sidebar.closed .item-name {
@@ -98,12 +108,16 @@
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
+  z-index: 1;
 }
 
+/* Glassmorphism Header */
 .viewport-header {
   height: 64px;
   border-bottom: 1px solid var(--border-subtle);
-  background-color: var(--surface-primary);
+  background: rgba(4, 10, 20, 0.25);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   display: flex;
   align-items: center;
   padding: 0 20px;
@@ -116,16 +130,18 @@
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 4px;
+  padding: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
-  transition: background var(--transition-fast);
+  transition: all var(--transition-fast);
+  border: 1px solid transparent;
 }
 
 .toggle-sidebar-btn:hover {
-  background-color: var(--surface-elevated);
+  background-color: rgba(0, 229, 255, 0.05);
+  border-color: rgba(0, 229, 255, 0.15);
   color: var(--cyan-primary);
 }
 
@@ -134,9 +150,9 @@
 }
 
 .current-route-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
 }
 
 /* Status Indicators */
@@ -149,9 +165,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   color: var(--text-secondary);
+  background-color: rgba(2, 6, 12, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  padding: 4px 10px;
+  border-radius: 4px;
 }
 
 .status-name {
@@ -160,54 +180,62 @@
 }
 
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   display: inline-block;
 }
 
 .status-dot.online {
   background-color: var(--green);
-  box-shadow: 0 0 8px var(--green);
+  box-shadow: 0 0 6px var(--green);
 }
 
 .status-dot.active {
   background-color: var(--green);
-  box-shadow: 0 0 8px var(--green);
+  box-shadow: 0 0 6px var(--green);
 }
 
 .status-dot.idle {
   background-color: var(--blue);
-  box-shadow: 0 0 8px var(--blue);
+  box-shadow: 0 0 6px var(--blue);
 }
 
 .status-dot.checking {
   background-color: var(--purple);
-  box-shadow: 0 0 8px var(--purple);
+  box-shadow: 0 0 6px var(--purple);
 }
 
 .status-dot.offline {
   background-color: var(--critical-red);
-  box-shadow: 0 0 8px var(--critical-red);
+  box-shadow: 0 0 6px var(--critical-red);
 }
 
 .status-dot.error {
   background-color: var(--critical-red);
-  box-shadow: 0 0 8px var(--critical-red);
+  box-shadow: 0 0 6px var(--critical-red);
 }
 
 .status-text {
-  font-size: 11px;
+  font-size: 9px;
+  font-family: var(--font-mono);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
 }
 
 /* Viewport content shell */
 .viewport-content {
   flex: 1;
-  padding: 20px;
+  padding: 24px;
   overflow-y: auto;
-  background-color: var(--bg-deep);
+  background-color: transparent;
+}
+
+@media (min-width: 1025px) {
+  .viewport-content:has(.copilot-container) {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
 }
 
 /* Helper text colors */
@@ -219,7 +247,7 @@
 
 /* Header Clock Widget */
 .header-clock-widget {
-  background-color: var(--surface-secondary);
+  background: rgba(2, 6, 12, 0.45);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 6px 12px;
@@ -227,22 +255,26 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 2px;
-  box-shadow: var(--glow-subtle);
   min-width: 140px;
   text-align: right;
   flex-shrink: 0;
+  transition: border-color var(--transition-fast);
+}
+
+.header-clock-widget:hover {
+  border-color: var(--border-active);
 }
 
 .clock-date {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--text-muted);
 }
 
 .clock-time {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--cyan-primary);
   font-weight: 700;
-  text-shadow: 0 0 4px rgba(0, 212, 255, 0.4);
+  text-shadow: 0 0 6px rgba(0, 229, 255, 0.3);
 }
 
 /* Sidebar system monitor widgets */
@@ -251,7 +283,7 @@
   flex-direction: column;
   gap: 10px;
   margin-bottom: 12px;
-  background-color: rgba(2, 6, 23, 0.4);
+  background-color: rgba(2, 6, 12, 0.35);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 10px;
@@ -265,7 +297,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 10px;
+  font-size: 9px;
   width: 100%;
 }
 
@@ -277,8 +309,8 @@
 
 .sys-mon-bar-bg {
   flex: 1;
-  height: 4px;
-  background-color: var(--bg-deep);
+  height: 3px;
+  background-color: rgba(2, 6, 12, 0.7);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -303,4 +335,3 @@
   align-items: center;
   gap: 8px;
 }
-

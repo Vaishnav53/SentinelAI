@@ -1,54 +1,55 @@
 :root {
   /* Color Design Tokens */
-  --bg-deep: #020617;
-  --surface-primary: #06101f;
-  --surface-secondary: #081426;
-  --surface-elevated: #0b1930;
+  --bg-deep: #020408; /* Near Black */
+  --surface-primary: rgba(6, 14, 28, 0.45); /* Translucent Glass */
+  --surface-secondary: rgba(10, 22, 44, 0.7);
+  --surface-elevated: rgba(16, 32, 64, 0.85);
   
-  --cyan-primary: #00d4ff;
-  --cyan-bright: #00f5ff;
-  --blue: #2d8cff;
-  --purple: #8b5cf6;
+  --cyan-primary: #00e5ff;
+  --cyan-bright: #39f3ff;
+  --blue: #2f8cff;
+  --purple: #9b5cff;
   --green: #00ff88;
   --yellow: #ffd32a;
   --orange: #ff9f43;
-  --critical-red: #ff3860;
+  --critical-red: #ff3366;
   
-  --text-primary: #e5f7ff;
-  --text-secondary: #9bb0c9;
-  --text-muted: #6b7c9b;
+  --text-primary: #f0f7ff;
+  --text-secondary: #a3b8cc;
+  --text-muted: #5f748d;
   
-  --border-subtle: rgba(0, 212, 255, 0.12);
-  --border-active: rgba(0, 212, 255, 0.45);
+  --border-subtle: rgba(0, 229, 255, 0.08);
+  --border-active: rgba(0, 229, 255, 0.35);
   
-  --glow-subtle: 0 0 10px rgba(0, 212, 255, 0.15);
-  --glow-active: 0 0 15px rgba(0, 212, 255, 0.35);
-  --glow-red: 0 0 15px rgba(255, 56, 96, 0.35);
-  --glow-green: 0 0 15px rgba(0, 255, 136, 0.35);
+  --glow-subtle: 0 0 15px rgba(0, 229, 255, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.02);
+  --glow-active: 0 0 25px rgba(0, 229, 255, 0.15), inset 0 1px 2px rgba(255, 255, 255, 0.05);
+  --glow-red: 0 0 20px rgba(255, 51, 102, 0.2);
+  --glow-green: 0 0 20px rgba(0, 255, 136, 0.2);
+  --glow-purple: 0 0 20px rgba(155, 92, 255, 0.2);
 
   /* Typography */
-  --font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  --font-mono: 'Space Mono', source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+  --font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Space Mono', source-code-pro, Menlo, Monaco, Consolas, monospace;
 
   /* Spacing & Scaling */
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
-  --transition-fast: 0.15s ease;
-  --transition-normal: 0.25s ease;
+  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Animation Keyframes */
 @keyframes pulse-skeleton {
-  0% { background-color: rgba(11, 25, 48, 0.5); }
-  50% { background-color: rgba(11, 25, 48, 0.85); }
-  100% { background-color: rgba(11, 25, 48, 0.5); }
+  0% { background-color: rgba(16, 32, 64, 0.35); }
+  50% { background-color: rgba(16, 32, 64, 0.7); }
+  100% { background-color: rgba(16, 32, 64, 0.35); }
 }
 
 @keyframes pulse-glow-critical {
-  0% { border-color: rgba(255, 56, 96, 0.2); box-shadow: 0 0 5px rgba(255, 56, 96, 0.1); }
-  50% { border-color: rgba(255, 56, 96, 0.75); box-shadow: 0 0 12px rgba(255, 56, 96, 0.35); }
-  100% { border-color: rgba(255, 56, 96, 0.2); box-shadow: 0 0 5px rgba(255, 56, 96, 0.1); }
+  0% { border-color: rgba(255, 51, 102, 0.15); box-shadow: 0 0 6px rgba(255, 51, 102, 0.05); }
+  50% { border-color: rgba(255, 51, 102, 0.6); box-shadow: 0 0 16px rgba(255, 51, 102, 0.25); }
+  100% { border-color: rgba(255, 51, 102, 0.15); box-shadow: 0 0 6px rgba(255, 51, 102, 0.05); }
 }
 
 @keyframes spin-sync {
@@ -64,4 +65,3 @@
 .animate-glow-critical {
   animation: pulse-glow-critical 2.2s infinite ease-in-out;
 }
-

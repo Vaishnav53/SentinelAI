@@ -1,12 +1,13 @@
 .reports-root {
-  max-width: 1000px;
+  max-width: 1200px;
   margin: 0 auto;
+  width: 100%;
 }
 
 .reports-grid {
   display: grid;
   grid-template-columns: 1fr 1.5fr;
-  gap: 16px;
+  gap: 20px;
 }
 
 @media (max-width: 800px) {
@@ -20,6 +21,13 @@
   flex-direction: column;
   gap: 16px;
   height: fit-content;
+  background: var(--surface-primary);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glow-subtle);
+  padding: 20px;
 }
 
 .generate-form {
@@ -35,31 +43,40 @@
 }
 
 .form-row label {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
-  font-weight: 600;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .form-row select {
-  background-color: var(--bg-deep);
+  background-color: rgba(2, 6, 12, 0.45);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 8px 12px;
   color: var(--text-primary);
   outline: none;
-  font-size: 13px;
+  font-size: 12px;
+  font-family: var(--font-mono);
   cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+
+.form-row select:hover {
+  border-color: var(--border-active);
 }
 
 .checkbox-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background-color: var(--bg-deep);
+  background-color: rgba(2, 6, 12, 0.45);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 10px;
+  padding: 12px;
   font-size: 11px;
+  font-family: var(--font-mono);
 }
 
 .checkbox-group label {
@@ -72,15 +89,17 @@
 
 .checkbox-group input {
   cursor: pointer;
+  accent-color: var(--cyan-primary);
 }
 
 .generate-btn {
-  background-color: rgba(0, 212, 255, 0.1);
-  border: 1px solid rgba(0, 212, 255, 0.2);
+  background-color: rgba(0, 229, 255, 0.05);
+  border: 1px solid rgba(0, 229, 255, 0.2);
   color: var(--cyan-primary);
   border-radius: var(--radius-sm);
   padding: 10px;
-  font-size: 12px;
+  font-size: 11px;
+  font-family: var(--font-mono);
   font-weight: 700;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -90,7 +109,7 @@
 }
 
 .generate-btn:hover:not(:disabled) {
-  background-color: rgba(0, 212, 255, 0.2);
+  background-color: rgba(0, 229, 255, 0.15);
   border-color: var(--cyan-primary);
   box-shadow: var(--glow-subtle);
 }
@@ -106,6 +125,13 @@
   flex-direction: column;
   gap: 16px;
   min-height: 350px;
+  background: var(--surface-primary);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glow-subtle);
+  padding: 20px;
 }
 
 .jobs-list {
@@ -117,18 +143,19 @@
 }
 
 .job-item {
-  background-color: var(--surface-secondary);
+  background-color: rgba(2, 6, 12, 0.25);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 12px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: border-color var(--transition-fast);
+  transition: all var(--transition-fast);
 }
 
 .job-item:hover {
   border-color: var(--border-active);
+  background-color: rgba(2, 6, 12, 0.45);
 }
 
 .job-meta {
@@ -144,14 +171,16 @@
 }
 
 .job-name {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   color: var(--text-primary);
+  font-family: var(--font-mono);
 }
 
 .job-date {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--text-muted);
+  font-family: var(--font-mono);
 }
 
 .job-actions {
@@ -161,7 +190,7 @@
 }
 
 .download-btn {
-  background-color: var(--surface-primary);
+  background-color: rgba(2, 6, 12, 0.45);
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   width: 28px;
@@ -187,6 +216,6 @@
   justify-content: center;
   height: 150px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 11px;
   font-family: var(--font-mono);
 }

@@ -1,9 +1,10 @@
 .lab-root {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  max-width: 1200px;
+  gap: 20px;
+  max-width: 1400px;
   margin: 0 auto;
+  width: 100%;
 }
 
 .lab-header {
@@ -20,12 +21,15 @@
 }
 
 .lab-header-title h4 {
-  font-size: 16px;
+  font-size: 15px;
+  font-weight: 700;
   margin-bottom: 4px;
+  letter-spacing: 0.05em;
 }
 
 .lab-header-title p {
-  font-size: 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 /* Grid layout */
@@ -41,24 +45,43 @@
   justify-content: space-between;
   min-height: 220px;
   transition: all var(--transition-normal);
-  background-color: var(--surface-primary);
+  background: var(--surface-primary);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--glow-subtle);
+}
+
+.sensor-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-active);
+  box-shadow: var(--glow-active);
 }
 
 .sensor-card.online {
-  border-color: rgba(0, 255, 136, 0.2);
+  border-color: rgba(0, 255, 136, 0.15);
 }
 
 .sensor-card.online:hover {
-  border-color: var(--green);
-  box-shadow: 0 0 10px rgba(0, 255, 136, 0.15);
+  border-color: rgba(0, 255, 136, 0.45);
+  box-shadow: var(--glow-green);
 }
 
 .sensor-card.offline {
-  border-color: rgba(107, 124, 155, 0.2);
+  border-color: rgba(95, 116, 141, 0.15);
+}
+
+.sensor-card.offline:hover {
+  border-color: rgba(95, 116, 141, 0.45);
 }
 
 .sensor-card.idle {
-  border-color: rgba(45, 140, 255, 0.2);
+  border-color: rgba(47, 140, 255, 0.15);
+}
+
+.sensor-card.idle:hover {
+  border-color: rgba(47, 140, 255, 0.45);
+  box-shadow: var(--glow-active);
 }
 
 .sensor-card-header {
@@ -69,7 +92,7 @@
 }
 
 .power-btn {
-  background-color: var(--surface-secondary);
+  background-color: rgba(2, 6, 12, 0.45);
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   width: 28px;
@@ -90,7 +113,7 @@
 }
 
 .power-btn.active {
-  background-color: rgba(0, 255, 136, 0.1);
+  background-color: rgba(0, 255, 136, 0.05);
   color: var(--green);
   border-color: var(--green);
   box-shadow: var(--glow-green);
@@ -104,22 +127,24 @@
 }
 
 .sensor-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-primary);
+  letter-spacing: 0.03em;
 }
 
 .sensor-meta {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 11px;
+  font-size: 10px;
+  font-family: var(--font-mono);
 }
 
 .sm-row {
   display: flex;
   justify-content: space-between;
-  border-bottom: 1px dotted var(--border-subtle);
+  border-bottom: 1px dotted rgba(255, 255, 255, 0.03);
   padding-bottom: 4px;
 }
 
@@ -134,7 +159,7 @@
 
 .sensor-card-footer {
   margin-top: 16px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
   padding-top: 10px;
 }
 
@@ -142,8 +167,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono);
 }
 
 .pulse {
@@ -152,7 +178,7 @@
 
 @keyframes pulse-lab {
   0% { transform: scale(1); opacity: 0.8; }
-  50% { transform: scale(1.05); opacity: 1; }
+  50% { transform: scale(1.03); opacity: 1; }
   100% { transform: scale(1); opacity: 0.8; }
 }
 
@@ -161,10 +187,13 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background-color: var(--surface-primary);
+  background: var(--surface-primary);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: 20px;
+  box-shadow: var(--glow-subtle);
 }
 
 .hp-control-header {
@@ -180,17 +209,18 @@
 }
 
 .hp-meta-desc h3 {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
+  letter-spacing: 0.05em;
 }
 
 .hp-power-btn {
-  background-color: var(--surface-secondary);
+  background-color: rgba(2, 6, 12, 0.45);
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -207,7 +237,7 @@
 }
 
 .hp-power-btn.active {
-  background-color: rgba(0, 255, 136, 0.1);
+  background-color: rgba(0, 255, 136, 0.05);
   color: var(--green);
   border-color: var(--green);
   box-shadow: var(--glow-green);
@@ -232,7 +262,7 @@
 }
 
 .payload-item {
-  background-color: var(--bg-deep);
+  background-color: rgba(2, 6, 12, 0.3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 12px;
@@ -250,7 +280,8 @@
 .payload-title {
   font-size: 11px;
   color: var(--cyan-primary);
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.03em;
 }
 
 .copy-btn {
@@ -261,8 +292,9 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 10px;
   outline: none;
+  font-family: var(--font-mono);
   transition: color var(--transition-fast);
 }
 
@@ -271,13 +303,14 @@
 }
 
 .payload-cmd {
-  background-color: #020617;
+  background-color: rgba(2, 6, 12, 0.5);
   padding: 8px 12px;
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-secondary);
   overflow-x: auto;
   border-left: 2px solid var(--border-active);
+  font-family: var(--font-mono);
 }
 
 /* Safety Directive Warning Banner */
@@ -285,15 +318,15 @@
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  background-color: rgba(255, 211, 42, 0.03);
-  border: 1px solid rgba(255, 211, 42, 0.2);
+  background-color: rgba(255, 211, 42, 0.02);
+  border: 1px solid rgba(255, 211, 42, 0.15);
   border-radius: var(--radius-md);
   padding: 14px 18px;
 }
 
 .safety-warning-banner:hover {
   border-color: var(--yellow);
-  box-shadow: 0 0 10px rgba(255, 211, 42, 0.1);
+  box-shadow: 0 0 10px rgba(255, 211, 42, 0.08);
 }
 
 .safety-text {
@@ -303,8 +336,7 @@
 }
 
 .safety-title {
-  font-size: 11px;
-  letter-spacing: 0.05em;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  font-weight: 700;
 }
-
-

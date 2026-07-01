@@ -15,6 +15,48 @@ body {
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
   height: 100vh;
+  position: relative;
+}
+
+/* Reusable Animated SOC Background components */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    linear-gradient(rgba(0, 229, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 229, 255, 0.02) 1px, transparent 1px);
+  background-size: 50px 50px;
+  background-position: center;
+  pointer-events: none;
+  z-index: -2;
+  animation: grid-scroll 25s linear infinite;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at center, rgba(155, 92, 255, 0.04) 0%, rgba(0, 229, 255, 0.015) 30%, transparent 60%);
+  pointer-events: none;
+  z-index: -1;
+  animation: float-light 40s ease-in-out infinite alternate;
+}
+
+@keyframes grid-scroll {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 50px; }
+}
+
+@keyframes float-light {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(3%, 3%) scale(1.08); }
 }
 
 /* Custom Scrollbar styling */
@@ -24,58 +66,87 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-deep);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--surface-elevated);
+  background: rgba(0, 229, 255, 0.1);
   border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--cyan-primary);
 }
 
-/* Common Layout Components */
+/* Inputs & Form Reset styling */
 button, input, select, textarea {
   font-family: inherit;
   color: inherit;
+  outline: none;
+}
+
+button {
+  cursor: pointer;
 }
 
 a {
   text-decoration: none;
   color: var(--cyan-primary);
-  transition: color var(--transition-fast);
+  transition: all var(--transition-fast);
 }
 
 a:hover {
   color: var(--cyan-bright);
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.3);
 }
 
-/* Accent Glow Helper Classes */
-.glow-border {
+/* Reusable Glassmorphism Card styling */
+.card-cyber {
+  background: var(--surface-primary);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-subtle);
-  transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
-}
-
-.glow-border:hover {
-  border-color: var(--border-active);
+  border-radius: var(--radius-md);
+  padding: 20px;
   box-shadow: var(--glow-subtle);
+  transition: all var(--transition-normal);
+  position: relative;
+  overflow: hidden;
 }
 
-.glow-border-active {
-  border-color: var(--cyan-primary);
+/* Subtle corner reflection on card hover */
+.card-cyber::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+}
+
+.card-cyber:hover {
+  border-color: var(--border-active);
   box-shadow: var(--glow-active);
+  transform: translateY(-2px);
 }
 
-/* Typography Helpers */
+.card-cyber:hover::before {
+  opacity: 1;
+}
+
+/* Typography Headers */
 .title-cyber {
   font-family: var(--font-family);
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--cyan-primary);
-  text-shadow: 0 0 5px rgba(0, 212, 255, 0.3);
+  text-shadow: 0 0 6px rgba(0, 229, 255, 0.35);
 }
 
 .font-mono {
@@ -89,38 +160,36 @@ a:hover {
   gap: 16px;
 }
 
-.card-cyber {
-  background: var(--surface-primary);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: 16px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  transition: all var(--transition-normal);
-}
-
-.card-cyber:hover {
-  border-color: var(--border-active);
-  box-shadow: var(--glow-subtle);
-}
-
 /* Badge Layouts */
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
 }
 
-.badge-low { background: rgba(0, 255, 136, 0.1); color: var(--green); border: 1px solid rgba(0, 255, 136, 0.2); }
-.badge-medium { background: rgba(255, 211, 42, 0.1); color: var(--yellow); border: 1px solid rgba(255, 211, 42, 0.2); }
-.badge-high { background: rgba(255, 159, 67, 0.1); color: var(--orange); border: 1px solid rgba(255, 159, 67, 0.2); }
-.badge-critical { background: rgba(255, 56, 96, 0.1); color: var(--critical-red); border: 1px solid rgba(255, 56, 96, 0.2); }
+.badge-low { background: rgba(0, 255, 136, 0.05); color: var(--green); border-color: rgba(0, 255, 136, 0.25); box-shadow: 0 0 6px rgba(0, 255, 136, 0.05); }
+.badge-medium { background: rgba(255, 211, 42, 0.05); color: var(--yellow); border-color: rgba(255, 211, 42, 0.25); box-shadow: 0 0 6px rgba(255, 211, 42, 0.05); }
+.badge-high { background: rgba(255, 159, 67, 0.05); color: var(--orange); border-color: rgba(255, 159, 67, 0.25); box-shadow: 0 0 6px rgba(255, 159, 67, 0.05); }
+.badge-critical { background: rgba(255, 51, 102, 0.05); color: var(--critical-red); border-color: rgba(255, 51, 102, 0.25); box-shadow: 0 0 6px rgba(255, 51, 102, 0.05); }
 
-.badge-online { background: rgba(0, 255, 136, 0.1); color: var(--green); }
-.badge-offline { background: rgba(107, 124, 155, 0.1); color: var(--text-muted); }
-.badge-idle { background: rgba(45, 140, 255, 0.1); color: var(--blue); }
-.badge-checking { background: rgba(139, 92, 246, 0.1); color: var(--purple); }
+.badge-online { background: rgba(0, 255, 136, 0.05); color: var(--green); border-color: rgba(0, 255, 136, 0.15); }
+.badge-offline { background: rgba(95, 116, 141, 0.05); color: var(--text-secondary); border-color: rgba(95, 116, 141, 0.15); }
+.badge-idle { background: rgba(47, 140, 255, 0.05); color: var(--blue); border-color: rgba(47, 140, 255, 0.15); }
+.badge-checking { background: rgba(155, 92, 255, 0.05); color: var(--purple); border-color: rgba(155, 92, 255, 0.15); }
+
+/* Animation Entrances */
+.animate-fade-in {
+  animation: fade-in 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
