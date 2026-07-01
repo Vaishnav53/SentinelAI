@@ -17,6 +17,7 @@ class ChatResponse(BaseModel):
     model: str
     created_at: datetime
     latency: float
+    source: Optional[str] = "model"
 
 class ModelRead(BaseModel):
     name: str
@@ -69,4 +70,5 @@ class AnalysisResponse(BaseModel):
     recovery_steps: str
     references: str
     conversation_id: str
+    source: Optional[str] = "model"
 

@@ -31,7 +31,7 @@ export default function Agent() {
 
   // Settings Overlay Configurations
   const [temp, setTemp] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(1024);
+  const [maxTokens, setMaxTokens] = useState(512);
   const [systemPrompt, setSystemPrompt] = useState('Zero-Trust SOC Assistant');
 
   const messagesEndRef = useRef(null);
@@ -164,9 +164,14 @@ export default function Agent() {
         latency: response.latency
       }]);
     } catch (err) {
+      const isTimeout = (err.message || '').toLowerCase().includes('timeout') || err.code === 'ECONNABORTED';
+      const fallbackMsg = isTimeout 
+        ? "The local AI model is online but took too long to respond. Try a smaller model, reduce max tokens, or retry."
+        : `Security Copilot was unable to get a response: ${err.message || 'Connection failed.'}. Utilizing local rule fallback.`;
+      
       setMessages([...tempMessages, { 
         role: 'assistant', 
-        content: `Generation failure: ${err.message || 'Ollama connection timeout.'}`, 
+        content: fallbackMsg, 
         created_at: new Date()
       }]);
     } finally {
@@ -196,6 +201,13 @@ export default function Agent() {
       }
     } catch (e) {
       console.error("Attack analysis failed:", e);
+      const isTimeout = (e.message || '').toLowerCase().includes('timeout') || e.code === 'ECONNABORTED';
+      const fallbackMsg = isTimeout 
+        ? "The local AI model is online but took too long to respond. Try a smaller model, reduce max tokens, or retry."
+        : `Analysis failed: ${e.message || 'Server connection error.'}`;
+      setMessages([
+        { role: 'assistant', content: fallbackMsg }
+      ]);
     } finally {
       setLoading(false);
     }
@@ -383,7 +395,7 @@ export default function Agent() {
                     <span className="typing-dot"></span>
                     <span className="typing-dot"></span>
                   </div>
-                  <span className="typing-label font-mono text-xxs text-muted">COMPILING INTEL...</span>
+                  <span className="typing-label font-mono text-xxs text-muted">Security Copilot is analyzing...</span>
                 </div>
               </div>
             </div>

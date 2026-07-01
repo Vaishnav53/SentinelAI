@@ -19,6 +19,21 @@ from backend.schemas.agent import (
     AnalysisResponse
 )
 
+async def resolve_ollama_model_name(model_name: str) -> str:
+    """Resolve requested base model name to the exact tag string returned by Ollama."""
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            resp = await client.get(f"{settings.OLLAMA_BASE_URL}/api/tags")
+            if resp.status_code == 200:
+                available_tags = [m["name"] for m in resp.json().get("models", [])]
+                if model_name not in available_tags:
+                    for tag in available_tags:
+                        if tag.split(':')[0] == model_name.split(':')[0]:
+                            return tag
+    except Exception as e:
+        logging.warning(f"Ollama tags lookup failed: {e}")
+    return model_name
+
 router = APIRouter(prefix="/agent", tags=["AI Agent"])
 
 @router.get("/status", response_model=AgentStatus)
@@ -34,7 +49,6 @@ async def get_agent_status(
             if response.status_code == 200:
                 data = response.json()
                 models = [model["name"] for model in data.get("models", [])]
-                # If settings active model is not in models, prepend/ensure it's listed
                 if active_model not in models:
                     models.insert(0, active_model)
                 return AgentStatus(status="ONLINE", models_available=models)
@@ -77,7 +91,8 @@ async def post_chat(
 ):
     """Submit prompt to Copilot, persisting conversations in SQLite db."""
     start_time = datetime.utcnow()
-    model_name = payload.model or settings_service.get_setting(db, "default_ollama_model", settings.DEFAULT_OLLAMA_MODEL)
+    raw_model = payload.model or settings_service.get_setting(db, "default_ollama_model", settings.DEFAULT_OLLAMA_MODEL)
+    model_name = await resolve_ollama_model_name(raw_model)
     
     # 1. Retrieve or Create AIConversation context
     conv_key = payload.conversation_id
@@ -120,9 +135,12 @@ async def post_chat(
 
     # 4. Attempt Ollama Call
     response_text = ""
+    source = "model"
     ollama_url = f"{settings.OLLAMA_BASE_URL}/api/generate"
+    timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 60.0))
+    
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
             response = await client.post(
                 ollama_url,
                 json={"model": model_name, "prompt": ollama_prompt, "stream": False}
@@ -131,17 +149,18 @@ async def post_chat(
                 data = response.json()
                 response_text = data.get("response", "")
     except Exception as e:
-        logging.warning(f"Ollama chat error: {e}. Executing mock fallback.")
+        logging.warning(f"Ollama chat error ({type(e).__name__}): {str(e)}. Executing mock fallback.", exc_info=True)
 
-    # 5. Local Mock Fallback if Ollama Offline
+    # 5. Local Mock Fallback if Ollama Offline or Timed Out
     if not response_text:
+        source = "fallback"
         msg_lower = payload.message.lower()
         if "explain" in msg_lower or "traversal" in msg_lower or "injection" in msg_lower:
             response_text = "Analysis: The payload indicates an injection probe sequence. Recommendations: Contextually sanitize input values and configure firewall blocks."
         elif "mitigat" in msg_lower or "prevent" in msg_lower:
             response_text = "Mitigation guidance: 1. Deploy firewall filters. 2. Bind application ports exclusively to local interfaces (e.g. 127.0.0.1)."
         else:
-            response_text = f"Security Copilot Advisory: Message processed. (Note: Ollama at {settings.OLLAMA_BASE_URL} is offline. Using local template advice)."
+            response_text = f"Security Copilot Advisory: Message processed. (Note: Ollama at {settings.OLLAMA_BASE_URL} timed out or is offline. Using local template advice)."
 
     # 6. Save AI Response in DB
     latency = (datetime.utcnow() - start_time).total_seconds()
@@ -160,7 +179,8 @@ async def post_chat(
         conversation_id=conv.conversation_key,
         model=model_name,
         created_at=datetime.utcnow(),
-        latency=latency
+        latency=latency,
+        source=source
     )
 
 @router.post("/analyze/{attack_id}", response_model=AnalysisResponse)
@@ -175,7 +195,8 @@ async def analyze_attack(
     if not attack:
         raise HTTPException(status_code=404, detail="Attack event not found")
 
-    model_name = settings_service.get_setting(db, "default_ollama_model", settings.DEFAULT_OLLAMA_MODEL)
+    raw_model = settings_service.get_setting(db, "default_ollama_model", settings.DEFAULT_OLLAMA_MODEL)
+    model_name = await resolve_ollama_model_name(raw_model)
     conv_key = f"analysis_attack_{attack_id}"
     
     # 1. Retrieve or Create Conversation
@@ -246,9 +267,12 @@ Begin the analysis now:"""
 
     # 4. Attempt Ollama Analysis Call
     response_text = ""
+    source = "model"
     ollama_url = f"{settings.OLLAMA_BASE_URL}/api/generate"
+    timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 60.0))
+    
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
             response = await client.post(
                 ollama_url,
                 json={"model": model_name, "prompt": prompt, "stream": False}
@@ -257,13 +281,14 @@ Begin the analysis now:"""
                 data = response.json()
                 response_text = data.get("response", "")
     except Exception as e:
-        logging.warning(f"Ollama analyze failed: {e}. Executing mock fallback.")
+        logging.warning(f"Ollama analyze failed ({type(e).__name__}): {str(e)}. Executing mock fallback.", exc_info=True)
 
     # 5. Fallback Mock response dictionary
     parsed_json = {}
     if response_text:
         parsed_json = parse_markdown_analysis(response_text, conv_key)
     else:
+        source = "fallback"
         parsed_json = get_mock_analysis(attack, conv_key)
         # Format mock response for message log
         response_text = f"""### EXECUTIVE SUMMARY
@@ -305,6 +330,7 @@ Begin the analysis now:"""
     db.add(ai_msg)
     db.commit()
 
+    parsed_json["source"] = source
     return parsed_json
 
 def parse_markdown_analysis(text: str, conversation_id: str) -> dict:
