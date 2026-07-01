@@ -31,7 +31,7 @@ export default function Agent() {
 
   // Settings Overlay Configurations
   const [temp, setTemp] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(512);
+  const [maxTokens, setMaxTokens] = useState(256);
   const [systemPrompt, setSystemPrompt] = useState('Zero-Trust SOC Assistant');
 
   const messagesEndRef = useRef(null);
@@ -143,7 +143,9 @@ export default function Agent() {
         message: text,
         model: modelName,
         conversation_id: convId,
-        context: selectedAttack ? { attack_id: selectedAttack.id } : null
+        context: selectedAttack ? { attack_id: selectedAttack.id } : null,
+        temperature: temp,
+        max_tokens: maxTokens
       });
 
       // Update current conversation context
@@ -375,7 +377,15 @@ export default function Agent() {
                       <span className="msg-latency text-muted">({msg.latency.toFixed(2)}s)</span>
                     )}
                   </div>
-                  <div className="msg-text">{renderMarkdown(msg.content)}</div>
+                  <div className="msg-text">
+                    {renderMarkdown(msg.content)}
+                    {msg.role === 'assistant' && msg.latency > 20 && (
+                      <div className="latency-warning font-mono text-xxs mt-2 pt-2 flex items-center gap-2" style={{ color: '#ffd32a', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                        <AlertTriangle size={10} />
+                        <span>Local model is responding slowly. For faster responses, use a smaller model or reduce max tokens.</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );

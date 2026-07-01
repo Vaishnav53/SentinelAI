@@ -48,8 +48,19 @@ async def get_agent_status(
             response = await client.get(f"{settings.OLLAMA_BASE_URL}/api/tags")
             if response.status_code == 200:
                 data = response.json()
-                models = [model["name"] for model in data.get("models", [])]
-                if active_model not in models:
+                raw_models = [model["name"] for model in data.get("models", [])]
+                
+                # Filter out duplicate base names if a tagged version exists
+                models = []
+                for name in raw_models:
+                    if ":" not in name:
+                        if any(m.startswith(name + ":") for m in raw_models):
+                            continue
+                    models.append(name)
+                
+                # Insert active model if not matching any in list
+                has_match = any(m.split(':')[0] == active_model.split(':')[0] for m in models)
+                if not has_match and active_model not in models:
                     models.insert(0, active_model)
                 return AgentStatus(status="ONLINE", models_available=models)
     except Exception as e:
@@ -126,32 +137,62 @@ async def post_chat(
 
     # 3. Formulate Prompt History
     history_messages = db.query(AIMessage).filter(AIMessage.conversation_id == conv.id).order_by(AIMessage.created_at.asc()).all()
-    ollama_prompt = ""
-    for msg in history_messages:
-        role_label = "Operator" if msg.role == "user" else "Copilot AI"
-        ollama_prompt += f"{role_label}: {msg.content}\n"
     
-    ollama_prompt += "Copilot AI:"
+    messages_payload = []
+    # System Prompt Directive
+    system_prompt = settings_service.get_setting(
+        db, 
+        "ollama_system_prompt", 
+        "You are a cyber security SOC analyst. Answer questions clearly, directly, and practically. Be beginner-friendly for general questions, and provide actionable security recommendations for threats. Do not mention any local templates or fallbacks."
+    )
+    messages_payload.append({"role": "system", "content": system_prompt})
+    
+    # Historical turns
+    for msg in history_messages:
+        messages_payload.append({
+            "role": "user" if msg.role == "user" else "assistant",
+            "content": msg.content
+        })
 
     # 4. Attempt Ollama Call
     response_text = ""
     source = "model"
-    ollama_url = f"{settings.OLLAMA_BASE_URL}/api/generate"
-    timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 60.0))
+    ollama_url = f"{settings.OLLAMA_BASE_URL}/api/chat"
+    timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 90.0))
+    
+    # Custom options
+    temperature = payload.temperature if payload.temperature is not None else 0.7
+    max_tokens = payload.max_tokens if payload.max_tokens is not None else 256
     
     try:
         async with httpx.AsyncClient(timeout=timeout_seconds) as client:
             response = await client.post(
                 ollama_url,
-                json={"model": model_name, "prompt": ollama_prompt, "stream": False}
+                json={
+                    "model": model_name,
+                    "messages": messages_payload,
+                    "options": {
+                        "num_predict": max_tokens,
+                        "temperature": temperature,
+                        "top_p": 0.9,
+                        "repeat_penalty": 1.1
+                    },
+                    "stream": False
+                }
             )
             if response.status_code == 200:
                 data = response.json()
-                response_text = data.get("response", "")
+                response_text = data.get("message", {}).get("content", "")
     except Exception as e:
-        logging.warning(f"Ollama chat error ({type(e).__name__}): {str(e)}. Executing mock fallback.", exc_info=True)
+        source = "fallback"
+        error_name = type(e).__name__
+        logging.warning(f"Ollama chat error ({error_name}): {str(e)}. Executing fallback.", exc_info=True)
+        if "Timeout" in error_name:
+            response_text = "The local AI model is online but responded too slowly. Try using a smaller model, lower max tokens, or run Ollama with GPU acceleration."
+        else:
+            response_text = "Security Copilot is currently offline. Ensure Ollama is running locally."
 
-    # 5. Local Mock Fallback if Ollama Offline or Timed Out
+    # 5. Local Mock Fallback if Ollama Offline/Timed Out or returns empty
     if not response_text:
         source = "fallback"
         msg_lower = payload.message.lower()
@@ -160,7 +201,7 @@ async def post_chat(
         elif "mitigat" in msg_lower or "prevent" in msg_lower:
             response_text = "Mitigation guidance: 1. Deploy firewall filters. 2. Bind application ports exclusively to local interfaces (e.g. 127.0.0.1)."
         else:
-            response_text = f"Security Copilot Advisory: Message processed. (Note: Ollama at {settings.OLLAMA_BASE_URL} timed out or is offline. Using local template advice)."
+            response_text = "The local AI model is online but responded too slowly. Try using a smaller model, lower max tokens, or run Ollama with GPU acceleration."
 
     # 6. Save AI Response in DB
     latency = (datetime.utcnow() - start_time).total_seconds()
@@ -268,28 +309,50 @@ Begin the analysis now:"""
     # 4. Attempt Ollama Analysis Call
     response_text = ""
     source = "model"
-    ollama_url = f"{settings.OLLAMA_BASE_URL}/api/generate"
-    timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 60.0))
+    ollama_url = f"{settings.OLLAMA_BASE_URL}/api/chat"
+    timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 90.0))
+    
+    messages_payload = [
+        {"role": "system", "content": "SYSTEM DIRECTIVE: ZERO-TRUST SOC COPILET. You are a highly experienced SOC analyst investigating a threat event. Respond using the requested markdown headings structure."},
+        {"role": "user", "content": prompt}
+    ]
     
     try:
         async with httpx.AsyncClient(timeout=timeout_seconds) as client:
             response = await client.post(
                 ollama_url,
-                json={"model": model_name, "prompt": prompt, "stream": False}
+                json={
+                    "model": model_name, 
+                    "messages": messages_payload, 
+                    "options": {
+                        "num_predict": 512,
+                        "temperature": 0.2,
+                        "top_p": 0.9,
+                        "repeat_penalty": 1.1
+                    },
+                    "stream": False
+                }
             )
             if response.status_code == 200:
                 data = response.json()
-                response_text = data.get("response", "")
+                response_text = data.get("message", {}).get("content", "")
     except Exception as e:
-        logging.warning(f"Ollama analyze failed ({type(e).__name__}): {str(e)}. Executing mock fallback.", exc_info=True)
+        error_name = type(e).__name__
+        logging.warning(f"Ollama analyze failed ({error_name}): {str(e)}. Executing fallback.", exc_info=True)
+        if "Timeout" in error_name:
+            response_text = "### EXECUTIVE SUMMARY\nThe local AI model is online but responded too slowly. Try using a smaller model, lower max tokens, or run Ollama with GPU acceleration."
+        else:
+            response_text = "### EXECUTIVE SUMMARY\nSecurity Copilot is currently offline. Ensure Ollama is running locally."
 
     # 5. Fallback Mock response dictionary
     parsed_json = {}
-    if response_text:
+    if response_text and "timed out" not in response_text and "offline" not in response_text:
         parsed_json = parse_markdown_analysis(response_text, conv_key)
     else:
         source = "fallback"
         parsed_json = get_mock_analysis(attack, conv_key)
+        if response_text:
+            parsed_json["executive_summary"] = response_text.replace("### EXECUTIVE SUMMARY\n", "")
         # Format mock response for message log
         response_text = f"""### EXECUTIVE SUMMARY
 {parsed_json['executive_summary']}

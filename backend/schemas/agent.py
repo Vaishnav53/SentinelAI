@@ -10,6 +10,8 @@ class ChatRequest(BaseModel):
     model: Optional[str] = "llama3.1"
     conversation_id: Optional[str] = None
     context: Optional[ChatContext] = None
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
 
 class ChatResponse(BaseModel):
     message: str
