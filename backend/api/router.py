@@ -9,6 +9,8 @@ from backend.api.monitoring import router as monitoring_router
 from backend.api.honeypot import router as honeypot_router
 from backend.api.threat_intel import router as threat_intel_router
 from backend.api.waf import router as waf_router
+from backend.api.logs import router as logs_router
+from backend.api.correlation import router as correlation_router
 
 api_router = APIRouter()
 
@@ -23,3 +25,5 @@ api_router.include_router(monitoring_router)
 api_router.include_router(honeypot_router)
 api_router.include_router(threat_intel_router)
 api_router.include_router(waf_router)
+api_router.include_router(logs_router)
+api_router.include_router(correlation_router)

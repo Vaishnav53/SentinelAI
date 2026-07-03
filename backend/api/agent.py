@@ -94,6 +94,7 @@ async def post_chat_stream(
     
     conv_key = payload.conversation_id
     linked_attack_id = payload.context.attack_id if payload.context else None
+    linked_incident_id = payload.context.incident_id if payload.context else None
     
     if not conv_key:
         conv_key = f"conv_{int(datetime.utcnow().timestamp())}"
@@ -128,7 +129,24 @@ async def post_chat_stream(
         "ollama_system_prompt", 
         "You are a cyber security SOC analyst. For security incidents and threat analyses, organize your response using exactly these sections in Markdown headers:\n### Threat Summary\n### MITRE ATT&CK\n### Confidence\n### Impact\n### Detection\n### Remediation\n### References\nBe direct, technical, and beginner-friendly. Do not mention any local templates or fallbacks."
     )
-    messages_payload.append({"role": "system", "content": system_prompt})
+    
+    incident_context = ""
+    if linked_incident_id:
+        from backend.models.models import CorrelatedIncident
+        incident = db.query(CorrelatedIncident).filter(CorrelatedIncident.id == linked_incident_id).first()
+        if incident:
+            incident_context = (
+                f"\n\n[CORRELATED THREAT CHAIN CONTEXT]\n"
+                f"Incident ID: ID-{incident.id}\n"
+                f"Title: {incident.title}\n"
+                f"Severity: {incident.severity} | Confidence: {int(incident.confidence*100)}% | Status: {incident.status}\n"
+                f"Description: {incident.description}\n"
+                f"Network Node Entities:\n{incident.nodes_data}\n"
+                f"Incident Timeline Path:\n{incident.timeline_data}\n"
+                f"[END CONTEXT]"
+            )
+            
+    messages_payload.append({"role": "system", "content": system_prompt + incident_context})
     
     for msg in history_messages:
         messages_payload.append({
@@ -176,7 +194,35 @@ async def post_chat_stream(
             source = "fallback"
             fallback_full_text = ""
             msg_lower = payload.message.lower()
-            if "explain" in msg_lower or "traversal" in msg_lower or "injection" in msg_lower:
+            if linked_incident_id:
+                from backend.models.models import CorrelatedIncident
+                incident = db.query(CorrelatedIncident).filter(CorrelatedIncident.id == linked_incident_id).first()
+                if incident:
+                    fallback_full_text = f"""### Threat Summary
+The logs describe a multi-stage correlated threat chain ('{incident.title}') targeting network assets. This includes brute-force credentials login success, privilege escalation, or dynamic WAF blocks.
+
+### MITRE ATT&CK
+* T1110 - Brute Force Authentication
+* T1078 - Valid Accounts Usage
+* T1190 - Exploit Public-Facing Application
+
+### Confidence
+High ({int(incident.confidence * 100)}%)
+
+### Impact
+Critical severity compromise. The attacker successfully authenticated or escalated privileges, indicating potential unauthorized data exfiltration or host takeover.
+
+### Detection
+Correlate repeated SSH/HTTP login failures (Event ID 4625) with subsequent logins (Event ID 4624) or sudo actions within short time windows.
+
+### Remediation
+1. Force password resets for the compromised credential handles.
+2. Isolate the affected host node immediately using the containment dashboard.
+3. Review audit logs for unauthorized active background processes.
+
+### References
+{incident.description}"""
+            elif "explain" in msg_lower or "traversal" in msg_lower or "injection" in msg_lower:
                 fallback_full_text = """### Threat Summary
 The payload indicates an injection probe sequence (SQL Injection or Directory Traversal) targeting honeypot sensors.
 
@@ -333,6 +379,7 @@ async def post_chat(
     # 1. Retrieve or Create AIConversation context
     conv_key = payload.conversation_id
     linked_attack_id = payload.context.attack_id if payload.context else None
+    linked_incident_id = payload.context.incident_id if payload.context else None
     
     if not conv_key:
         conv_key = f"conv_{int(datetime.utcnow().timestamp())}"
@@ -370,7 +417,24 @@ async def post_chat(
         "ollama_system_prompt", 
         "You are a cyber security SOC analyst. For security incidents and threat analyses, organize your response using exactly these sections in Markdown headers:\n### Threat Summary\n### MITRE ATT&CK\n### Confidence\n### Impact\n### Detection\n### Remediation\n### References\nBe direct, technical, and beginner-friendly. Do not mention any local templates or fallbacks."
     )
-    messages_payload.append({"role": "system", "content": system_prompt})
+    
+    incident_context = ""
+    if linked_incident_id:
+        from backend.models.models import CorrelatedIncident
+        incident = db.query(CorrelatedIncident).filter(CorrelatedIncident.id == linked_incident_id).first()
+        if incident:
+            incident_context = (
+                f"\n\n[CORRELATED THREAT CHAIN CONTEXT]\n"
+                f"Incident ID: ID-{incident.id}\n"
+                f"Title: {incident.title}\n"
+                f"Severity: {incident.severity} | Confidence: {int(incident.confidence*100)}% | Status: {incident.status}\n"
+                f"Description: {incident.description}\n"
+                f"Network Node Entities:\n{incident.nodes_data}\n"
+                f"Incident Timeline Path:\n{incident.timeline_data}\n"
+                f"[END CONTEXT]"
+            )
+            
+    messages_payload.append({"role": "system", "content": system_prompt + incident_context})
     
     # Historical turns
     for msg in history_messages:
@@ -421,7 +485,35 @@ async def post_chat(
     if not response_text:
         source = "fallback"
         msg_lower = payload.message.lower()
-        if "explain" in msg_lower or "traversal" in msg_lower or "injection" in msg_lower:
+        if linked_incident_id:
+            from backend.models.models import CorrelatedIncident
+            incident = db.query(CorrelatedIncident).filter(CorrelatedIncident.id == linked_incident_id).first()
+            if incident:
+                response_text = f"""### Threat Summary
+The logs describe a multi-stage correlated threat chain ('{incident.title}') targeting network assets. This includes brute-force credentials login success, privilege escalation, or dynamic WAF blocks.
+
+### MITRE ATT&CK
+* T1110 - Brute Force Authentication
+* T1078 - Valid Accounts Usage
+* T1190 - Exploit Public-Facing Application
+
+### Confidence
+High ({int(incident.confidence * 100)}%)
+
+### Impact
+Critical severity compromise. The attacker successfully authenticated or escalated privileges, indicating potential unauthorized data exfiltration or host takeover.
+
+### Detection
+Correlate repeated SSH/HTTP login failures (Event ID 4625) with subsequent logins (Event ID 4624) or sudo actions within short time windows.
+
+### Remediation
+1. Force password resets for the compromised credential handles.
+2. Isolate the affected host node immediately using the containment dashboard.
+3. Review audit logs for unauthorized active background processes.
+
+### References
+{incident.description}"""
+        elif "explain" in msg_lower or "traversal" in msg_lower or "injection" in msg_lower:
             response_text = """### Threat Summary
 The payload indicates an injection probe sequence (SQL Injection or Directory Traversal) targeting honeypot sensors.
 

@@ -1,0 +1,64 @@
+.correlation-root {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  height: 100%;
+}
+
+.list-panel-correlation {
+  min-height: 400px;
+  overflow: hidden;
+}
+
+.graph-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.canvas-wrapper {
+  position: relative;
+  width: 100%;
+  background-color: rgba(2, 6, 12, 0.45);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.canvas-wrapper canvas {
+  display: block;
+  cursor: grab;
+}
+
+.canvas-wrapper canvas:active {
+  cursor: grabbing;
+}
+
+.correlation-drawer-details {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* WAF WAF specific modifications for Correlation feed */
+.waf-panel.graph-panel {
+  padding: 0;
+}
+
+.waf-table tr.active-row {
+  background-color: rgba(0, 229, 255, 0.08) !important;
+  border-left: 2px solid var(--cyan-primary);
+}
+
+.badge-action-brute_forced {
+  background-color: rgba(239, 68, 68, 0.15);
+  border: 1px solid var(--red);
+  color: var(--red);
+}
+
+.badge-action-authenticated_on {
+  background-color: rgba(16, 185, 129, 0.15);
+  border: 1px solid var(--green);
+  color: var(--green);
+}

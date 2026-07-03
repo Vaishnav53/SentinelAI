@@ -15,7 +15,8 @@ import {
   Database,
   BookOpen,
   Clock,
-  ShieldAlert
+  ShieldAlert,
+  GitBranch
 } from 'lucide-react';
 import apiClient from '../api/client';
 import './DashboardLayout.css';
@@ -172,6 +173,29 @@ export default function DashboardLayout() {
           setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== wafToast.id));
           }, 6000);
+        } else if (payload.type === 'new_correlated_incident') {
+          const incident = payload.data;
+          const correlationToast = {
+            id: `COR-${incident.id}`,
+            attack_type: "CORRELATED ATTACK CHAIN MATCH",
+            severity: incident.severity || "HIGH",
+            threat_score: incident.confidence * 10.0,
+            source_ip: "Security Operations Center",
+            created_at: incident.created_at
+          };
+          
+          setToasts(prev => {
+            if (prev.some(t => t.id === correlationToast.id)) return prev;
+            return [correlationToast, ...prev].slice(0, 3);
+          });
+          setUnreadCount(prev => prev + 1);
+          setNotifications(prev => {
+            if (prev.some(n => n.id === correlationToast.id)) return prev;
+            return [correlationToast, ...prev].slice(0, 10);
+          });
+          setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== correlationToast.id));
+          }, 6000);
         }
       } catch (err) {
         console.error("Failed to parse WebSocket alert:", err);
@@ -184,6 +208,7 @@ export default function DashboardLayout() {
   const menuItems = [
     { name: 'Dashboard', path: '/', icon: Activity },
     { name: 'Incident Response', path: '/attacks', icon: Shield },
+    { name: 'Threat Correlation', path: '/correlation', icon: GitBranch },
     { name: 'WAF Manager', path: '/waf', icon: ShieldAlert },
     { name: 'Honeypot Lab', path: '/sensors', icon: Radio },
     { name: 'AI Assistant', path: '/agent', icon: Terminal },

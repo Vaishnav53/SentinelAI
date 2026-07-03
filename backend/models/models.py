@@ -162,3 +162,33 @@ class WAFHit(Base, DBBaseModel):
 
 Index("ix_waf_rules_created_at", WAFRule.created_at)
 Index("ix_waf_hits_created_at", WAFHit.created_at)
+
+class NormalizedLog(Base, DBBaseModel):
+    __tablename__ = "normalized_logs"
+    
+    log_source = Column(String, index=True, nullable=False)  # WINDOWS, SYSLOG, SENSOR
+    event_id = Column(String, index=True, nullable=True)
+    source_ip = Column(String, index=True, nullable=True)
+    destination_ip = Column(String, index=True, nullable=True)
+    user_name = Column(String, index=True, nullable=True)
+    hostname = Column(String, index=True, nullable=True)
+    message = Column(Text, nullable=False)
+    severity = Column(String, index=True, nullable=False)
+    technique_id = Column(String, index=True, nullable=True)
+    raw_data = Column(Text, nullable=True)  # JSON formatted metadata details
+
+class CorrelatedIncident(Base, DBBaseModel):
+    __tablename__ = "correlated_incidents"
+    
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    severity = Column(String, index=True, nullable=False)  # LOW, MEDIUM, HIGH, CRITICAL
+    confidence = Column(Float, default=1.0, nullable=False)
+    status = Column(String, index=True, default="NEW", nullable=False)  # NEW, INVESTIGATING, CONTAINED, CLOSED
+    assigned_analyst = Column(String, nullable=True)
+    nodes_data = Column(Text, nullable=True)  # JSON serialized list of nodes in chain
+    links_data = Column(Text, nullable=True)  # JSON serialized list of links in chain
+    timeline_data = Column(Text, nullable=True)  # JSON serialized list of timeline logs
+
+Index("ix_normalized_logs_created_at", NormalizedLog.created_at)
+Index("ix_correlated_incidents_created_at", CorrelatedIncident.created_at)

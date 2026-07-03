@@ -9,6 +9,7 @@ import Reports from '../pages/reports/Reports';
 import SettingsPage from '../pages/settings/Settings';
 import Blueprint from '../pages/blueprint/Blueprint';
 import WAFManager from '../pages/waf/WAFManager';
+import CorrelationDashboard from '../pages/correlation/CorrelationDashboard';
 
 const router = createBrowserRouter([
   {
@@ -22,6 +23,10 @@ const router = createBrowserRouter([
       {
         path: 'attacks',
         element: <AttackFeed />
+      },
+      {
+        path: 'correlation',
+        element: <CorrelationDashboard />
       },
       {
         path: 'waf',
