@@ -50,11 +50,18 @@ async def lifespan(app: FastAPI):
             logging.info("Demo data populated successfully.")
         finally:
             db.close()
+            
+        # Start background threat simulator task
+        import asyncio
+        from backend.api.attacks import start_attack_simulator
+        app.state.simulator_task = asyncio.create_task(start_attack_simulator())
     except Exception as e:
         logging.error(f"Failed to initialize database tables or populate demo data: {e}", exc_info=True)
     yield
     # Cleanup tasks (if any) go here on Shutdown
     logging.info("Shutting down SentinelAI API backend...")
+    if hasattr(app.state, "simulator_task"):
+        app.state.simulator_task.cancel()
 
 app = FastAPI(
     title=settings.APP_NAME,

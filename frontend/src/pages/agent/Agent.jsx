@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import apiClient from '../../api/client';
 import './Agent.css';
+import ThreatIntelPanel from '../../components/ThreatIntelPanel';
 
 export default function Agent() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -20,7 +21,7 @@ export default function Agent() {
   
   // Input settings
   const [inputValue, setInputValue] = useState('');
-  const [modelName, setModelName] = useState('llama3.1');
+  const [modelName, setModelName] = useState('llama3.2:3b');
   const [availableModels, setAvailableModels] = useState([]);
   const [agentStatus, setAgentStatus] = useState('OFFLINE');
   const [loading, setLoading] = useState(false);
@@ -28,6 +29,7 @@ export default function Agent() {
 
   // Selected threat context
   const [selectedAttack, setSelectedAttack] = useState(null);
+  const [selectedIntelIp, setSelectedIntelIp] = useState(null);
 
   // Settings Overlay Configurations
   const [temp, setTemp] = useState(0.7);
@@ -135,38 +137,146 @@ export default function Agent() {
     const convId = currentConversation?.conversation_key || null;
     const userMsg = { role: 'user', content: text, created_at: new Date() };
     const tempMessages = [...messages, userMsg];
-    setMessages(tempMessages);
+    
+    // Add placeholder assistant message that will be populated with the stream chunks
+    const assistantMsgIndex = tempMessages.length;
+    setMessages([...tempMessages, { role: 'assistant', content: '', isStreaming: true }]);
     setLoading(true);
 
     try {
-      const response = await apiClient.post('/agent/chat', {
-        message: text,
-        model: modelName,
-        conversation_id: convId,
-        context: selectedAttack ? { attack_id: selectedAttack.id } : null,
-        temperature: temp,
-        max_tokens: maxTokens
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
+      const response = await fetch(`${apiBase}/agent/chat/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: text,
+          model: modelName,
+          conversation_id: convId,
+          context: selectedAttack ? { attack_id: selectedAttack.id } : null,
+          temperature: temp,
+          max_tokens: maxTokens
+        })
       });
 
-      // Update current conversation context
-      if (!currentConversation) {
-        const updatedConvs = await apiClient.get('/agent/conversations');
-        setConversations(updatedConvs);
-        const match = updatedConvs.find(c => c.conversation_key === response.conversation_id);
-        if (match) {
-          setCurrentConversation(match);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let finished = false;
+      let accumulatedText = '';
+      let conversationKey = convId;
+      let leftover = '';
+
+      while (!finished) {
+        const { value, done } = await reader.read();
+        if (done) {
+          finished = true;
+          break;
+        }
+
+        const chunkStr = decoder.decode(value, { stream: true });
+        const combined = leftover + chunkStr;
+        const lines = combined.split('\n');
+        leftover = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          
+          if (trimmed.startsWith('data: ')) {
+            const rawJson = trimmed.substring(6).trim();
+            if (!rawJson) continue;
+            try {
+              const data = JSON.parse(rawJson);
+              if (data.done) {
+                setMessages(prev => {
+                  const updated = [...prev];
+                  updated[assistantMsgIndex] = {
+                    role: 'assistant',
+                    content: accumulatedText || data.text,
+                    model: data.model,
+                    latency: data.latency,
+                    isStreaming: false,
+                    created_at: new Date()
+                  };
+                  return updated;
+                });
+                
+                if (!currentConversation && data.conversation_id) {
+                  conversationKey = data.conversation_id;
+                }
+              } else {
+                accumulatedText += data.text;
+                setMessages(prev => {
+                  const updated = [...prev];
+                  updated[assistantMsgIndex] = {
+                    role: 'assistant',
+                    content: accumulatedText,
+                    isStreaming: true,
+                    created_at: new Date()
+                  };
+                  return updated;
+                });
+              }
+            } catch (err) {
+              console.error("Failed to parse chunk JSON:", err, "Line:", line);
+            }
+          }
         }
       }
-      
-      setMessages([...tempMessages, { 
-        role: 'assistant', 
-        content: response.message, 
-        created_at: new Date(),
-        model: response.model,
-        latency: response.latency
-      }]);
+
+      if (leftover && leftover.trim().startsWith('data: ')) {
+        const rawJson = leftover.trim().substring(6).trim();
+        try {
+          const data = JSON.parse(rawJson);
+          if (data.done) {
+            setMessages(prev => {
+              const updated = [...prev];
+              updated[assistantMsgIndex] = {
+                role: 'assistant',
+                content: accumulatedText || data.text,
+                model: data.model,
+                latency: data.latency,
+                isStreaming: false,
+                created_at: new Date()
+              };
+              return updated;
+            });
+            if (!currentConversation && data.conversation_id) {
+              conversationKey = data.conversation_id;
+            }
+          } else {
+            accumulatedText += data.text;
+            setMessages(prev => {
+              const updated = [...prev];
+              updated[assistantMsgIndex] = {
+                role: 'assistant',
+                content: accumulatedText,
+                isStreaming: true,
+                created_at: new Date()
+              };
+              return updated;
+            });
+          }
+        } catch (err) {}
+      }
+
+      // Sync conversations list
+      const updatedConvs = await apiClient.get('/agent/conversations');
+      setConversations(updatedConvs);
+      if (!currentConversation && conversationKey) {
+        const match = updatedConvs.find(c => c.conversation_key === conversationKey);
+        if (match) {
+          const detail = await apiClient.get(`/agent/conversations/${match.id}`);
+          setCurrentConversation(detail);
+        }
+      }
     } catch (err) {
-      const isTimeout = (err.message || '').toLowerCase().includes('timeout') || err.code === 'ECONNABORTED';
+      const isTimeout = (err.message || '').toLowerCase().includes('timeout');
       const fallbackMsg = isTimeout 
         ? "The local AI model is online but took too long to respond. Try a smaller model, reduce max tokens, or retry."
         : `Security Copilot was unable to get a response: ${err.message || 'Connection failed.'}. Utilizing local rule fallback.`;
@@ -220,10 +330,15 @@ export default function Agent() {
     fetchConversations();
     fetchAgentStatus();
     
+    const enrichIp = searchParams.get('enrich_ip');
+    if (enrichIp) {
+      setSelectedIntelIp(enrichIp);
+    }
+    
     if (analyzeAttackId) {
       triggerAttackAnalysis(analyzeAttackId);
     }
-  }, [analyzeAttackId]);
+  }, [analyzeAttackId, searchParams]);
 
   const quickActions = [
     { label: "Explain Attack", query: "Can you provide a clear description and root cause summary of this attack vector?" },
@@ -232,6 +347,53 @@ export default function Agent() {
     { label: "Map to MITRE", query: "Explain what MITRE ATT&CK technique IDs match this capture and why." },
     { label: "IOC Summary", query: "Summarize the indicators of compromise (IP, port, signature patterns) for this event." },
   ];
+
+  // Inline badge highlights helper
+  const formatInlineTags = (line) => {
+    const mitreRegex = /\b(T\d{4}(?:\.\d{3})?)\b/g;
+    const percentRegex = /\b(\d{1,3}%)\b/g;
+    const ipRegex = /\b((?:[0-9]{1,3}\.){3}[0-9]{1,3})\b/g;
+    
+    const mitreMatches = [...line.matchAll(mitreRegex)];
+    const percentMatches = [...line.matchAll(percentRegex)];
+    const ipMatches = [...line.matchAll(ipRegex)];
+    
+    if (mitreMatches.length === 0 && percentMatches.length === 0 && ipMatches.length === 0) {
+      return line;
+    }
+    
+    let currentText = line;
+    currentText = currentText.replace(mitreRegex, '##MITRE_START##$1##MITRE_END##');
+    currentText = currentText.replace(percentRegex, '##PCT_START##$1##PCT_END##');
+    currentText = currentText.replace(ipRegex, '##IP_START##$1##IP_END##');
+    
+    const splitParts = currentText.split(/(##MITRE_START##.*?##MITRE_END##|##PCT_START##.*?##PCT_END##|##IP_START##.*?##IP_END##)/g);
+    
+    return splitParts.map((part, pidx) => {
+      if (part.startsWith('##MITRE_START##')) {
+        const id = part.replace('##MITRE_START##', '').replace('##MITRE_END##', '');
+        return <span key={pidx} className="inline-mitre-badge">{id}</span>;
+      }
+      if (part.startsWith('##PCT_START##')) {
+        const pct = part.replace('##PCT_START##', '').replace('##PCT_END##', '');
+        return <span key={pidx} className="inline-percent-badge">{pct}</span>;
+      }
+      if (part.startsWith('##IP_START##')) {
+        const ipVal = part.replace('##IP_START##', '').replace('##IP_END##', '');
+        return (
+          <span 
+            key={pidx} 
+            className="clickable-ip-address"
+            onClick={() => setSelectedIntelIp(ipVal)}
+            title="Click to query Threat Intelligence profile"
+          >
+            {ipVal}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
 
   // Custom Markdown renderer inside bubble
   const renderMarkdown = (text) => {
@@ -253,16 +415,16 @@ export default function Agent() {
       const lines = part.split("\n");
       return lines.map((line, lIdx) => {
         if (line.startsWith("### ")) {
-          return <h5 key={lIdx} className="md-h3 font-bold text-cyan mt-3">{line.replace("### ", "")}</h5>;
+          return <h5 key={lIdx} className="md-h3 font-bold text-cyan mt-3">{formatInlineTags(line.replace("### ", ""))}</h5>;
         }
         if (line.startsWith("## ")) {
-          return <h4 key={lIdx} className="md-h2 font-bold text-cyan mt-3">{line.replace("## ", "")}</h4>;
+          return <h4 key={lIdx} className="md-h2 font-bold text-cyan mt-3">{formatInlineTags(line.replace("## ", ""))}</h4>;
         }
         if (line.startsWith("- ") || line.startsWith("* ")) {
-          return <li key={lIdx} className="md-li list-disc ml-4 font-mono text-xs">{line.substring(2)}</li>;
+          return <li key={lIdx} className="md-li list-disc ml-4 font-mono text-xs">{formatInlineTags(line.substring(2))}</li>;
         }
         if (line.trim() === "") return <div key={lIdx} className="h-2"></div>;
-        return <p key={lIdx} className="md-p my-1 font-mono text-xs leading-relaxed">{line}</p>;
+        return <p key={lIdx} className="md-p my-1 font-mono text-xs leading-relaxed">{formatInlineTags(line)}</p>;
       });
     });
   };
@@ -273,53 +435,7 @@ export default function Agent() {
 
   return (
     <div className="copilot-container">
-      {/* 1. LEFT PANEL: Chat history */}
-      <aside className="copilot-left card-cyber">
-        <button className="btn-new-chat font-mono" onClick={handleNewConversation}>
-          <Plus size={14} />
-          New Investigation
-        </button>
-
-        <div className="history-search">
-          <Search size={12} className="search-icon" />
-          <input 
-            type="text" 
-            placeholder="Search sessions..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-
-        <div className="sessions-list scroll-bar font-mono">
-          {filteredConversations.map(conv => {
-            const isSelected = currentConversation?.id === conv.id;
-            return (
-              <div 
-                key={conv.id}
-                className={`session-item ${isSelected ? 'active' : ''}`}
-                onClick={() => handleSelectConversation(conv)}
-              >
-                <div className="session-info">
-                  <span className="session-title-text">{conv.title || "Blank chat session"}</span>
-                  <span className="session-model-label">{conv.model_used || "Ollama"}</span>
-                </div>
-                <button 
-                  className="btn-delete-session"
-                  onClick={(e) => handleDeleteConversation(conv.id, e)}
-                  title="Delete session"
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            );
-          })}
-          {filteredConversations.length === 0 && (
-            <div className="empty-history text-muted text-center mt-4 text-xs">No active sessions found</div>
-          )}
-        </div>
-      </aside>
-
-      {/* 2. CENTER PANEL: Chat Workspace */}
+      {/* CENTER PANEL: Chat Workspace (Expanded) */}
       <section className="copilot-center card-cyber">
         {/* Header Console controls */}
         <div className="copilot-workspace-header border-bottom">
@@ -330,6 +446,16 @@ export default function Agent() {
           </div>
 
           <div className="header-controls font-mono text-xs">
+            <button 
+              className="btn-new-chat-header font-mono text-xxs"
+              onClick={handleNewConversation}
+              title="Start a new investigation session"
+              style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              <Plus size={12} />
+              NEW CHAT
+            </button>
+
             <div className="control-item">
               <span className="text-muted">LLM:</span>
               <select 
@@ -341,7 +467,7 @@ export default function Agent() {
                   <option key={m} value={m}>{m}</option>
                 ))}
                 {availableModels.length === 0 && (
-                  <option value="llama3.1">llama3.1 (default)</option>
+                  <option value="llama3.2:3b">llama3.2:3b (default)</option>
                 )}
               </select>
             </div>
@@ -379,6 +505,9 @@ export default function Agent() {
                   </div>
                   <div className="msg-text">
                     {renderMarkdown(msg.content)}
+                    {msg.isStreaming && (
+                      <span className="blinking-cursor text-purple font-bold ml-1">_</span>
+                    )}
                     {msg.role === 'assistant' && msg.latency > 20 && (
                       <div className="latency-warning font-mono text-xxs mt-2 pt-2 flex items-center gap-2" style={{ color: '#ffd32a', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
                         <AlertTriangle size={10} />
@@ -453,7 +582,9 @@ export default function Agent() {
         {/* Threat context box */}
         <div className="card-cyber copilot-context-card">
           <h5 className="section-title"><Shield size={14} className="text-cyan" /> Threat Telemetry Context</h5>
-          {selectedAttack ? (
+          {selectedIntelIp ? (
+            <ThreatIntelPanel ip={selectedIntelIp} onClose={() => setSelectedIntelIp(null)} />
+          ) : selectedAttack ? (
             <div className="context-details font-mono text-xs">
               <div className="context-row font-bold text-red border-bottom pb-2">
                 <span>{selectedAttack.attack_type}</span>

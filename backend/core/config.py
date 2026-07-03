@@ -22,7 +22,7 @@ class Settings(BaseModel):
     
     # Local AI Settings
     OLLAMA_BASE_URL: str = Field(default_factory=lambda: os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"))
-    DEFAULT_OLLAMA_MODEL: str = Field(default_factory=lambda: os.getenv("DEFAULT_OLLAMA_MODEL", "llama3.1"))
+    DEFAULT_OLLAMA_MODEL: str = Field(default_factory=lambda: os.getenv("DEFAULT_OLLAMA_MODEL", "llama3.2:3b"))
     
     # Storage Settings
     REPORT_STORAGE: str = Field(default_factory=lambda: os.getenv("REPORT_STORAGE", "./storage/reports"))

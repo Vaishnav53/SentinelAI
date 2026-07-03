@@ -2,7 +2,9 @@ import httpx
 import logging
 import json
 import re
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import List, Optional, Dict, Any
@@ -42,33 +44,19 @@ async def get_agent_status(
     settings_service = Depends(get_settings_service)
 ):
     """Verify Ollama status and fetch installed model names dynamically."""
-    active_model = settings_service.get_setting(db, "default_ollama_model", settings.DEFAULT_OLLAMA_MODEL)
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
             response = await client.get(f"{settings.OLLAMA_BASE_URL}/api/tags")
             if response.status_code == 200:
                 data = response.json()
                 raw_models = [model["name"] for model in data.get("models", [])]
-                
-                # Filter out duplicate base names if a tagged version exists
-                models = []
-                for name in raw_models:
-                    if ":" not in name:
-                        if any(m.startswith(name + ":") for m in raw_models):
-                            continue
-                    models.append(name)
-                
-                # Insert active model if not matching any in list
-                has_match = any(m.split(':')[0] == active_model.split(':')[0] for m in models)
-                if not has_match and active_model not in models:
-                    models.insert(0, active_model)
-                return AgentStatus(status="ONLINE", models_available=models)
+                return AgentStatus(status="ONLINE", models_available=raw_models)
     except Exception as e:
         logging.warning(f"Ollama offline during status discovery: {e}")
         
     return AgentStatus(
         status="OFFLINE", 
-        models_available=[active_model, "gemma:latest", "llama3.1:latest"]
+        models_available=[]
     )
 
 @router.get("/conversations", response_model=List[ConversationRead])
@@ -93,6 +81,243 @@ async def delete_conversation(id: int, db: Session = Depends(get_db)):
     db.delete(conv)
     db.commit()
     return None
+
+@router.post("/chat/stream")
+async def post_chat_stream(
+    payload: ChatRequest,
+    db: Session = Depends(get_db),
+    settings_service = Depends(get_settings_service)
+):
+    """Submit prompt to Copilot, returning a streaming response chunk-by-chunk."""
+    raw_model = payload.model or settings_service.get_setting(db, "default_ollama_model", settings.DEFAULT_OLLAMA_MODEL)
+    model_name = await resolve_ollama_model_name(raw_model)
+    
+    conv_key = payload.conversation_id
+    linked_attack_id = payload.context.attack_id if payload.context else None
+    
+    if not conv_key:
+        conv_key = f"conv_{int(datetime.utcnow().timestamp())}"
+        
+    conv = db.query(AIConversation).filter(AIConversation.conversation_key == conv_key).first()
+    if not conv:
+        conv = AIConversation(
+            conversation_key=conv_key,
+            title=payload.message[:40] + ("..." if len(payload.message) > 40 else ""),
+            model_used=model_name,
+            linked_attack_id=linked_attack_id
+        )
+        db.add(conv)
+        db.commit()
+        db.refresh(conv)
+
+    user_msg = AIMessage(
+        conversation_id=conv.id,
+        role="user",
+        content=payload.message,
+        model=model_name,
+        latency=0.0
+    )
+    db.add(user_msg)
+    db.commit()
+
+    history_messages = db.query(AIMessage).filter(AIMessage.conversation_id == conv.id).order_by(AIMessage.created_at.asc()).all()
+    messages_payload = []
+    
+    system_prompt = settings_service.get_setting(
+        db, 
+        "ollama_system_prompt", 
+        "You are a cyber security SOC analyst. For security incidents and threat analyses, organize your response using exactly these sections in Markdown headers:\n### Threat Summary\n### MITRE ATT&CK\n### Confidence\n### Impact\n### Detection\n### Remediation\n### References\nBe direct, technical, and beginner-friendly. Do not mention any local templates or fallbacks."
+    )
+    messages_payload.append({"role": "system", "content": system_prompt})
+    
+    for msg in history_messages:
+        messages_payload.append({
+            "role": "user" if msg.role == "user" else "assistant",
+            "content": msg.content
+        })
+
+    # Dynamically verify installed models before running call
+    installed_models = []
+    is_ollama_online = False
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            resp = await client.get(f"{settings.OLLAMA_BASE_URL}/api/tags")
+            if resp.status_code == 200:
+                is_ollama_online = True
+                installed_models = [m["name"] for m in resp.json().get("models", [])]
+    except Exception as e:
+        logging.warning(f"Ollama connection check failed: {e}")
+
+    async def generate_response():
+        start_time = datetime.utcnow()
+        response_text = ""
+        source = "ollama"
+        
+        # 1. If Ollama is online, but model is not installed -> yield explicit error and terminate
+        if is_ollama_online:
+            if model_name not in installed_models:
+                error_msg = "Selected model is not installed. Please choose an available model."
+                yield f"data: {json.dumps({'text': error_msg, 'done': True, 'error': True, 'conversation_id': conv_key, 'model': model_name, 'latency': 0.0, 'source': 'ollama'})}\n\n"
+                
+                # Save the error message in the DB
+                ai_msg = AIMessage(
+                    conversation_id=conv.id,
+                    role="assistant",
+                    content=error_msg,
+                    model=model_name,
+                    latency=0.0
+                )
+                db.add(ai_msg)
+                db.commit()
+                return
+
+        # 2. If Ollama is completely offline, fall back to offline simulation
+        if not is_ollama_online:
+            source = "fallback"
+            fallback_full_text = ""
+            msg_lower = payload.message.lower()
+            if "explain" in msg_lower or "traversal" in msg_lower or "injection" in msg_lower:
+                fallback_full_text = """### Threat Summary
+The payload indicates an injection probe sequence (SQL Injection or Directory Traversal) targeting honeypot sensors.
+
+### MITRE ATT&CK
+T1190 - Exploit Public-Facing Application
+
+### Confidence
+High (95%)
+
+### Impact
+Unauthorized database exposure, server configuration file read, or authentication bypass.
+
+### Detection
+Identify escape symbols (e.g., `' OR '1'='1` or `../etc/passwd`) in application access logs.
+
+### Remediation
+1. Sanitize all input values contextually.
+2. Configure active Web Application Firewall (WAF) rule filters.
+
+### References
+CVE-2024-XXXX, OWASP Top 10 A03:2021-Injection"""
+            elif "mitigat" in msg_lower or "prevent" in msg_lower:
+                fallback_full_text = """### Threat Summary
+Host security policy recommendations to secure honeyports and service channels.
+
+### MITRE ATT&CK
+T1059 - Command and Scripting Interpreter
+
+### Confidence
+High (90%)
+
+### Impact
+System hijacking, shell execution, or remote system commands exposure.
+
+### Detection
+Track anomalous parent-child process paths (e.g., web server spawning bash shell).
+
+### Remediation
+1. Bind ports exclusively to loopback interface (e.g., 127.0.0.1).
+2. Configure fail2ban blocking rules for malicious probing IPs.
+
+### References
+SOC Defense Handbook Section 4.2"""
+            else:
+                fallback_full_text = """### Threat Summary
+Ollama response request has timed out.
+
+### MITRE ATT&CK
+N/A
+
+### Confidence
+N/A
+
+### Impact
+Latency in threat response telemetry delivery.
+
+### Detection
+Check uvicorn and ollama daemon container log levels.
+
+### Remediation
+The local AI model is online but responded too slowly. Try using a smaller model, lower max tokens, or run Ollama with GPU acceleration.
+
+### References
+SentinelAI System Performance Guide"""
+            
+            words = fallback_full_text.split(" ")
+            for idx, word in enumerate(words):
+                space = " " if idx < len(words) - 1 else ""
+                text_chunk = f"{word}{space}"
+                response_text += text_chunk
+                yield f"data: {json.dumps({'text': text_chunk, 'done': False, 'conversation_id': conv_key, 'model': model_name})}\n\n"
+                await asyncio.sleep(0.03)
+        else:
+            # Call Ollama API
+            ollama_url = f"{settings.OLLAMA_BASE_URL}/api/chat"
+            timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 90.0))
+            temperature = payload.temperature if payload.temperature is not None else 0.7
+            max_tokens = payload.max_tokens if payload.max_tokens is not None else 256
+            
+            try:
+                async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                    async with client.stream(
+                        "POST",
+                        ollama_url,
+                        json={
+                            "model": model_name,
+                            "messages": messages_payload,
+                            "options": {
+                                "num_predict": max_tokens,
+                                "temperature": temperature,
+                                "top_p": 0.9,
+                                "repeat_penalty": 1.1
+                            },
+                            "stream": True
+                        }
+                    ) as response:
+                        if response.status_code == 200:
+                            async for line in response.aiter_lines():
+                                if not line:
+                                    continue
+                                try:
+                                    chunk_json = json.loads(line)
+                                    text_chunk = chunk_json.get("message", {}).get("content", "")
+                                    if text_chunk:
+                                        response_text += text_chunk
+                                        yield f"data: {json.dumps({'text': text_chunk, 'done': False, 'conversation_id': conv_key, 'model': model_name})}\n\n"
+                                except Exception:
+                                    pass
+                        else:
+                            raise Exception(f"Ollama stream status {response.status_code}")
+            except Exception as e:
+                source = "fallback"
+                error_name = type(e).__name__
+                logging.warning(f"Ollama stream error mid-connection ({error_name}): {str(e)}.")
+                yield f"data: {json.dumps({'text': f'\\n[Stream Interrupted: {error_name}]', 'done': True, 'error': True, 'conversation_id': conv_key, 'model': model_name, 'latency': 0.0, 'source': 'ollama'})}\n\n"
+                return
+        
+        latency = (datetime.utcnow() - start_time).total_seconds()
+        
+        # Save finished response in DB
+        ai_msg = AIMessage(
+            conversation_id=conv.id,
+            role="assistant",
+            content=response_text,
+            model=model_name,
+            latency=latency
+        )
+        db.add(ai_msg)
+        db.commit()
+            
+        yield f"data: {json.dumps({'text': '', 'done': True, 'conversation_id': conv_key, 'model': model_name, 'latency': latency, 'source': source})}\n\n"
+
+    return StreamingResponse(
+        generate_response(), 
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 @router.post("/chat", response_model=ChatResponse)
 async def post_chat(
@@ -143,7 +368,7 @@ async def post_chat(
     system_prompt = settings_service.get_setting(
         db, 
         "ollama_system_prompt", 
-        "You are a cyber security SOC analyst. Answer questions clearly, directly, and practically. Be beginner-friendly for general questions, and provide actionable security recommendations for threats. Do not mention any local templates or fallbacks."
+        "You are a cyber security SOC analyst. For security incidents and threat analyses, organize your response using exactly these sections in Markdown headers:\n### Threat Summary\n### MITRE ATT&CK\n### Confidence\n### Impact\n### Detection\n### Remediation\n### References\nBe direct, technical, and beginner-friendly. Do not mention any local templates or fallbacks."
     )
     messages_payload.append({"role": "system", "content": system_prompt})
     
@@ -197,11 +422,70 @@ async def post_chat(
         source = "fallback"
         msg_lower = payload.message.lower()
         if "explain" in msg_lower or "traversal" in msg_lower or "injection" in msg_lower:
-            response_text = "Analysis: The payload indicates an injection probe sequence. Recommendations: Contextually sanitize input values and configure firewall blocks."
+            response_text = """### Threat Summary
+The payload indicates an injection probe sequence (SQL Injection or Directory Traversal) targeting honeypot sensors.
+
+### MITRE ATT&CK
+T1190 - Exploit Public-Facing Application
+
+### Confidence
+High (95%)
+
+### Impact
+Unauthorized database exposure, server configuration file read, or authentication bypass.
+
+### Detection
+Identify escape symbols (e.g., `' OR '1'='1` or `../etc/passwd`) in application access logs.
+
+### Remediation
+1. Sanitize all input values contextually.
+2. Configure active Web Application Firewall (WAF) rule filters.
+
+### References
+CVE-2024-XXXX, OWASP Top 10 A03:2021-Injection"""
         elif "mitigat" in msg_lower or "prevent" in msg_lower:
-            response_text = "Mitigation guidance: 1. Deploy firewall filters. 2. Bind application ports exclusively to local interfaces (e.g. 127.0.0.1)."
+            response_text = """### Threat Summary
+Host security policy recommendations to secure honeyports and service channels.
+
+### MITRE ATT&CK
+T1059 - Command and Scripting Interpreter
+
+### Confidence
+High (90%)
+
+### Impact
+System hijacking, shell execution, or remote system commands exposure.
+
+### Detection
+Track anomalous parent-child process paths (e.g., web server spawning bash shell).
+
+### Remediation
+1. Bind ports exclusively to loopback interface (e.g., 127.0.0.1).
+2. Configure fail2ban blocking rules for malicious probing IPs.
+
+### References
+SOC Defense Handbook Section 4.2"""
         else:
-            response_text = "The local AI model is online but responded too slowly. Try using a smaller model, lower max tokens, or run Ollama with GPU acceleration."
+            response_text = """### Threat Summary
+Ollama response request has timed out.
+
+### MITRE ATT&CK
+N/A
+
+### Confidence
+N/A
+
+### Impact
+Latency in threat response telemetry delivery.
+
+### Detection
+Check uvicorn and ollama daemon container log levels.
+
+### Remediation
+The local AI model is online but responded too slowly. Try using a smaller model, lower max tokens, or run Ollama with GPU acceleration.
+
+### References
+SentinelAI System Performance Guide"""
 
     # 6. Save AI Response in DB
     latency = (datetime.utcnow() - start_time).total_seconds()

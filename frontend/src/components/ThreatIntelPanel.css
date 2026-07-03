@@ -1,0 +1,189 @@
+/* Slide-in Threat Intelligence Drawer CSS */
+.threat-intel-drawer {
+  position: fixed;
+  top: 0;
+  right: -360px; /* Hidden state */
+  width: 340px;
+  height: 100vh;
+  background: rgba(6, 14, 28, 0.75);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-left: 1px solid rgba(0, 229, 255, 0.15);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(0, 229, 255, 0.02);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+.threat-intel-drawer.open {
+  right: 0; /* Visible state */
+}
+
+.drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  background-color: rgba(6, 14, 28, 0.4);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+.btn-close-drawer {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  outline: none;
+}
+
+.btn-close-drawer:hover {
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.drawer-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Section Cards inside Intel */
+.intel-section-card {
+  background: rgba(2, 6, 12, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  position: relative;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.target-ip-card {
+  border-left: 2px solid var(--cyan-primary);
+}
+
+.section-title-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px dotted rgba(255, 255, 255, 0.05);
+  padding-bottom: 5px;
+}
+
+/* Visual Threat score meter */
+.threat-bar-container {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 6px 0;
+}
+
+.threat-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 1s ease-in-out;
+}
+
+.intel-data-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.intel-grid-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+}
+
+/* Provider Status Feeds */
+.provider-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.provider-row:last-child {
+  border-bottom: none;
+}
+
+.provider-badge {
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+
+.provider-badge.live {
+  background-color: rgba(0, 255, 136, 0.08);
+  border: 1px solid rgba(0, 255, 136, 0.25);
+  color: var(--green);
+  box-shadow: 0 0 5px rgba(0, 255, 136, 0.05);
+}
+
+.provider-badge.mocked {
+  background-color: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  color: var(--cyan-primary);
+  box-shadow: 0 0 5px rgba(0, 229, 255, 0.05);
+}
+
+/* Loader animations */
+.drawer-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+.spinner-border {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(0, 229, 255, 0.1);
+  border-top-color: var(--cyan-primary);
+  border-radius: 50%;
+}
+
+/* Inline Threat Intelligence styling overrides for right panel copilot context card */
+.copilot-context-card .threat-intel-drawer {
+  position: static;
+  width: 100%;
+  height: auto;
+  background: transparent;
+  border-left: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: 0;
+  transition: none;
+}
+
+.copilot-context-card .threat-intel-drawer .drawer-header {
+  padding: 6px 0;
+  background-color: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.copilot-context-card .threat-intel-drawer .drawer-content {
+  padding: 10px 0 0 0;
+  height: auto;
+  overflow: visible;
+}

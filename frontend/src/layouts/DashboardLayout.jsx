@@ -13,7 +13,8 @@ import {
   Menu,
   X,
   Database,
-  BookOpen
+  BookOpen,
+  Clock
 } from 'lucide-react';
 import apiClient from '../api/client';
 import './DashboardLayout.css';
@@ -37,9 +38,9 @@ export default function DashboardLayout() {
 
   // Format Date for Clock
   const formatDate = (date) => {
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${days[date.getDay()]}, ${date.getDate()} ${months[date.getMonth()]}, ${date.getFullYear()}`;
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return `${days[date.getDay()]}, ${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
   };
 
   // Format Time for Clock
@@ -88,7 +89,7 @@ export default function DashboardLayout() {
   const menuItems = [
     { name: 'Dashboard', path: '/', icon: Activity },
     { name: 'Attack Feed', path: '/attacks', icon: Shield },
-    { name: 'Sensors Lab', path: '/sensors', icon: Radio },
+    { name: 'Honeypot Lab', path: '/sensors', icon: Radio },
     { name: 'AI Assistant', path: '/agent', icon: Terminal },
     { name: 'Reports', path: '/reports', icon: FileText },
     { name: 'Blueprint', path: '/blueprint', icon: BookOpen },
@@ -160,6 +161,11 @@ export default function DashboardLayout() {
             <span className="current-route-title font-mono title-cyber">
               {menuItems.find(i => i.path === location.pathname)?.name.toUpperCase() || 'CYBER DEFENSE SOC'}
             </span>
+            {location.pathname === '/' && (
+              <div className="header-subtitle font-mono">
+                AI-POWERED CYBER DEFENSE COMMAND CENTER
+              </div>
+            )}
           </div>
 
           {/* Active status checkers */}
@@ -185,8 +191,11 @@ export default function DashboardLayout() {
 
           {/* Real-time Clock Widget */}
           <div className="header-clock-widget font-mono">
-            <div className="clock-date">{formatDate(currentTime)}</div>
-            <div className="clock-time">{formatTime(currentTime)}</div>
+            <Clock size={16} className="clock-icon text-cyan" />
+            <div className="clock-details">
+              <div className="clock-time">{formatTime(currentTime)}</div>
+              <div className="clock-date">{formatDate(currentTime)}</div>
+            </div>
           </div>
         </header>
 
