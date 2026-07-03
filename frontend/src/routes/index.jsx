@@ -10,6 +10,7 @@ import SettingsPage from '../pages/settings/Settings';
 import Blueprint from '../pages/blueprint/Blueprint';
 import WAFManager from '../pages/waf/WAFManager';
 import CorrelationDashboard from '../pages/correlation/CorrelationDashboard';
+import SandboxDashboard from '../pages/sandbox/SandboxDashboard';
 
 const router = createBrowserRouter([
   {
@@ -27,6 +28,10 @@ const router = createBrowserRouter([
       {
         path: 'correlation',
         element: <CorrelationDashboard />
+      },
+      {
+        path: 'sandbox',
+        element: <SandboxDashboard />
       },
       {
         path: 'waf',

@@ -192,3 +192,20 @@ class CorrelatedIncident(Base, DBBaseModel):
 
 Index("ix_normalized_logs_created_at", NormalizedLog.created_at)
 Index("ix_correlated_incidents_created_at", CorrelatedIncident.created_at)
+
+class DecoySandboxFile(Base, DBBaseModel):
+    __tablename__ = "decoy_sandbox_files"
+    
+    filename = Column(String, nullable=False)
+    size_bytes = Column(Integer, nullable=False)
+    sha256 = Column(String, index=True, nullable=False)
+    md5 = Column(String, nullable=False)
+    sha1 = Column(String, nullable=False)
+    status = Column(String, index=True, nullable=False)  # CLEAN, SUSPICIOUS, MALICIOUS
+    threat_score = Column(Float, default=0.0, nullable=False)
+    malware_description = Column(String, nullable=True)
+    vt_reputation = Column(String, nullable=True)
+    sandbox_path = Column(String, nullable=False)
+    ip_address = Column(String, index=True, nullable=False)
+
+Index("ix_decoy_sandbox_files_created_at", DecoySandboxFile.created_at)

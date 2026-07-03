@@ -1,0 +1,82 @@
+.sandbox-root {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  height: 100%;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+}
+
+.hash-copy-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: rgba(2, 6, 12, 0.65);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+}
+
+.hash-copy-field .hash-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  width: 60px;
+  flex-shrink: 0;
+  font-weight: bold;
+}
+
+.hash-copy-field input {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-size: 10px;
+  flex: 1;
+  outline: none;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.hash-copy-field button {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+}
+
+.hash-copy-field button:hover {
+  color: var(--cyan-primary);
+}
+
+.scan-reasons-reputation {
+  background-color: rgba(2, 6, 12, 0.45);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 15px;
+}
+
+.reason-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reason-item .label {
+  font-size: 8px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: bold;
+}
+
+.reason-item .value {
+  font-size: 11px;
+  color: #ffffff;
+}
+
+.btn-quarantine:hover {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}

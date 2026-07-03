@@ -11,6 +11,7 @@ from backend.api.threat_intel import router as threat_intel_router
 from backend.api.waf import router as waf_router
 from backend.api.logs import router as logs_router
 from backend.api.correlation import router as correlation_router
+from backend.api.sandbox import router as sandbox_router
 
 api_router = APIRouter()
 
@@ -27,3 +28,4 @@ api_router.include_router(threat_intel_router)
 api_router.include_router(waf_router)
 api_router.include_router(logs_router)
 api_router.include_router(correlation_router)
+api_router.include_router(sandbox_router)

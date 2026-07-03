@@ -16,7 +16,8 @@ import {
   BookOpen,
   Clock,
   ShieldAlert,
-  GitBranch
+  GitBranch,
+  Folder
 } from 'lucide-react';
 import apiClient from '../api/client';
 import './DashboardLayout.css';
@@ -196,6 +197,31 @@ export default function DashboardLayout() {
           setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== correlationToast.id));
           }, 6000);
+        } else if (payload.type === 'new_sandbox_file') {
+          const sfile = payload.data;
+          if (sfile.status !== 'CLEAN') {
+            const sandboxToast = {
+              id: `SND-${sfile.id}`,
+              attack_type: "DECOY UPLOAD THREAT MATCH",
+              severity: sfile.status === 'MALICIOUS' ? 'CRITICAL' : 'HIGH',
+              threat_score: sfile.threat_score * 10.0,
+              source_ip: "File Sandbox Threat Scan",
+              created_at: sfile.created_at
+            };
+            
+            setToasts(prev => {
+              if (prev.some(t => t.id === sandboxToast.id)) return prev;
+              return [sandboxToast, ...prev].slice(0, 3);
+            });
+            setUnreadCount(prev => prev + 1);
+            setNotifications(prev => {
+              if (prev.some(n => n.id === sandboxToast.id)) return prev;
+              return [sandboxToast, ...prev].slice(0, 10);
+            });
+            setTimeout(() => {
+              setToasts(prev => prev.filter(t => t.id !== sandboxToast.id));
+            }, 6000);
+          }
         }
       } catch (err) {
         console.error("Failed to parse WebSocket alert:", err);
@@ -209,6 +235,7 @@ export default function DashboardLayout() {
     { name: 'Dashboard', path: '/', icon: Activity },
     { name: 'Incident Response', path: '/attacks', icon: Shield },
     { name: 'Threat Correlation', path: '/correlation', icon: GitBranch },
+    { name: 'Sandbox Console', path: '/sandbox', icon: Folder },
     { name: 'WAF Manager', path: '/waf', icon: ShieldAlert },
     { name: 'Honeypot Lab', path: '/sensors', icon: Radio },
     { name: 'AI Assistant', path: '/agent', icon: Terminal },

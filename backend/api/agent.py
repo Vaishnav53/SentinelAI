@@ -95,6 +95,7 @@ async def post_chat_stream(
     conv_key = payload.conversation_id
     linked_attack_id = payload.context.attack_id if payload.context else None
     linked_incident_id = payload.context.incident_id if payload.context else None
+    linked_sandbox_id = payload.context.sandbox_file_id if payload.context else None
     
     if not conv_key:
         conv_key = f"conv_{int(datetime.utcnow().timestamp())}"
@@ -145,8 +146,28 @@ async def post_chat_stream(
                 f"Incident Timeline Path:\n{incident.timeline_data}\n"
                 f"[END CONTEXT]"
             )
+
+    sandbox_context = ""
+    if linked_sandbox_id:
+        from backend.models.models import DecoySandboxFile
+        sfile = db.query(DecoySandboxFile).filter(DecoySandboxFile.id == linked_sandbox_id).first()
+        if sfile:
+            sandbox_context = (
+                f"\n\n[SANDBOX FILE ANALYSIS CONTEXT]\n"
+                f"File ID: ID-{sfile.id}\n"
+                f"Filename: {sfile.filename}\n"
+                f"File Size: {sfile.size_bytes} bytes\n"
+                f"MD5: {sfile.md5}\n"
+                f"SHA-1: {sfile.sha1}\n"
+                f"SHA-256: {sfile.sha256}\n"
+                f"Status: {sfile.status} | Threat Score: {sfile.threat_score * 10.0}/10.0\n"
+                f"Malware Description: {sfile.malware_description or 'None'}\n"
+                f"VirusTotal Reputation: {sfile.vt_reputation or 'Unknown'}\n"
+                f"Source Attacker IP: {sfile.ip_address}\n"
+                f"[END CONTEXT]"
+            )
             
-    messages_payload.append({"role": "system", "content": system_prompt + incident_context})
+    messages_payload.append({"role": "system", "content": system_prompt + incident_context + sandbox_context})
     
     for msg in history_messages:
         messages_payload.append({
@@ -222,6 +243,35 @@ Correlate repeated SSH/HTTP login failures (Event ID 4625) with subsequent login
 
 ### References
 {incident.description}"""
+            elif linked_sandbox_id:
+                from backend.models.models import DecoySandboxFile
+                sfile = db.query(DecoySandboxFile).filter(DecoySandboxFile.id == linked_sandbox_id).first()
+                if sfile:
+                    fallback_full_text = f"""### Threat Summary
+A sandbox threat analysis was conducted on uploaded file '{sfile.filename}'. The scanner flagged this payload as {sfile.status} (threat score {sfile.threat_score * 10.0}/10.0) based on dangerous extension patterns, binary heuristics, or VirusTotal hashes database hits.
+
+### MITRE ATT&CK
+* T1204.002 - User Execution: Malicious File
+* T1059 - Command and Scripting Interpreter
+
+### Confidence
+High (98%)
+
+### Impact
+Possible arbitrary shell execution, trojan drops, or macros bypass access. If execution succeeded outside the decoy sandbox, it could trigger remote control.
+
+### Detection
+Monitor host directories (especially web upload endpoints) for file signatures matching:
+* MD5: `{sfile.md5}`
+* SHA-256: `{sfile.sha256}`
+
+### Remediation
+1. Purge this payload from sandbox workspace directory.
+2. Maintain strict extension blocking (WAF manager policy block) targeting IP {sfile.ip_address}.
+3. Re-verify server upload folder execution permissions (disallow executable bits).
+
+### References
+{sfile.malware_description or 'No further descriptions.'}"""
             elif "explain" in msg_lower or "traversal" in msg_lower or "injection" in msg_lower:
                 fallback_full_text = """### Threat Summary
 The payload indicates an injection probe sequence (SQL Injection or Directory Traversal) targeting honeypot sensors.
@@ -380,6 +430,7 @@ async def post_chat(
     conv_key = payload.conversation_id
     linked_attack_id = payload.context.attack_id if payload.context else None
     linked_incident_id = payload.context.incident_id if payload.context else None
+    linked_sandbox_id = payload.context.sandbox_file_id if payload.context else None
     
     if not conv_key:
         conv_key = f"conv_{int(datetime.utcnow().timestamp())}"
@@ -434,7 +485,27 @@ async def post_chat(
                 f"[END CONTEXT]"
             )
             
-    messages_payload.append({"role": "system", "content": system_prompt + incident_context})
+    sandbox_context = ""
+    if linked_sandbox_id:
+        from backend.models.models import DecoySandboxFile
+        sfile = db.query(DecoySandboxFile).filter(DecoySandboxFile.id == linked_sandbox_id).first()
+        if sfile:
+            sandbox_context = (
+                f"\n\n[SANDBOX FILE ANALYSIS CONTEXT]\n"
+                f"File ID: ID-{sfile.id}\n"
+                f"Filename: {sfile.filename}\n"
+                f"File Size: {sfile.size_bytes} bytes\n"
+                f"MD5: {sfile.md5}\n"
+                f"SHA-1: {sfile.sha1}\n"
+                f"SHA-256: {sfile.sha256}\n"
+                f"Status: {sfile.status} | Threat Score: {sfile.threat_score * 10.0}/10.0\n"
+                f"Malware Description: {sfile.malware_description or 'None'}\n"
+                f"VirusTotal Reputation: {sfile.vt_reputation or 'Unknown'}\n"
+                f"Source Attacker IP: {sfile.ip_address}\n"
+                f"[END CONTEXT]"
+            )
+            
+    messages_payload.append({"role": "system", "content": system_prompt + incident_context + sandbox_context})
     
     # Historical turns
     for msg in history_messages:
@@ -513,6 +584,35 @@ Correlate repeated SSH/HTTP login failures (Event ID 4625) with subsequent login
 
 ### References
 {incident.description}"""
+        elif linked_sandbox_id:
+            from backend.models.models import DecoySandboxFile
+            sfile = db.query(DecoySandboxFile).filter(DecoySandboxFile.id == linked_sandbox_id).first()
+            if sfile:
+                response_text = f"""### Threat Summary
+A sandbox threat analysis was conducted on uploaded file '{sfile.filename}'. The scanner flagged this payload as {sfile.status} (threat score {sfile.threat_score * 10.0}/10.0) based on dangerous extension patterns, binary heuristics, or VirusTotal hashes database hits.
+
+### MITRE ATT&CK
+* T1204.002 - User Execution: Malicious File
+* T1059 - Command and Scripting Interpreter
+
+### Confidence
+High (98%)
+
+### Impact
+Possible arbitrary shell execution, trojan drops, or macros bypass access. If execution succeeded outside the decoy sandbox, it could trigger remote control.
+
+### Detection
+Monitor host directories (especially web upload endpoints) for file signatures matching:
+* MD5: `{sfile.md5}`
+* SHA-256: `{sfile.sha256}`
+
+### Remediation
+1. Purge this payload from sandbox workspace directory.
+2. Maintain strict extension blocking (WAF manager policy block) targeting IP {sfile.ip_address}.
+3. Re-verify server upload folder execution permissions (disallow executable bits).
+
+### References
+{sfile.malware_description or 'No further descriptions.'}"""
         elif "explain" in msg_lower or "traversal" in msg_lower or "injection" in msg_lower:
             response_text = """### Threat Summary
 The payload indicates an injection probe sequence (SQL Injection or Directory Traversal) targeting honeypot sensors.

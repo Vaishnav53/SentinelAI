@@ -5,6 +5,7 @@ from datetime import datetime
 class ChatContext(BaseModel):
     attack_id: Optional[int] = None
     incident_id: Optional[int] = None
+    sandbox_file_id: Optional[int] = None
 
 class ChatRequest(BaseModel):
     message: str

@@ -553,7 +553,7 @@ class HoneypotRequestHandler(http.server.BaseHTTPRequestHandler):
 
         # 2. Directory / Path traversal check
         path_lower = urllib.parse.unquote(self.path).lower()
-        if "../" in path_lower or "..\\" in path_lower or "/etc/passwd" in path_lower or "win.ini" in path_lower:
+        if "../" in path_lower or "..\\" in path_lower or "passwd" in path_lower or "win.ini" in path_lower or "boot.ini" in path_lower:
             self.log_attack(
                 "Path Traversal", 
                 "CRITICAL", 
@@ -562,10 +562,42 @@ class HoneypotRequestHandler(http.server.BaseHTTPRequestHandler):
                 "Verify strict server folder permissions and validate parameters to prevent escaping the web directory.",
                 f"Path: {self.path}"
             )
-            self.send_response(403)
-            self.send_header("Content-Type", "text/html")
+            
+            # Formulate realistic mock output content
+            mock_content = ""
+            if "passwd" in path_lower:
+                mock_content = """root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+sys:x:3:3:sys:/dev:/usr/sbin/nologin
+sync:x:4:65534:sync:/bin:/bin/sync
+games:x:5:60:games:/usr/games:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin
+aetheris-admin:x:1000:1000:Aetheris Admin Portal,,,:/home/aetheris-admin:/bin/bash
+sentinel-decoy:x:1001:1001:Sentinel Decoy Sensor,,,:/home/sentinel-decoy:/bin/bash"""
+            elif "win.ini" in path_lower or "boot.ini" in path_lower:
+                mock_content = """; for 16-bit app support
+[fonts]
+[extensions]
+[mci extensions]
+[files]
+[Mail]
+MAPI=1"""
+            else:
+                mock_content = """total 24
+drwxr-xr-x  3 www-data www-data  4096 Jul  3 12:00 .
+drwxr-xr-x 12 www-data www-data  4096 Jul  3 12:00 ..
+-rw-r--r--  1 www-data www-data   450 Jul  3 12:00 config.php
+-rw-r--r--  1 www-data www-data 12288 Jul  3 12:00 database.db
+-rw-r--r--  1 www-data www-data   248 Jul  3 12:00 login.php
+drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(mock_content)))
             self.end_headers()
-            self.wfile.write(get_lab_html("403 Forbidden", "<p class='text-danger'>Error 403: Forbidden Path Traversal Violation. Access denied.</p>").encode('utf-8'))
+            self.wfile.write(mock_content.encode('utf-8'))
             return True
 
         # 3. Broken Access Control check on admin routes
@@ -948,6 +980,19 @@ class HoneypotRequestHandler(http.server.BaseHTTPRequestHandler):
                 if fn_match:
                     uploaded_filename = fn_match.group(1)
                 
+                # Slicing out the multipart file body content
+                file_content = body.encode('utf-8')
+                header_boundary = re.search(rb'\r\n\r\n', file_content)
+                if header_boundary:
+                    start_idx = header_boundary.end()
+                    end_match = re.search(rb'\r\n---', file_content[start_idx:])
+                    if end_match:
+                        file_content = file_content[start_idx : start_idx + end_match.start()]
+                    else:
+                        file_content = file_content[start_idx:]
+                else:
+                    file_content = body.encode('utf-8')
+
                 # Check for malicious script files
                 extension = uploaded_filename.split(".")[-1].lower() if "." in uploaded_filename else ""
                 if extension in ["php", "jsp", "asp", "aspx", "sh", "exe", "py", "pl", "js"]:
@@ -960,12 +1005,33 @@ class HoneypotRequestHandler(http.server.BaseHTTPRequestHandler):
                         f"Attempted upload of executable extension script: {uploaded_filename}"
                     )
                 
+                # Perform Sandbox Scan & Hash persistence
+                from backend.services.decoy_sandbox import DecoySandboxService
+                import asyncio
+
+                db = SessionLocal()
+                try:
+                    sandbox_service = DecoySandboxService(db)
+                    loop = asyncio.new_event_loop()
+                    loop.run_until_complete(
+                        sandbox_service.save_and_scan_file(
+                            uploaded_filename, 
+                            file_content, 
+                            self.client_address[0]
+                        )
+                    )
+                    loop.close()
+                except Exception as ex:
+                    logger.error(f"Sandbox scan failed: {ex}")
+                finally:
+                    db.close()
+
                 # Mock record save
                 self.lab_uploads.append({
                     "id": len(self.lab_uploads) + 1,
                     "username": username,
                     "filename": uploaded_filename,
-                    "size": f"{round(len(body) / 1024, 1)} KB",
+                    "size": f"{round(len(file_content) / 1024, 1)} KB",
                     "created_at": datetime.now().strftime("%Y-%m-%d %H:%M")
                 })
                 
