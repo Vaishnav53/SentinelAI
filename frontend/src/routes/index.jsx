@@ -8,6 +8,7 @@ import Agent from '../pages/agent/Agent';
 import Reports from '../pages/reports/Reports';
 import SettingsPage from '../pages/settings/Settings';
 import Blueprint from '../pages/blueprint/Blueprint';
+import WAFManager from '../pages/waf/WAFManager';
 
 const router = createBrowserRouter([
   {
@@ -21,6 +22,10 @@ const router = createBrowserRouter([
       {
         path: 'attacks',
         element: <AttackFeed />
+      },
+      {
+        path: 'waf',
+        element: <WAFManager />
       },
       {
         path: 'sensors',

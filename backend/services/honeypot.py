@@ -608,6 +608,41 @@ class HoneypotRequestHandler(http.server.BaseHTTPRequestHandler):
             except Exception as e:
                 logger.error(f"Error reading body: {e}")
 
+        # Check Active Defense Engine rules and interception signatures
+        db = SessionLocal()
+        try:
+            from backend.services.active_defense import ActiveDefenseEngine
+            engine = ActiveDefenseEngine(db)
+            headers_dict = {k: v for k, v in self.headers.items()}
+            is_blocked, action, reason = engine.evaluate_request(
+                self.client_address[0], 
+                path, 
+                self.command, 
+                headers_dict, 
+                body
+            )
+            if is_blocked:
+                # Log attack event so SentinelAI console tracks the incident
+                self.log_attack(
+                    f"WAF Intercept: {action}",
+                    "CRITICAL" if action == "BLOCK" else "HIGH",
+                    0.99,
+                    "T1190",
+                    f"Active defense block active for source IP. Maintain blocking rule.",
+                    f"Request: {self.command} {path} | Trigger: {reason}"
+                )
+                
+                block_html = engine.get_block_html(self.client_address[0], action, reason)
+                self.send_response(403)
+                self.send_header("Content-Type", "text/html")
+                self.end_headers()
+                self.wfile.write(block_html.encode('utf-8'))
+                return
+        except Exception as e:
+            logger.error(f"Active defense evaluation failure: {e}", exc_info=True)
+        finally:
+            db.close()
+
         # Logging request locally for the admin console
         user = self.get_session_user()
         request_log_entry = {

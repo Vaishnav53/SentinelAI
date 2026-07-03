@@ -136,3 +136,29 @@ Index("ix_attack_events_created_at", AttackEvent.created_at)
 Index("ix_system_metrics_created_at", SystemMetric.created_at)
 Index("ix_windows_log_events_created_at", WindowsLogEvent.created_at)
 Index("ix_audit_logs_created_at", AuditLog.created_at)
+
+class WAFRule(Base, DBBaseModel):
+    __tablename__ = "waf_rules"
+    
+    ip_address = Column(String, index=True, nullable=True)  # Specific IP target, or null for general WAF check signatures
+    action = Column(String, index=True, nullable=False)  # ALLOW, BLOCK, QUARANTINE
+    reason = Column(Text, nullable=True)
+    is_enabled = Column(Integer, default=1, nullable=False)  # 1 = Enabled, 0 = Disabled
+    rule_type = Column(String, index=True, default="MANUAL", nullable=False)  # MANUAL, AUTOMATIC
+    expires_at = Column(DateTime, nullable=True)
+    analyst_attribution = Column(String, nullable=True)
+    trigger_count = Column(Integer, default=0, nullable=False)
+
+class WAFHit(Base, DBBaseModel):
+    __tablename__ = "waf_hits"
+    
+    ip_address = Column(String, index=True, nullable=False)
+    rule_id = Column(Integer, ForeignKey("waf_rules.id"), nullable=True)
+    path = Column(String, nullable=False)
+    method = Column(String, nullable=False)
+    action = Column(String, nullable=False)
+    payload = Column(Text, nullable=True)
+    user_agent = Column(Text, nullable=True)
+
+Index("ix_waf_rules_created_at", WAFRule.created_at)
+Index("ix_waf_hits_created_at", WAFHit.created_at)

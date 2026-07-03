@@ -149,6 +149,29 @@ export default function DashboardLayout() {
               setToasts(prev => prev.filter(t => t.id !== attack.id));
             }, 6000);
           }
+        } else if (payload.type === 'waf_rule_created') {
+          const rule = payload.data;
+          const wafToast = {
+            id: `WAF-${rule.id}`,
+            attack_type: "AUTO WAF BLOCK INITIATED",
+            severity: "CRITICAL",
+            threat_score: 10.0,
+            source_ip: rule.ip_address || "Global",
+            created_at: rule.created_at
+          };
+          
+          setToasts(prev => {
+            if (prev.some(t => t.id === wafToast.id)) return prev;
+            return [wafToast, ...prev].slice(0, 3);
+          });
+          setUnreadCount(prev => prev + 1);
+          setNotifications(prev => {
+            if (prev.some(n => n.id === wafToast.id)) return prev;
+            return [wafToast, ...prev].slice(0, 10);
+          });
+          setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== wafToast.id));
+          }, 6000);
         }
       } catch (err) {
         console.error("Failed to parse WebSocket alert:", err);
@@ -161,6 +184,7 @@ export default function DashboardLayout() {
   const menuItems = [
     { name: 'Dashboard', path: '/', icon: Activity },
     { name: 'Incident Response', path: '/attacks', icon: Shield },
+    { name: 'WAF Manager', path: '/waf', icon: ShieldAlert },
     { name: 'Honeypot Lab', path: '/sensors', icon: Radio },
     { name: 'AI Assistant', path: '/agent', icon: Terminal },
     { name: 'Reports', path: '/reports', icon: FileText },
