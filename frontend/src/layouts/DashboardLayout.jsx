@@ -17,7 +17,9 @@ import {
   Clock,
   ShieldAlert,
   GitBranch,
-  Folder
+  Folder,
+  Skull,
+  Workflow
 } from 'lucide-react';
 import apiClient from '../api/client';
 import './DashboardLayout.css';
@@ -236,6 +238,8 @@ export default function DashboardLayout() {
     { name: 'Incident Response', path: '/attacks', icon: Shield },
     { name: 'Threat Correlation', path: '/correlation', icon: GitBranch },
     { name: 'Sandbox Console', path: '/sandbox', icon: Folder },
+    { name: 'Attacker Profiles', path: '/attackers', icon: Skull },
+    { name: 'Threat Playbooks', path: '/playbooks', icon: Workflow },
     { name: 'WAF Manager', path: '/waf', icon: ShieldAlert },
     { name: 'Honeypot Lab', path: '/sensors', icon: Radio },
     { name: 'AI Assistant', path: '/agent', icon: Terminal },

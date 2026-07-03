@@ -209,3 +209,21 @@ class DecoySandboxFile(Base, DBBaseModel):
     ip_address = Column(String, index=True, nullable=False)
 
 Index("ix_decoy_sandbox_files_created_at", DecoySandboxFile.created_at)
+
+class ThreatPlaybook(Base, DBBaseModel):
+    __tablename__ = "threat_playbooks"
+    
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    trigger_type = Column(String, index=True, default="MANUAL", nullable=False)  # ON_MALICIOUS_UPLOAD, ON_CORRELATED_INCIDENT, MANUAL
+    actions_data = Column(Text, nullable=False)  # JSON serialized list of action structures
+
+class PlaybookExecution(Base, DBBaseModel):
+    __tablename__ = "playbook_executions"
+    
+    playbook_id = Column(Integer, ForeignKey("threat_playbooks.id"), nullable=False)
+    target_ip = Column(String, index=True, nullable=False)
+    status = Column(String, index=True, default="RUNNING", nullable=False)  # RUNNING, SUCCESS, FAILED
+    logs_data = Column(Text, nullable=True)  # JSON serialized execution log steps
+
+Index("ix_playbook_executions_created_at", PlaybookExecution.created_at)

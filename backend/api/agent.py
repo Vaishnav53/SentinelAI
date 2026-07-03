@@ -96,6 +96,7 @@ async def post_chat_stream(
     linked_attack_id = payload.context.attack_id if payload.context else None
     linked_incident_id = payload.context.incident_id if payload.context else None
     linked_sandbox_id = payload.context.sandbox_file_id if payload.context else None
+    linked_attacker_ip = payload.context.attacker_ip if payload.context else None
     
     if not conv_key:
         conv_key = f"conv_{int(datetime.utcnow().timestamp())}"
@@ -166,8 +167,25 @@ async def post_chat_stream(
                 f"Source Attacker IP: {sfile.ip_address}\n"
                 f"[END CONTEXT]"
             )
+
+    attacker_context = ""
+    if linked_attacker_ip:
+        from backend.services.attacker_profiling import AttackerProfilingService
+        profiler = AttackerProfilingService(db)
+        profile = profiler.get_attacker_profile(linked_attacker_ip)
+        if profile:
+            attacker_context = (
+                f"\n\n[ATTACKER THREAT PROFILE CONTEXT]\n"
+                f"Attacker IP: {profile['ip_address']}\n"
+                f"GeoIP Location: {profile['city']}, {profile['country']}\n"
+                f"Total Attacks: {profile['attack_count']} | WAF interceptions: {profile['waf_count']} | Decoy uploads: {profile['sandbox_count']}\n"
+                f"Currently Blocked: {profile['is_blocked']}\n"
+                f"Observed MITRE Techniques:\n{json.dumps(profile['mitre_techniques'])}\n"
+                f"Recent Timeline path:\n{json.dumps(profile['timeline'][:10])}\n"
+                f"[END CONTEXT]"
+            )
             
-    messages_payload.append({"role": "system", "content": system_prompt + incident_context + sandbox_context})
+    messages_payload.append({"role": "system", "content": system_prompt + incident_context + sandbox_context + attacker_context})
     
     for msg in history_messages:
         messages_payload.append({
@@ -272,6 +290,35 @@ Monitor host directories (especially web upload endpoints) for file signatures m
 
 ### References
 {sfile.malware_description or 'No further descriptions.'}"""
+            elif linked_attacker_ip:
+                from backend.services.attacker_profiling import AttackerProfilingService
+                profiler = AttackerProfilingService(db)
+                profile = profiler.get_attacker_profile(linked_attacker_ip)
+                if profile:
+                    fallback_full_text = f"""### Threat Summary
+A unified attacker profiling analysis was compiled for IP address '{profile['ip_address']}' (resolved location: {profile['city']}, {profile['country']}). The client was observed launching {profile['attack_count']} sensor attacks, triggering {profile['waf_count']} WAF blocks, and uploading {profile['sandbox_count']} decoy file payloads.
+
+### MITRE ATT&CK
+* T1110 - Brute Force (Credential Access)
+* T1190 - Exploit Public-Facing Application (Initial Access)
+* T1083 - File and Directory Discovery (Discovery)
+
+### Confidence
+High (96%)
+
+### Impact
+Multi-stage scanning, authentication bypass attempts, and potential server directory compromises. WAF state: {'Active Block' if profile['is_blocked'] else 'Not blocked'}.
+
+### Detection
+Correlate network ingress logs, honeypot telemetry feeds, and WAF rules triggers. Track attacker's progression from brute-forcing to sandbox payload drops.
+
+### Remediation
+1. Run playbooks such as 'Rapid Containment Block' to enforce uploader isolation blocks.
+2. Cross-reference threat intelligence indexes (AbuseIPDB reputation lookup) for this IP.
+3. Review audit trail logs of the incident drawer assignment for analyst notes.
+
+### References
+MITRE mapping signature count: {len(profile['mitre_techniques'])} techniques observed."""
             elif "explain" in msg_lower or "traversal" in msg_lower or "injection" in msg_lower:
                 fallback_full_text = """### Threat Summary
 The payload indicates an injection probe sequence (SQL Injection or Directory Traversal) targeting honeypot sensors.
@@ -431,6 +478,7 @@ async def post_chat(
     linked_attack_id = payload.context.attack_id if payload.context else None
     linked_incident_id = payload.context.incident_id if payload.context else None
     linked_sandbox_id = payload.context.sandbox_file_id if payload.context else None
+    linked_attacker_ip = payload.context.attacker_ip if payload.context else None
     
     if not conv_key:
         conv_key = f"conv_{int(datetime.utcnow().timestamp())}"
@@ -504,8 +552,25 @@ async def post_chat(
                 f"Source Attacker IP: {sfile.ip_address}\n"
                 f"[END CONTEXT]"
             )
+
+    attacker_context = ""
+    if linked_attacker_ip:
+        from backend.services.attacker_profiling import AttackerProfilingService
+        profiler = AttackerProfilingService(db)
+        profile = profiler.get_attacker_profile(linked_attacker_ip)
+        if profile:
+            attacker_context = (
+                f"\n\n[ATTACKER THREAT PROFILE CONTEXT]\n"
+                f"Attacker IP: {profile['ip_address']}\n"
+                f"GeoIP Location: {profile['city']}, {profile['country']}\n"
+                f"Total Attacks: {profile['attack_count']} | WAF interceptions: {profile['waf_count']} | Decoy uploads: {profile['sandbox_count']}\n"
+                f"Currently Blocked: {profile['is_blocked']}\n"
+                f"Observed MITRE Techniques:\n{json.dumps(profile['mitre_techniques'])}\n"
+                f"Recent Timeline path:\n{json.dumps(profile['timeline'][:10])}\n"
+                f"[END CONTEXT]"
+            )
             
-    messages_payload.append({"role": "system", "content": system_prompt + incident_context + sandbox_context})
+    messages_payload.append({"role": "system", "content": system_prompt + incident_context + sandbox_context + attacker_context})
     
     # Historical turns
     for msg in history_messages:
@@ -613,6 +678,35 @@ Monitor host directories (especially web upload endpoints) for file signatures m
 
 ### References
 {sfile.malware_description or 'No further descriptions.'}"""
+        elif linked_attacker_ip:
+            from backend.services.attacker_profiling import AttackerProfilingService
+            profiler = AttackerProfilingService(db)
+            profile = profiler.get_attacker_profile(linked_attacker_ip)
+            if profile:
+                response_text = f"""### Threat Summary
+A unified attacker profiling analysis was compiled for IP address '{profile['ip_address']}' (resolved location: {profile['city']}, {profile['country']}). The client was observed launching {profile['attack_count']} sensor attacks, triggering {profile['waf_count']} WAF blocks, and uploading {profile['sandbox_count']} decoy file payloads.
+
+### MITRE ATT&CK
+* T1110 - Brute Force (Credential Access)
+* T1190 - Exploit Public-Facing Application (Initial Access)
+* T1083 - File and Directory Discovery (Discovery)
+
+### Confidence
+High (96%)
+
+### Impact
+Multi-stage scanning, authentication bypass attempts, and potential server directory compromises. WAF state: {'Active Block' if profile['is_blocked'] else 'Not blocked'}.
+
+### Detection
+Correlate network ingress logs, honeypot telemetry feeds, and WAF rules triggers. Track attacker's progression from brute-forcing to sandbox payload drops.
+
+### Remediation
+1. Run playbooks such as 'Rapid Containment Block' to enforce uploader isolation blocks.
+2. Cross-reference threat intelligence indexes (AbuseIPDB reputation lookup) for this IP.
+3. Review audit trail logs of the incident drawer assignment for analyst notes.
+
+### References
+MITRE mapping signature count: {len(profile['mitre_techniques'])} techniques observed."""
         elif "explain" in msg_lower or "traversal" in msg_lower or "injection" in msg_lower:
             response_text = """### Threat Summary
 The payload indicates an injection probe sequence (SQL Injection or Directory Traversal) targeting honeypot sensors.

@@ -11,6 +11,8 @@ import Blueprint from '../pages/blueprint/Blueprint';
 import WAFManager from '../pages/waf/WAFManager';
 import CorrelationDashboard from '../pages/correlation/CorrelationDashboard';
 import SandboxDashboard from '../pages/sandbox/SandboxDashboard';
+import AttackerProfiles from '../pages/attackers/AttackerProfiles';
+import PlaybooksConsole from '../pages/playbooks/PlaybooksConsole';
 
 const router = createBrowserRouter([
   {
@@ -32,6 +34,14 @@ const router = createBrowserRouter([
       {
         path: 'sandbox',
         element: <SandboxDashboard />
+      },
+      {
+        path: 'attackers',
+        element: <AttackerProfiles />
+      },
+      {
+        path: 'playbooks',
+        element: <PlaybooksConsole />
       },
       {
         path: 'waf',

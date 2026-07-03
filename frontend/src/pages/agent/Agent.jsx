@@ -30,6 +30,8 @@ export default function Agent() {
   // Selected threat context
   const [selectedAttack, setSelectedAttack] = useState(null);
   const [selectedIntelIp, setSelectedIntelIp] = useState(null);
+  const [selectedSandboxId, setSelectedSandboxId] = useState(null);
+  const [selectedAttackerIp, setSelectedAttackerIp] = useState(null);
 
   // Settings Overlay Configurations
   const [temp, setTemp] = useState(0.7);
@@ -154,7 +156,12 @@ export default function Agent() {
           message: text,
           model: modelName,
           conversation_id: convId,
-          context: selectedAttack ? { attack_id: selectedAttack.id } : null,
+          context: {
+            attack_id: selectedAttack ? selectedAttack.id : (searchParams.get('analyze_attack') ? parseInt(searchParams.get('analyze_attack')) : null),
+            incident_id: searchParams.get('analyze_incident') ? parseInt(searchParams.get('analyze_incident')) : null,
+            sandbox_file_id: selectedSandboxId || (searchParams.get('analyze_sandbox') ? parseInt(searchParams.get('analyze_sandbox')) : null),
+            attacker_ip: selectedAttackerIp || searchParams.get('analyze_attacker') || null
+          },
           temperature: temp,
           max_tokens: maxTokens
         })
@@ -337,6 +344,18 @@ export default function Agent() {
     
     if (analyzeAttackId) {
       triggerAttackAnalysis(analyzeAttackId);
+    }
+
+    const analyzeSandboxId = searchParams.get('analyze_sandbox');
+    if (analyzeSandboxId) {
+      setSelectedSandboxId(parseInt(analyzeSandboxId));
+      setInputValue("Can you perform an automated threat sandbox analysis for this uploaded payload file?");
+    }
+
+    const analyzeAttackerIp = searchParams.get('analyze_attacker');
+    if (analyzeAttackerIp) {
+      setSelectedAttackerIp(analyzeAttackerIp);
+      setInputValue("Please compile a threat brief campaign progression dossier and playbook recommendation list for this attacker IP.");
     }
   }, [analyzeAttackId, searchParams]);
 
