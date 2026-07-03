@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Shield, 
   Activity, 
@@ -14,12 +14,14 @@ import {
   X,
   Database,
   BookOpen,
-  Clock
+  Clock,
+  ShieldAlert
 } from 'lucide-react';
 import apiClient from '../api/client';
 import './DashboardLayout.css';
 
 export default function DashboardLayout() {
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [backendStatus, setBackendStatus] = useState('CHECKING');
   const [ollamaStatus, setOllamaStatus] = useState('CHECKING');
@@ -29,6 +31,13 @@ export default function DashboardLayout() {
   const [currentTime, setCurrentTime] = useState(new Date());
   
   const location = useLocation();
+
+  // Notification SOC center hooks
+  const [notifications, setNotifications] = useState([]);
+  const [toasts, setToasts] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [thresholds, setThresholds] = useState({ severity: 'HIGH', score: 70.0 });
 
   // Clock Widget timer
   useEffect(() => {
@@ -86,9 +95,72 @@ export default function DashboardLayout() {
     return () => clearInterval(interval);
   }, []);
 
+  // Load configured thresholds
+  useEffect(() => {
+    const fetchThresholds = async () => {
+      try {
+        const data = await apiClient.get('/settings');
+        setThresholds({
+          severity: data.alert_severity_threshold || 'HIGH',
+          score: parseFloat(data.alert_score_threshold || 70.0)
+        });
+      } catch (e) {
+        console.warn("Failed to fetch settings thresholds:", e);
+      }
+    };
+    fetchThresholds();
+  }, [location.pathname]); // Refresh when settings might have changed
+
+  // WebSocket live alerts alerts connector
+  useEffect(() => {
+    const wsUrl = `ws://${window.location.hostname || '127.0.0.1'}:8000/api/attacks/ws`;
+    const socket = new WebSocket(wsUrl);
+
+    socket.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'new_attack') {
+          const attack = payload.data;
+          
+          // Verify if it exceeds our settings alerts thresholds
+          const severities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+          const threshIdx = severities.indexOf(thresholds.severity.toUpperCase());
+          const attackIdx = severities.indexOf(attack.severity.toUpperCase());
+          
+          const matchesSeverity = attackIdx >= (threshIdx === -1 ? 2 : threshIdx);
+          const matchesScore = attack.threat_score >= thresholds.score;
+
+          if (matchesSeverity || matchesScore) {
+            // Push toast alert card
+            setToasts(prev => {
+              if (prev.some(t => t.id === attack.id)) return prev;
+              return [attack, ...prev].slice(0, 3);
+            });
+            
+            // Increment unread count & add to notifications log list
+            setUnreadCount(prev => prev + 1);
+            setNotifications(prev => {
+              if (prev.some(n => n.id === attack.id)) return prev;
+              return [attack, ...prev].slice(0, 10);
+            });
+
+            // Auto dismiss toast alert card after 6 seconds
+            setTimeout(() => {
+              setToasts(prev => prev.filter(t => t.id !== attack.id));
+            }, 6000);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to parse WebSocket alert:", err);
+      }
+    };
+
+    return () => socket.close();
+  }, [thresholds]);
+
   const menuItems = [
     { name: 'Dashboard', path: '/', icon: Activity },
-    { name: 'Attack Feed', path: '/attacks', icon: Shield },
+    { name: 'Incident Response', path: '/attacks', icon: Shield },
     { name: 'Honeypot Lab', path: '/sensors', icon: Radio },
     { name: 'AI Assistant', path: '/agent', icon: Terminal },
     { name: 'Reports', path: '/reports', icon: FileText },
@@ -189,6 +261,50 @@ export default function DashboardLayout() {
             </div>
           </div>
 
+          {/* Real-time Notifications Bell */}
+          <div className="notification-bell-container" style={{ marginRight: '10px' }}>
+            <button 
+              className={`bell-btn ${showDropdown ? 'active' : ''}`}
+              onClick={() => {
+                setShowDropdown(!showDropdown);
+                setUnreadCount(0);
+              }}
+              title="Incident Notifications Hub"
+            >
+              <ShieldAlert size={16} />
+              {unreadCount > 0 && <span className="bell-badge">{unreadCount}</span>}
+            </button>
+
+            {showDropdown && (
+              <div className="notification-dropdown">
+                <div className="notif-header">
+                  <h6>SOC TELEMETRY ALERTS</h6>
+                  <button className="clear-notif-btn" onClick={() => setNotifications([])}>Clear All</button>
+                </div>
+                <div className="notif-list">
+                  {notifications.length === 0 ? (
+                    <div className="notif-empty">No active notifications logged.</div>
+                  ) : (
+                    notifications.map((notif) => (
+                      <div 
+                        key={notif.id} 
+                        className="notif-item"
+                        onClick={() => {
+                          setShowDropdown(false);
+                          navigate('/attacks');
+                        }}
+                      >
+                        <span className="notif-item-title">{notif.attack_type}</span>
+                        <span className="notif-item-desc">IP: {notif.source_ip} | Severity: {notif.severity}</span>
+                        <span className="notif-item-time">{new Date(notif.created_at).toLocaleTimeString()}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Real-time Clock Widget */}
           <div className="header-clock-widget font-mono">
             <Clock size={16} className="clock-icon text-cyan" />
@@ -202,6 +318,41 @@ export default function DashboardLayout() {
         <main className="viewport-content">
           <Outlet />
         </main>
+
+        {/* Floating Real-time SOC Toasts */}
+        <div className="toast-container">
+          {toasts.map((toast) => (
+            <div key={toast.id} className={`toast-card ${toast.severity.toLowerCase()}`}>
+              <div className={`toast-icon-box ${toast.severity.toLowerCase()}`}>
+                <ShieldAlert size={18} className="pulse" />
+              </div>
+              <div className="toast-body">
+                <div className="toast-title">{toast.attack_type}</div>
+                <div className="toast-desc">
+                  Intrusion signature detected from {toast.source_ip}. Severity: <strong>{toast.severity}</strong> (Score: {toast.threat_score}/10).
+                </div>
+                <div className="toast-footer">
+                  <span className="toast-time">{new Date(toast.created_at).toLocaleTimeString()}</span>
+                  <span 
+                    className="toast-view-link"
+                    onClick={() => {
+                      setToasts(toasts.filter(t => t.id !== toast.id));
+                      navigate('/attacks');
+                    }}
+                  >
+                    View Details
+                  </span>
+                </div>
+              </div>
+              <button 
+                className="toast-close-btn"
+                onClick={() => setToasts(toasts.filter(t => t.id !== toast.id))}
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

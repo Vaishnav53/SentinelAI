@@ -18,6 +18,13 @@ export default function SettingsPage() {
   const [collectorInterval, setCollectorInterval] = useState(5);
   const [abuseipdbApiKey, setAbuseipdbApiKey] = useState('');
   const [virustotalApiKey, setVirustotalApiKey] = useState('');
+  
+  // Alert & Notification SOC states
+  const [alertSeverityThreshold, setAlertSeverityThreshold] = useState('HIGH');
+  const [alertScoreThreshold, setAlertScoreThreshold] = useState(70);
+  const [slackWebhookUrl, setSlackWebhookUrl] = useState('');
+  const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
+  const [alertEmailRecipient, setAlertEmailRecipient] = useState('');
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -34,6 +41,12 @@ export default function SettingsPage() {
         if (data.collector_interval) setCollectorInterval(data.collector_interval);
         if (data.abuseipdb_api_key) setAbuseipdbApiKey(data.abuseipdb_api_key);
         if (data.virustotal_api_key) setVirustotalApiKey(data.virustotal_api_key);
+        
+        if (data.alert_severity_threshold) setAlertSeverityThreshold(data.alert_severity_threshold);
+        if (data.alert_score_threshold) setAlertScoreThreshold(data.alert_score_threshold);
+        if (data.slack_webhook_url) setSlackWebhookUrl(data.slack_webhook_url);
+        if (data.discord_webhook_url) setDiscordWebhookUrl(data.discord_webhook_url);
+        if (data.alert_email_recipient) setAlertEmailRecipient(data.alert_email_recipient);
         
         setError(null);
       } catch (err) {
@@ -67,7 +80,12 @@ export default function SettingsPage() {
         retention_days: parseInt(retentionDays),
         collector_interval: parseInt(collectorInterval),
         abuseipdb_api_key: abuseipdbApiKey,
-        virustotal_api_key: virustotalApiKey
+        virustotal_api_key: virustotalApiKey,
+        alert_severity_threshold: alertSeverityThreshold,
+        alert_score_threshold: parseFloat(alertScoreThreshold),
+        slack_webhook_url: slackWebhookUrl,
+        discord_webhook_url: discordWebhookUrl,
+        alert_email_recipient: alertEmailRecipient
       };
 
       await apiClient.put('/settings', payload);
@@ -206,6 +224,68 @@ export default function SettingsPage() {
                   value={virustotalApiKey} 
                   placeholder="Enter VirusTotal API key (Not active)"
                   onChange={(e) => setVirustotalApiKey(e.target.value)} 
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="form-section mt-4" style={{ marginTop: '24px' }}>
+            <h6 className="form-section-title font-mono">SOC Alert Rules &amp; Thresholds</h6>
+            <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div className="form-field">
+                <label>Notification Severity Threshold:</label>
+                <select 
+                  value={alertSeverityThreshold} 
+                  onChange={(e) => setAlertSeverityThreshold(e.target.value)}
+                  style={{ width: '100%', background: 'var(--surface-secondary)', border: '1px solid var(--border-primary)', color: 'white', padding: '12px', borderRadius: '6px', outline: 'none' }}
+                >
+                  <option value="LOW">Low &amp; Above</option>
+                  <option value="MEDIUM">Medium &amp; Above</option>
+                  <option value="HIGH">High &amp; Above</option>
+                  <option value="CRITICAL">Critical Only</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label>Notification Threat Score Threshold:</label>
+                <input 
+                  type="number" 
+                  value={alertScoreThreshold} 
+                  min="0"
+                  max="100"
+                  onChange={(e) => setAlertScoreThreshold(e.target.value)} 
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="form-section mt-4" style={{ marginTop: '24px' }}>
+            <h6 className="form-section-title font-mono">Notification Channels (SMTP / Webhooks)</h6>
+            <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div className="form-field" style={{ gridColumn: 'span 2' }}>
+                <label>Slack Webhook URL:</label>
+                <input 
+                  type="text" 
+                  value={slackWebhookUrl} 
+                  placeholder="https://hooks.slack.com/services/..."
+                  onChange={(e) => setSlackWebhookUrl(e.target.value)} 
+                />
+              </div>
+              <div className="form-field" style={{ gridColumn: 'span 2' }}>
+                <label>Discord Webhook URL:</label>
+                <input 
+                  type="text" 
+                  value={discordWebhookUrl} 
+                  placeholder="https://discord.com/api/webhooks/..."
+                  onChange={(e) => setDiscordWebhookUrl(e.target.value)} 
+                />
+              </div>
+              <div className="form-field" style={{ gridColumn: 'span 2' }}>
+                <label>SMTP Alert Recipient Email:</label>
+                <input 
+                  type="email" 
+                  value={alertEmailRecipient} 
+                  placeholder="admin-alerts@sentinelai.local"
+                  onChange={(e) => setAlertEmailRecipient(e.target.value)} 
                 />
               </div>
             </div>

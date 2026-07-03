@@ -131,6 +131,12 @@ async def start_attack_simulator():
                         "created_at": new_event.created_at.isoformat()
                     }
                     
+                    try:
+                        from backend.services.notification import NotificationService
+                        NotificationService(db).trigger_notifications(event_data)
+                    except Exception as e:
+                        logging.warning(f"Failed to trigger alerts: {e}")
+
                     await manager.broadcast({
                         "type": "new_attack",
                         "data": event_data
@@ -266,3 +272,136 @@ async def update_attack_status(
     db.commit()
     db.refresh(attack)
     return attack
+
+from pydantic import BaseModel
+
+class IncidentRemediationPayload(BaseModel):
+    action: str
+    notes: Optional[str] = None
+    analyst: Optional[str] = None
+    status: Optional[str] = None
+
+@router.post("/{id}/incident-action", response_model=AttackEventRead)
+async def perform_incident_action(
+    id: int,
+    payload: IncidentRemediationPayload,
+    db: Session = Depends(get_db)
+):
+    """Execute SOC incident containment, assignments, note logs, and audit trails."""
+    attack = db.query(AttackEvent).filter(AttackEvent.id == id).first()
+    if not attack:
+        raise HTTPException(status_code=404, detail=f"Attack event with ID {id} not found")
+
+    # Load/initialize raw_metadata JSON dict
+    meta = {}
+    if attack.raw_metadata:
+        try:
+            meta = json.loads(attack.raw_metadata)
+        except Exception:
+            pass
+
+    # Ensure lists exist
+    if "notes" not in meta or not isinstance(meta["notes"], list):
+        meta["notes"] = []
+    if "audit_trail" not in meta or not isinstance(meta["audit_trail"], list):
+        meta["audit_trail"] = []
+    if "timeline" not in meta or not isinstance(meta["timeline"], list):
+        # Auto-populate initial capture timeline event if empty
+        meta["timeline"] = [{
+            "time": attack.created_at.isoformat(),
+            "state": "NEW",
+            "description": "Telemetry event ingested from honeypot sensor."
+        }]
+
+    now_str = datetime.utcnow().isoformat()
+    action_type = payload.action.lower()
+
+    if action_type == "add_note":
+        if payload.notes:
+            meta["notes"].append({
+                "time": now_str,
+                "author": payload.analyst or "System Analyst",
+                "text": payload.notes
+            })
+            meta["audit_trail"].append({
+                "time": now_str,
+                "action": "ADD_NOTE",
+                "details": f"Analyst added note: {payload.notes[:60]}..."
+            })
+    
+    elif action_type == "assign_analyst":
+        if payload.analyst:
+            meta["assigned_analyst"] = payload.analyst
+            meta["audit_trail"].append({
+                "time": now_str,
+                "action": "ASSIGN_ANALYST",
+                "details": f"Assigned case to SOC analyst: {payload.analyst}"
+            })
+            meta["timeline"].append({
+                "time": now_str,
+                "state": attack.status,
+                "description": f"Incident assigned to {payload.analyst}."
+            })
+            
+    elif action_type == "block_ip":
+        meta["blocked"] = True
+        meta["audit_trail"].append({
+            "time": now_str,
+            "action": "BLOCK_IP",
+            "details": f"Initiated dynamic network block on source IP {attack.source_ip}"
+        })
+        meta["timeline"].append({
+            "time": now_str,
+            "state": "CONTAINED",
+            "description": "Source IP block rule committed to perimeter firewall."
+        })
+        attack.status = "CONTAINED"
+        
+    elif action_type == "quarantine_host":
+        meta["quarantined"] = True
+        meta["audit_trail"].append({
+            "time": now_str,
+            "action": "QUARANTINE_HOST",
+            "details": f"Isolated host signature nodes in quarantine partition."
+        })
+        meta["timeline"].append({
+            "time": now_str,
+            "state": "CONTAINED",
+            "description": "Host quarantined. Asset isolated in sandbox VLAN partition."
+        })
+        attack.status = "CONTAINED"
+        
+    elif action_type == "escalate":
+        meta["audit_trail"].append({
+            "time": now_str,
+            "action": "ESCALATE",
+            "details": f"Escalated incident to Tier 2 SOC response lead."
+        })
+        meta["timeline"].append({
+            "time": now_str,
+            "state": attack.status,
+            "description": "Incident escalated to Tier 2 Incident Response Lead."
+        })
+        
+    elif action_type == "update_status":
+        if payload.status:
+            old_status = attack.status
+            new_status = payload.status.upper()
+            attack.status = new_status
+            meta["audit_trail"].append({
+                "time": now_str,
+                "action": "UPDATE_STATUS",
+                "details": f"Transitioned incident state from {old_status} to {new_status}"
+            })
+            meta["timeline"].append({
+                "time": now_str,
+                "state": new_status,
+                "description": f"Incident status changed to {new_status}."
+            })
+
+    # Save back
+    attack.raw_metadata = json.dumps(meta)
+    db.commit()
+    db.refresh(attack)
+    return attack
+

@@ -490,6 +490,12 @@ class HoneypotRequestHandler(http.server.BaseHTTPRequestHandler):
             }
             
             try:
+                from backend.services.notification import NotificationService
+                NotificationService(db).trigger_notifications(event_data)
+            except Exception as e:
+                logger.warning(f"Failed to trigger honeypot alerts: {e}")
+
+            try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
                     loop.create_task(manager.broadcast({
