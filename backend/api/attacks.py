@@ -73,6 +73,10 @@ async def start_attack_simulator():
                     src_ip = f"{random.randint(1, 254)}.{random.randint(1, 254)}.{random.randint(1, 254)}.{random.randint(1, 254)}"
                     dest_port = random.choice([80, 22, 21, 23, 8088])
                     
+                    from backend.services.threat_intel import ThreatIntelService
+                    service = ThreatIntelService(db)
+                    intel = service.enrich_ip(src_ip)
+
                     new_event = AttackEvent(
                         external_id=f"SIM-{int(datetime.utcnow().timestamp())}",
                         attack_type=attack_type,
@@ -83,13 +87,17 @@ async def start_attack_simulator():
                         destination_port=dest_port,
                         protocol="TCP",
                         target_service="HTTP Honeypot" if dest_port == 8088 else ("SSH" if dest_port == 22 else "HTTP"),
-                        country=src_country,
-                        city="Threat Node",
+                        country=intel["country"],
+                        city=intel["city"],
                         payload="Simulated threat intelligence arc trace",
                         user_agent="SentinelAISimulator/1.0",
                         sensor_id="Simulated Sensor Node",
-                        threat_score=9.5 if sev == "CRITICAL" else (7.5 if sev == "HIGH" else (4.5 if sev == "MEDIUM" else 1.5)),
-                        confidence=round(0.8 + random.random() * 0.19, 2),
+                        threat_score=intel["threat_score"],
+                        confidence=intel["confidence"],
+                        raw_metadata=json.dumps({
+                            "latitude": intel.get("latitude", 0.0),
+                            "longitude": intel.get("longitude", 0.0)
+                        }),
                         created_at=datetime.utcnow()
                     )
                     db.add(new_event)
@@ -119,6 +127,7 @@ async def start_attack_simulator():
                         "payload": new_event.payload,
                         "threat_score": new_event.threat_score,
                         "confidence": new_event.confidence,
+                        "raw_metadata": new_event.raw_metadata,
                         "created_at": new_event.created_at.isoformat()
                     }
                     

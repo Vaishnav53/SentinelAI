@@ -436,6 +436,9 @@ class HoneypotRequestHandler(http.server.BaseHTTPRequestHandler):
         
         db = SessionLocal()
         try:
+            from backend.services.threat_intel import ThreatIntelService
+            intel = ThreatIntelService(db).enrich_ip(self.client_address[0])
+
             attack_event = AttackEvent(
                 external_id=f"HON-{int(datetime.utcnow().timestamp())}",
                 attack_type=attack_type,
@@ -446,16 +449,18 @@ class HoneypotRequestHandler(http.server.BaseHTTPRequestHandler):
                 destination_port=8088,
                 protocol="HTTP",
                 target_service="HTTP Honeypot",
-                country="Local",
-                city="Loopback",
+                country=intel["country"],
+                city=intel["city"],
                 payload=safe_payload,
                 user_agent=self.headers.get('User-Agent', 'Unknown'),
                 sensor_id="HTTP Honeypot",
-                threat_score=9.5 if severity == "CRITICAL" else (7.5 if severity == "HIGH" else (4.5 if severity == "MEDIUM" else 1.5)),
-                confidence=confidence,
+                threat_score=intel["threat_score"],
+                confidence=intel["confidence"],
                 raw_metadata=json.dumps({
                     "mitre_id": mitre_id,
-                    "recommendation": recommendation
+                    "recommendation": recommendation,
+                    "latitude": intel.get("latitude", 0.0),
+                    "longitude": intel.get("longitude", 0.0)
                 }),
                 created_at=datetime.utcnow()
             )
@@ -480,6 +485,7 @@ class HoneypotRequestHandler(http.server.BaseHTTPRequestHandler):
                 "payload": attack_event.payload,
                 "threat_score": attack_event.threat_score,
                 "confidence": attack_event.confidence,
+                "raw_metadata": attack_event.raw_metadata,
                 "created_at": attack_event.created_at.isoformat()
             }
             

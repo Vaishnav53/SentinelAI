@@ -219,7 +219,18 @@ export default function HolographicGlobe({ attacks = [], onHover, onClickIp }) {
         destStr = 'Singapore';
       }
       
-      const srcGeo = getCountryCoords(srcStr);
+      let srcGeo = getCountryCoords(srcStr);
+      if (attack.raw_metadata) {
+        try {
+          const meta = typeof attack.raw_metadata === 'string' ? JSON.parse(attack.raw_metadata) : attack.raw_metadata;
+          if (meta && typeof meta.latitude === 'number' && typeof meta.longitude === 'number' && (meta.latitude !== 0 || meta.longitude !== 0)) {
+            srcGeo = { lat: meta.latitude, lon: meta.longitude, code: srcGeo.code };
+          }
+        } catch (e) {
+          // Silent fallback
+        }
+      }
+
       const destGeo = getCountryCoords(destStr);
       
       const p1 = latLonToVector3(srcGeo.lat, srcGeo.lon, radius);

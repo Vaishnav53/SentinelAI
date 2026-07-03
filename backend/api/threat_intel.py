@@ -20,6 +20,8 @@ class IPEnrichmentResponse(BaseModel):
     confidence: float
     reputation_summary: str
     provider_statuses: Dict[str, str]
+    latitude: float = 0.0
+    longitude: float = 0.0
 
 @router.get("/enrich/ip/{ip}", response_model=IPEnrichmentResponse)
 def get_ip_enrichment(

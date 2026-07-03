@@ -16,6 +16,8 @@ export default function SettingsPage() {
   const [ollamaModel, setOllamaModel] = useState('llama3.1');
   const [retentionDays, setRetentionDays] = useState(30);
   const [collectorInterval, setCollectorInterval] = useState(5);
+  const [abuseipdbApiKey, setAbuseipdbApiKey] = useState('');
+  const [virustotalApiKey, setVirustotalApiKey] = useState('');
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -30,6 +32,8 @@ export default function SettingsPage() {
         if (data.ollama_model) setOllamaModel(data.ollama_model);
         if (data.retention_days) setRetentionDays(data.retention_days);
         if (data.collector_interval) setCollectorInterval(data.collector_interval);
+        if (data.abuseipdb_api_key) setAbuseipdbApiKey(data.abuseipdb_api_key);
+        if (data.virustotal_api_key) setVirustotalApiKey(data.virustotal_api_key);
         
         setError(null);
       } catch (err) {
@@ -61,7 +65,9 @@ export default function SettingsPage() {
         ollama_host: ollamaHost,
         ollama_model: ollamaModel,
         retention_days: parseInt(retentionDays),
-        collector_interval: parseInt(collectorInterval)
+        collector_interval: parseInt(collectorInterval),
+        abuseipdb_api_key: abuseipdbApiKey,
+        virustotal_api_key: virustotalApiKey
       };
 
       await apiClient.put('/settings', payload);
@@ -176,6 +182,30 @@ export default function SettingsPage() {
                   type="text" 
                   value={ollamaModel} 
                   onChange={(e) => setOllamaModel(e.target.value)} 
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="form-section mt-4" style={{ marginTop: '24px' }}>
+            <h6 className="form-section-title font-mono">Threat Intelligence Integrations</h6>
+            <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div className="form-field">
+                <label>AbuseIPDB API Key:</label>
+                <input 
+                  type="password" 
+                  value={abuseipdbApiKey} 
+                  placeholder="Enter AbuseIPDB API key"
+                  onChange={(e) => setAbuseipdbApiKey(e.target.value)} 
+                />
+              </div>
+              <div className="form-field">
+                <label>VirusTotal API Key (Future Phase):</label>
+                <input 
+                  type="password" 
+                  value={virustotalApiKey} 
+                  placeholder="Enter VirusTotal API key (Not active)"
+                  onChange={(e) => setVirustotalApiKey(e.target.value)} 
                 />
               </div>
             </div>
