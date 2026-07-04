@@ -129,7 +129,7 @@ async def post_chat_stream(
     system_prompt = settings_service.get_setting(
         db, 
         "ollama_system_prompt", 
-        "You are a cyber security SOC analyst. For security incidents and threat analyses, organize your response using exactly these sections in Markdown headers:\n### Threat Summary\n### MITRE ATT&CK\n### Confidence\n### Impact\n### Detection\n### Remediation\n### References\nBe direct, technical, and beginner-friendly. Do not mention any local templates or fallbacks."
+        "You are a cyber security SOC analyst. For security incidents and threat analyses, organize your response using exactly these sections in Markdown headers:\n### Threat Summary\n### MITRE ATT&CK\n### Confidence\n### Impact\n### Detection\n### Remediation\n### References\nBe direct, technical, and beginner-friendly. For general conversational messages (such as greetings, questions about how you work, or casual chats like 'hi'), respond in a friendly, conversational style without using these report headers. Do not mention any local templates or fallbacks."
     )
     
     incident_context = ""
@@ -197,7 +197,7 @@ async def post_chat_stream(
     installed_models = []
     is_ollama_online = False
     try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
+        async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{settings.OLLAMA_BASE_URL}/api/tags")
             if resp.status_code == 200:
                 is_ollama_online = True
@@ -232,8 +232,20 @@ async def post_chat_stream(
         if not is_ollama_online:
             source = "fallback"
             fallback_full_text = ""
-            msg_lower = payload.message.lower()
-            if linked_incident_id:
+            msg_lower = payload.message.lower().strip()
+            
+            # Simple conversational greeting checks
+            greetings = ["hi", "hello", "hey", "greetings", "yo", "help", "who are you", "what are you"]
+            is_greeting = any(g in msg_lower for g in greetings) or msg_lower in ["hi", "hello", "hey", "yo", "help"]
+            
+            if is_greeting and not linked_incident_id and not linked_sandbox_id and not linked_attacker_ip:
+                fallback_full_text = (
+                    "Hello! I am your SentinelAI SOC Assistant.\n\n"
+                    "I am here to help you analyze honeypot telemetry, WAF rules alerts, correlated incident chains, "
+                    "and decoy sandbox file uploads.\n\n"
+                    "How can I assist you with your security operations today?"
+                )
+            elif linked_incident_id:
                 from backend.models.models import CorrelatedIncident
                 incident = db.query(CorrelatedIncident).filter(CorrelatedIncident.id == linked_incident_id).first()
                 if incident:
@@ -364,26 +376,19 @@ Track anomalous parent-child process paths (e.g., web server spawning bash shell
 ### References
 SOC Defense Handbook Section 4.2"""
             else:
-                fallback_full_text = """### Threat Summary
-Ollama response request has timed out.
+                fallback_full_text = f"""### ⚠️ Local AI Model Offline or Timed Out
 
-### MITRE ATT&CK
-N/A
+I was unable to establish a timely connection with the local Ollama service.
 
-### Confidence
-N/A
+**Possible Causes:**
+1. **Ollama Service is Not Running:** Ensure that the Ollama application is active on your host system.
+2. **Model Not Pulled:** The requested model (`{model_name}`) might not be downloaded. Run `ollama pull {model_name}` in your terminal.
+3. **Hardware Latency:** Running larger LLMs on CPU can lead to timeouts.
 
-### Impact
-Latency in threat response telemetry delivery.
-
-### Detection
-Check uvicorn and ollama daemon container log levels.
-
-### Remediation
-The local AI model is online but responded too slowly. Try using a smaller model, lower max tokens, or run Ollama with GPU acceleration.
-
-### References
-SentinelAI System Performance Guide"""
+**Recommended Troubleshooting:**
+- Select a smaller, faster model (e.g., `llama3.2:1b`, `tinydolphin`, or `phi3`) from the dropdown above.
+- Verify Ollama is running by executing: `curl http://127.0.0.1:11434/` in your command prompt.
+- Increase the AI timeout threshold in Platform Settings."""
             
             words = fallback_full_text.split(" ")
             for idx, word in enumerate(words):
@@ -395,7 +400,7 @@ SentinelAI System Performance Guide"""
         else:
             # Call Ollama API
             ollama_url = f"{settings.OLLAMA_BASE_URL}/api/chat"
-            timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 90.0))
+            timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 120.0))
             temperature = payload.temperature if payload.temperature is not None else 0.7
             max_tokens = payload.max_tokens if payload.max_tokens is not None else 256
             
@@ -433,8 +438,33 @@ SentinelAI System Performance Guide"""
             except Exception as e:
                 source = "fallback"
                 error_name = type(e).__name__
-                logging.warning(f"Ollama stream error mid-connection ({error_name}): {str(e)}.")
-                yield f"data: {json.dumps({'text': f'\\n[Stream Interrupted: {error_name}]', 'done': True, 'error': True, 'conversation_id': conv_key, 'model': model_name, 'latency': 0.0, 'source': 'ollama'})}\n\n"
+                logging.warning(f"Ollama stream error ({error_name}): {str(e)}.")
+                if not response_text:
+                    err_msg = f"""### ⚠️ Local AI Model Offline or Timed Out
+
+I was unable to establish a timely connection with the local Ollama service ({error_name}).
+
+**Possible Causes:**
+1. **Ollama Service is Not Running:** Ensure that the Ollama application is active on your host system.
+2. **Model Not Pulled:** The requested model (`{model_name}`) might not be downloaded. Run `ollama pull {model_name}` in your terminal.
+3. **Hardware Latency:** Running larger LLMs on CPU can lead to timeouts.
+
+**Recommended Troubleshooting:**
+- Select a smaller, faster model (e.g., `llama3.2:1b`, `tinydolphin`, or `phi3`) from the dropdown above.
+- Verify Ollama is running by executing: `curl http://127.0.0.1:11434/` in your command prompt.
+- Increase the AI timeout threshold in Platform Settings."""
+                    words = err_msg.split(" ")
+                    for idx, word in enumerate(words):
+                        space = " " if idx < len(words) - 1 else ""
+                        text_chunk = f"{word}{space}"
+                        response_text += text_chunk
+                        yield f"data: {json.dumps({'text': text_chunk, 'done': False, 'conversation_id': conv_key, 'model': model_name})}\n\n"
+                        await asyncio.sleep(0.01)
+                    
+                    latency = (datetime.utcnow() - start_time).total_seconds()
+                    yield f"data: {json.dumps({'text': '', 'done': True, 'conversation_id': conv_key, 'model': model_name, 'latency': latency, 'source': 'fallback'})}\n\n"
+                else:
+                    yield f"data: {json.dumps({'text': f'\\n[Stream Interrupted: {error_name}]', 'done': True, 'error': True, 'conversation_id': conv_key, 'model': model_name, 'latency': 0.0, 'source': 'ollama'})}\n\n"
                 return
         
         latency = (datetime.utcnow() - start_time).total_seconds()

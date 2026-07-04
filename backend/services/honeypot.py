@@ -409,7 +409,7 @@ class HoneypotRequestHandler(http.server.BaseHTTPRequestHandler):
     # Shared in-memory data store for the lab environment
     lab_users = {
         "admin": {"username": "admin", "password": "admin@123", "role": "admin", "email": "admin@sentinelai.local"},
-        "user1": {"username": "user1", "password": "user@123", "role": "user", "email": "user1@sentinelai.local"},
+        "user1": {"username": "user1", "password": "user1@123", "role": "user", "email": "user1@sentinelai.local"},
         "user2": {"username": "user2", "password": "user2@123", "role": "user", "email": "user2@sentinelai.local"}
     }
     lab_sessions = {}  # token -> user
@@ -421,6 +421,7 @@ class HoneypotRequestHandler(http.server.BaseHTTPRequestHandler):
         {"id": 1, "username": "user1", "filename": "avatar.png", "size": "45 KB", "created_at": "2026-07-02 12:05"}
     ]
     lab_login_attempts = []
+    lab_suspicious_payloads = []
     lab_request_logs = []
     
     # Rate limit tracker
@@ -434,6 +435,17 @@ class HoneypotRequestHandler(http.server.BaseHTTPRequestHandler):
         # Escape HTML characters in the payload to prevent real XSS in SentinelAI Dashboard
         safe_payload = payload.replace("<", "&lt;").replace(">", "&gt;")
         
+        # Append locally to Aetheris Admin dashboard intrusions log
+        self.lab_suspicious_payloads.append({
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "ip": self.client_address[0],
+            "type": attack_type,
+            "severity": severity,
+            "payload": safe_payload
+        })
+        if len(self.lab_suspicious_payloads) > 50:
+            self.lab_suspicious_payloads.pop(0)
+
         db = SessionLocal()
         try:
             from backend.services.threat_intel import ThreatIntelService
@@ -753,6 +765,15 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                     # Log successful attempt
                     self.lab_login_attempts.append({"username": post_user, "ip": self.client_address[0], "status": "SUCCESS", "time": datetime.now().strftime("%H:%M:%S")})
                     
+                    self.log_attack(
+                        "User Login (Success)", 
+                        "LOW", 
+                        0.50, 
+                        "T1078", 
+                        "Monitor for anomalous user logins and verify clearance levels.", 
+                        f"Login successful for user: {post_user}"
+                    )
+                    
                     self.send_response(302)
                     self.send_header("Set-Cookie", f"session_id={session_token}; Path=/")
                     self.send_header("Location", "/dashboard")
@@ -761,6 +782,15 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                 else:
                     # Failed attempt tracking
                     self.lab_login_attempts.append({"username": post_user, "ip": self.client_address[0], "status": "FAILED", "time": datetime.now().strftime("%H:%M:%S")})
+                    
+                    self.log_attack(
+                        "User Login (Failed)", 
+                        "MEDIUM", 
+                        0.70, 
+                        "T1110", 
+                        "Monitor credential stuffing attempts and lock accounts temporarily.", 
+                        f"Failed login attempt for username: {post_user}"
+                    )
                     
                     # Detect Brute Force / Credential Stuffing
                     recent_failures = [a for a in self.lab_login_attempts if a["status"] == "FAILED" and a["ip"] == self.client_address[0]]
@@ -1035,6 +1065,16 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                     "created_at": datetime.now().strftime("%Y-%m-%d %H:%M")
                 })
                 
+                if extension not in ["php", "jsp", "asp", "aspx", "sh", "exe", "py", "pl", "js"]:
+                    self.log_attack(
+                        "File Upload", 
+                        "LOW", 
+                        0.50, 
+                        "T1190", 
+                        "Restrict uploaded file extensions and execute scans inside sandbox directories.", 
+                        f"File '{uploaded_filename}' ({round(len(file_content) / 1024, 1)} KB) uploaded by user '{username}'."
+                    )
+                
                 content = f"<p class='text-success'>File '{uploaded_filename}' uploaded successfully (Simulated sandbox storage)!</p>"
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html")
@@ -1089,6 +1129,16 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                     "text": feedback_text,
                     "created_at": datetime.now().strftime("%Y-%m-%d %H:%M")
                 })
+                
+                if not xss_pattern.search(feedback_text):
+                    self.log_attack(
+                        "Feedback Submission", 
+                        "LOW", 
+                        0.50, 
+                        "T1592", 
+                        "Sanitize form comments inputs and review logs periodically.", 
+                        f"Feedback ticket submitted by user '{username}': {feedback_text}"
+                    )
                 
                 content = "<p class='text-success'>Feedback recorded! Thank you.</p><a href='/feedback'>Back to Feed</a>"
                 self.send_response(200)
@@ -1146,66 +1196,150 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
         if path == "/admin/dashboard":
             # Count details for visual charts
             total_users = len(self.lab_users)
-            feedback_count = len(self.lab_feedback)
-            files_count = len(self.lab_uploads)
+            success_logins = [a for a in self.lab_login_attempts if a["status"] == "SUCCESS"]
+            failed_logins = [a for a in self.lab_login_attempts if a["status"] == "FAILED"]
             
-            attempts_rows = ""
-            for a in self.lab_login_attempts:
-                status_color = "var(--green-primary)" if a['status'] == 'SUCCESS' else "var(--red-primary)"
-                attempts_rows += f"""
+            success_logins_count = len(success_logins)
+            failed_logins_count = len(failed_logins)
+            files_count = len(self.lab_uploads)
+            suspicious_count = len(self.lab_suspicious_payloads)
+            
+            success_attempts_rows = ""
+            for a in success_logins[::-1]:
+                success_attempts_rows += f"""
                 <tr style="border-bottom: 1px solid var(--border-primary);">
                     <td style="font-weight:600; color:#ffffff;">{a['username']}</td>
                     <td>{a['ip']}</td>
-                    <td><span style="color: {status_color}; font-weight:600;">{a['status']}</span></td>
+                    <td><span style="color: var(--green-primary); font-weight:600;">{a['status']}</span></td>
                     <td class="text-muted">{a['time']}</td>
                 </tr>
                 """
                 
+            failed_attempts_rows = ""
+            for a in failed_logins[::-1]:
+                failed_attempts_rows += f"""
+                <tr style="border-bottom: 1px solid var(--border-primary);">
+                    <td style="font-weight:600; color:#ffffff;">{a['username']}</td>
+                    <td>{a['ip']}</td>
+                    <td><span style="color: var(--red-primary); font-weight:600;">{a['status']}</span></td>
+                    <td class="text-muted">{a['time']}</td>
+                </tr>
+                """
+                
+            upload_rows = ""
+            for u in self.lab_uploads[::-1]:
+                upload_rows += f"""
+                <tr style="border-bottom: 1px solid var(--border-primary);">
+                    <td style="font-weight:600; color:#ffffff;">{u['username']}</td>
+                    <td><code>{u['filename']}</code></td>
+                    <td>{u['size']}</td>
+                    <td class="text-muted">{u['created_at']}</td>
+                </tr>
+                """
+                
+            suspicious_rows = ""
+            for s in self.lab_suspicious_payloads[::-1]:
+                sev_color = "var(--red-primary)" if s['severity'] in ["CRITICAL", "HIGH"] else ("var(--yellow-primary)" if s['severity'] == "MEDIUM" else "var(--blue-primary)")
+                suspicious_rows += f"""
+                <tr style="border-bottom: 1px solid var(--border-primary);">
+                    <td class="text-muted">{s['time']}</td>
+                    <td style="color:#ffffff;">{s['ip']}</td>
+                    <td style="font-weight:600;">{s['type']}</td>
+                    <td><span style="color: {sev_color}; font-weight:600;">{s['severity']}</span></td>
+                    <td class="text-muted" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{s['payload']}</td>
+                </tr>
+                """
+
             feedback_rows = ""
-            for f in self.lab_feedback:
+            for f in self.lab_feedback[::-1]:
                 feedback_rows += f"""
                 <tr style="border-bottom: 1px solid var(--border-primary);">
                     <td style="font-weight:600; color:#ffffff; width: 150px;">{f['username']}</td>
                     <td>{f['text']}</td>
+                    <td class="text-muted">{f['created_at']}</td>
                 </tr>
                 """
 
             content = f"""
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 25px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap: 15px; margin-bottom: 25px;">
                 <div class="card" style="margin:0; text-align: center;">
                     <span class="text-muted" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Total Users</span>
                     <h2 style="color: var(--blue-primary); margin: 10px 0 0 0; font-size: 24px;">{total_users}</h2>
                 </div>
                 <div class="card" style="margin:0; text-align: center;">
-                    <span class="text-muted" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Feedback Logs</span>
-                    <h2 style="color: var(--yellow-primary); margin: 10px 0 0 0; font-size: 24px;">{feedback_count}</h2>
+                    <span class="text-muted" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Logins Logged</span>
+                    <h2 style="color: var(--green-primary); margin: 10px 0 0 0; font-size: 24px;">{success_logins_count}</h2>
                 </div>
                 <div class="card" style="margin:0; text-align: center;">
-                    <span class="text-muted" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Uploaded Assets</span>
-                    <h2 style="color: var(--green-primary); margin: 10px 0 0 0; font-size: 24px;">{files_count}</h2>
+                    <span class="text-muted" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Failed Logins</span>
+                    <h2 style="color: var(--red-primary); margin: 10px 0 0 0; font-size: 24px;">{failed_logins_count}</h2>
+                </div>
+                <div class="card" style="margin:0; text-align: center;">
+                    <span class="text-muted" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Uploaded Files</span>
+                    <h2 style="color: var(--blue-primary); margin: 10px 0 0 0; font-size: 24px;">{files_count}</h2>
+                </div>
+                <div class="card" style="margin:0; text-align: center;">
+                    <span class="text-muted" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Intrusion Attempts</span>
+                    <h2 style="color: var(--yellow-primary); margin: 10px 0 0 0; font-size: 24px;">{suspicious_count}</h2>
                 </div>
             </div>
             
             <div class="card" style="margin-bottom: 25px;">
-                <h4 style="margin: 0 0 15px 0; color: #ffffff;">Portal Authentication Audit Log</h4>
+                <h4 style="margin: 0 0 15px 0; color: #ffffff;">Portal Session Log (Successful Login History)</h4>
                 <table>
                     <thead>
-                        <tr><th>Account ID</th><th>Source Address</th><th>Resolution Status</th><th>Time</th></tr>
+                        <tr><th>User ID</th><th>Source Address</th><th>Resolution Status</th><th>Timestamp</th></tr>
                     </thead>
                     <tbody>
-                        {attempts_rows if attempts_rows else '<tr><td colspan="4" class="text-muted" style="text-align: center;">No authentication records logged.</td></tr>'}
+                        {success_attempts_rows if success_attempts_rows else '<tr><td colspan="4" class="text-muted" style="text-align: center;">No successful sessions logged.</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card" style="margin-bottom: 25px;">
+                <h4 style="margin: 0 0 15px 0; color: #ffffff;">Authentication Failures Audit Log</h4>
+                <table>
+                    <thead>
+                        <tr><th>Attempted Account</th><th>Source Address</th><th>Resolution Status</th><th>Timestamp</th></tr>
+                    </thead>
+                    <tbody>
+                        {failed_attempts_rows if failed_attempts_rows else '<tr><td colspan="4" class="text-muted" style="text-align: center;">No authentication failures logged.</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card" style="margin-bottom: 25px;">
+                <h4 style="margin: 0 0 15px 0; color: #ffffff;">Asset Repository Uploads</h4>
+                <table>
+                    <thead>
+                        <tr><th>Account</th><th>Filename</th><th>Size</th><th>Timestamp</th></tr>
+                    </thead>
+                    <tbody>
+                        {upload_rows if upload_rows else '<tr><td colspan="4" class="text-muted" style="text-align: center;">No uploads recorded.</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card" style="margin-bottom: 25px;">
+                <h4 style="margin: 0 0 15px 0; color: #ffffff;">Suspicious Payload Intrusion Attempts</h4>
+                <table>
+                    <thead>
+                        <tr><th>Timestamp</th><th>Source IP</th><th>Attack Type</th><th>Severity</th><th>Payload Details</th></tr>
+                    </thead>
+                    <tbody>
+                        {suspicious_rows if suspicious_rows else '<tr><td colspan="5" class="text-muted" style="text-align: center;">No security intrusion probes logged.</td></tr>'}
                     </tbody>
                 </table>
             </div>
 
             <div class="card">
-                <h4 style="margin: 0 0 15px 0; color: #ffffff;">System Tickets Feed</h4>
+                <h4 style="margin: 0 0 15px 0; color: #ffffff;">System Tickets Feed (Feedback)</h4>
                 <table>
                     <thead>
-                        <tr><th>User ID</th><th>Incident Details</th></tr>
+                        <tr><th>User ID</th><th>Ticket Details</th><th>Timestamp</th></tr>
                     </thead>
                     <tbody>
-                        {feedback_rows}
+                        {feedback_rows if feedback_rows else '<tr><td colspan="3" class="text-muted" style="text-align: center;">No feedback tickets.</td></tr>'}
                     </tbody>
                 </table>
             </div>

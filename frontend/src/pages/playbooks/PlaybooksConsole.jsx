@@ -137,7 +137,9 @@ export default function PlaybooksConsole() {
                 </div>
               ))}
               {playbooks.length === 0 && !loading && (
-                <div className="empty-text">No orchestration playbooks configured.</div>
+                <div className="empty-text py-4" style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center', width: '100%' }}>
+                  No mitigation playbooks found. Configure a custom playbook workflow using the Studio form below.
+                </div>
               )}
             </div>
           </div>
@@ -265,7 +267,19 @@ export default function PlaybooksConsole() {
                 </div>
               ))}
               {executions.length === 0 && (
-                <div className="empty-text">No playbooks triggered. Ready for orchestration inputs.</div>
+                <div className="empty-playbook-execution card-cyber font-mono p-4" style={{ backgroundColor: 'rgba(2, 6, 12, 0.25)', border: '1px dashed var(--border-subtle)', borderRadius: 'var(--radius-sm)' }}>
+                  <div className="text-white" style={{ fontWeight: 'bold', fontSize: '12px' }}>Waiting for Orchestration Inputs...</div>
+                  <p className="text-muted mt-2" style={{ fontSize: '11px', lineHeight: '1.8' }}>
+                    Threat playbooks automate rapid incident mitigation. When a playbook runs, its active step outcomes, blocking status, and terminal messages compile here live.
+                  </p>
+                  
+                  <h5 className="text-cyan mt-3" style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to Execute Playbooks:</h5>
+                  <ul className="text-muted mt-1" style={{ fontSize: '11px', lineHeight: '1.8', paddingLeft: '16px' }}>
+                    <li>Go to the <strong>Attacker Profiles</strong> dossier view.</li>
+                    <li>Select any target IP address, choose a mitigation playbook from the dropdown launcher (e.g. <em>Rapid Containment Block</em>), and click <strong>Run Playbook Workflow</strong>.</li>
+                    <li>Or check the <strong>Incident Response SOC</strong> and execute a containment task.</li>
+                  </ul>
+                </div>
               )}
             </div>
           </div>

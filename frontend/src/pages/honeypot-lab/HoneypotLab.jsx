@@ -11,6 +11,26 @@ export default function HoneypotLab() {
   const [copiedIndex, setCopiedIndex] = useState(null);
   const [lanMode, setLanMode] = useState(false);
   const [liveActivity, setLiveActivity] = useState([]);
+  const [logFilter, setLogFilter] = useState('ALL');
+
+  const formatLocalTime = (utcString) => {
+    if (!utcString) return "";
+    const cleanStr = (utcString.endsWith('Z') || utcString.includes('+')) 
+      ? utcString 
+      : utcString + 'Z';
+    return new Date(cleanStr).toLocaleTimeString();
+  };
+
+  const filteredActivity = liveActivity.filter(activity => {
+    const isSimulator = activity.sensor_id === 'Simulated Sensor Node' || activity.external_id?.startsWith('SIM-');
+    if (logFilter === 'REAL') {
+      return !isSimulator;
+    }
+    if (logFilter === 'SIMULATOR') {
+      return isSimulator;
+    }
+    return true;
+  });
 
   const fetchStatusAndSensors = async () => {
     try {
@@ -61,11 +81,14 @@ export default function HoneypotLab() {
         const payload = JSON.parse(event.data);
         if (payload.type === 'new_attack') {
           const attack = payload.data;
-          // Filter only attack events destined to port 8088
-          if (attack.destination_port === 8088) {
+          
+          const isRealHoneypot = attack.destination_port === 8088 && !attack.external_id?.startsWith('SIM-') && attack.sensor_id !== 'Simulated Sensor Node';
+          const isSimulator = attack.sensor_id === 'Simulated Sensor Node' || attack.external_id?.startsWith('SIM-');
+          
+          if (isRealHoneypot || isSimulator) {
             setLiveActivity(prev => {
               if (prev.some(a => a.id === attack.id)) return prev;
-              return [attack, ...prev].slice(0, 10);
+              return [attack, ...prev].slice(0, 50);
             });
           }
         }
@@ -347,6 +370,30 @@ export default function HoneypotLab() {
           <Activity className="text-cyan animate-pulse" size={16} />
           <h5 className="section-title" style={{ margin: 0 }}>Live Honeypot Activity Log</h5>
         </div>
+
+        <div className="filter-bar flex gap-2 mb-3" style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+          <button 
+            className={`filter-btn-cyber ${logFilter === 'ALL' ? 'active' : ''}`}
+            onClick={() => setLogFilter('ALL')}
+            style={{ padding: '4px 8px', fontSize: '10px', background: logFilter === 'ALL' ? 'rgba(0, 229, 255, 0.15)' : 'transparent', border: '1px solid rgba(0, 229, 255, 0.3)', color: '#ffffff', cursor: 'pointer', borderRadius: '3px' }}
+          >
+            All Events
+          </button>
+          <button 
+            className={`filter-btn-cyber ${logFilter === 'REAL' ? 'active' : ''}`}
+            onClick={() => setLogFilter('REAL')}
+            style={{ padding: '4px 8px', fontSize: '10px', background: logFilter === 'REAL' ? 'rgba(0, 229, 255, 0.15)' : 'transparent', border: '1px solid rgba(0, 229, 255, 0.3)', color: '#ffffff', cursor: 'pointer', borderRadius: '3px' }}
+          >
+            Real Portal Events
+          </button>
+          <button 
+            className={`filter-btn-cyber ${logFilter === 'SIMULATOR' ? 'active' : ''}`}
+            onClick={() => setLogFilter('SIMULATOR')}
+            style={{ padding: '4px 8px', fontSize: '10px', background: logFilter === 'SIMULATOR' ? 'rgba(0, 229, 255, 0.15)' : 'transparent', border: '1px solid rgba(0, 229, 255, 0.3)', color: '#ffffff', cursor: 'pointer', borderRadius: '3px' }}
+          >
+            Simulator Events
+          </button>
+        </div>
         
         <div style={{ overflowX: 'auto' }}>
           <table className="font-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
@@ -363,26 +410,26 @@ export default function HoneypotLab() {
               </tr>
             </thead>
             <tbody>
-              {liveActivity.length === 0 ? (
+              {filteredActivity.length === 0 ? (
                 <tr>
                   <td colSpan="8" style={{ padding: '20px', textAlign: 'center', color: '#8b949e' }}>
-                    No honeypot activity detected. Send a test probe to port 8088 to verify telemetry.
+                    No honeypot activity detected matching the filters. Send a test probe to port 8088 to verify telemetry.
                   </td>
                 </tr>
               ) : (
-                liveActivity.map((activity, idx) => (
+                filteredActivity.map((activity, idx) => (
                   <tr key={activity.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#c9d1d9' }}>
                     <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>
-                      {new Date(activity.created_at).toLocaleTimeString()}
+                      {formatLocalTime(activity.created_at)}
                     </td>
                     <td style={{ padding: '8px', color: '#ffffff' }}>{activity.source_ip}</td>
                     <td style={{ padding: '8px' }}>
-                      <span style={{ color: activity.payload?.includes('Method: POST') ? '#ff9f43' : '#58a6ff' }}>
-                        {activity.payload?.includes('Method: POST') ? 'POST' : 'GET'}
+                      <span style={{ color: activity.payload?.includes('Method: POST') || activity.attack_type?.includes('Login') || activity.attack_type?.includes('Upload') || activity.attack_type?.includes('Submission') ? '#ff9f43' : '#58a6ff' }}>
+                        {activity.payload?.includes('Method: POST') || activity.attack_type?.includes('Login') || activity.attack_type?.includes('Upload') || activity.attack_type?.includes('Submission') ? 'POST' : 'GET'}
                       </span>
                     </td>
                     <td style={{ padding: '8px', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {activity.payload?.split('\n')[1]?.replace('Path: ', '') || '/'}
+                      {activity.payload?.split('\n')[1]?.replace('Path: ', '') || (activity.attack_type?.includes('Login') ? '/login' : (activity.attack_type?.includes('Upload') ? '/upload' : (activity.attack_type?.includes('Feedback') ? '/feedback' : '/')))}
                     </td>
                     <td style={{ padding: '8px', fontWeight: 'bold' }}>{activity.attack_type}</td>
                     <td style={{ padding: '8px' }}>

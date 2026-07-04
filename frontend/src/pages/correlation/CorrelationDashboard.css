@@ -62,3 +62,132 @@
   border: 1px solid var(--green);
   color: var(--green);
 }
+
+/* Empty onboarding states */
+.empty-correlation-container {
+  display: flex;
+  flex-direction: column;
+  padding: 30px;
+  background: var(--surface-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glow-subtle);
+  min-height: 450px;
+}
+
+.empty-correlation-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 15px;
+}
+
+.empty-correlation-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  flex: 1;
+}
+
+@media (max-width: 800px) {
+  .empty-correlation-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+.left-guide, .right-guide {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.left-guide h4, .right-guide h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 10px 0;
+}
+
+.left-guide h5 {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.left-guide ul {
+  padding-left: 16px;
+  margin: 10px 0;
+}
+
+.left-guide li {
+  margin-bottom: 8px;
+}
+
+.placeholder-topology-diagram {
+  background-color: rgba(2, 6, 12, 0.45);
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 40px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.diagram-node {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.node-ip {
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--red);
+  color: var(--red);
+}
+
+.node-host {
+  background-color: rgba(0, 229, 255, 0.1);
+  border: 1px solid var(--cyan-primary);
+  color: var(--cyan-primary);
+}
+
+.diagram-link {
+  font-size: 9px;
+  color: var(--text-muted);
+  border-bottom: 1px dashed var(--border-subtle);
+  padding-bottom: 2px;
+  width: 60px;
+  text-align: center;
+  position: relative;
+}
+
+.diagram-link::after {
+  content: '>';
+  position: absolute;
+  right: -2px;
+  bottom: -6px;
+  font-size: 8px;
+}
+
+.btn-trigger-demo-logs {
+  align-self: flex-start;
+  font-size: 11px;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: bold;
+  transition: all var(--transition-fast);
+  outline: none;
+}
+
+.btn-trigger-demo-logs:hover {
+  background-color: rgba(0, 229, 255, 0.15) !important;
+  box-shadow: var(--glow-subtle);
+}
+

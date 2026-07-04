@@ -7,7 +7,6 @@ import HoneypotLab from '../pages/honeypot-lab/HoneypotLab';
 import Agent from '../pages/agent/Agent';
 import Reports from '../pages/reports/Reports';
 import SettingsPage from '../pages/settings/Settings';
-import Blueprint from '../pages/blueprint/Blueprint';
 import WAFManager from '../pages/waf/WAFManager';
 import CorrelationDashboard from '../pages/correlation/CorrelationDashboard';
 import SandboxDashboard from '../pages/sandbox/SandboxDashboard';
@@ -62,10 +61,6 @@ const router = createBrowserRouter([
       {
         path: 'settings',
         element: <SettingsPage />
-      },
-      {
-        path: 'blueprint',
-        element: <Blueprint />
       }
     ]
   }

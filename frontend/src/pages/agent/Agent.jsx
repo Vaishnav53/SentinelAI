@@ -480,13 +480,19 @@ export default function Agent() {
               <select 
                 value={modelName} 
                 onChange={(e) => setModelName(e.target.value)}
-                disabled={availableModels.length === 0}
               >
-                {availableModels.map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-                {availableModels.length === 0 && (
-                  <option value="llama3.2:3b">llama3.2:3b (default)</option>
+                {availableModels.length > 0 ? (
+                  availableModels.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))
+                ) : (
+                  <>
+                    <option value="llama3.2:3b">llama3.2:3b (3B - Standard)</option>
+                    <option value="llama3.2:1b">llama3.2:1b (1B - Faster)</option>
+                    <option value="tinydolphin">tinydolphin (1.1B - Ultra-Fast)</option>
+                    <option value="phi3">phi3 (3.8B - Balanced)</option>
+                    <option value="gemma2:2b">gemma2:2b (2B - Efficient)</option>
+                  </>
                 )}
               </select>
             </div>

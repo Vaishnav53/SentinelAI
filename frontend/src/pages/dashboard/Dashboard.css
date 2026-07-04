@@ -12,8 +12,9 @@
 
 /* Viewport constraints */
 .viewport-fixed-height {
-  height: 100%;
-  overflow: hidden;
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
   padding: 6px 16px;
   box-sizing: border-box;
 }
@@ -531,6 +532,7 @@
   display: flex;
   gap: 12px;
   margin-top: 10px;
+  flex-shrink: 0;
 }
 
 .ai-advisor-box-v2 {
@@ -983,7 +985,7 @@
 .command-center-scale {
   width: 100%;
   height: calc(100vh - 38px); /* Account for compact 38px DashboardLayout header */
-  overflow: hidden;
+  overflow-y: auto;
   position: relative;
   box-sizing: border-box;
 }

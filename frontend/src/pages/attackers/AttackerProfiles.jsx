@@ -117,159 +117,212 @@ export default function AttackerProfiles() {
         </div>
       </div>
 
-      <div className="waf-main-grid">
-        {/* Profile list table */}
-        <div className="waf-panel card-cyber list-panel-correlation" style={{ flex: 1 }}>
-          <div className="panel-header">
-            <h5 className="panel-title font-mono">Telemetry Attacker Dossiers</h5>
+      {attackers.length === 0 ? (
+        <div className="empty-attacker-container card-cyber animate-slide-in">
+          <div className="empty-attacker-header font-mono text-cyan">
+            <Skull size={20} />
+            <span>Attacker Dossier Hub</span>
           </div>
-          <div className="panel-body">
-            <div className="attacker-list-container">
-              {filteredAttackers.map((a) => {
-                const isSelected = selectedIp === a.ip_address;
-                return (
-                  <div 
-                    key={a.ip_address} 
-                    className={`attacker-item card-cyber ${isSelected ? 'active-item' : ''}`}
-                    onClick={() => setSelectedIp(a.ip_address)}
-                  >
-                    <div className="item-header">
-                      <div className="d-flex align-items-center gap-2">
-                        <Skull size={14} className={a.highest_severity === 'CRITICAL' ? 'text-red' : 'text-orange'} />
-                        <span className="ip-val font-mono">{a.ip_address}</span>
-                      </div>
-                      <span className={`status-tag ${a.is_blocked ? 'tag-blocked' : 'tag-monitored'}`}>
-                        {a.is_blocked ? 'BLOCKED' : 'MONITORED'}
-                      </span>
-                    </div>
+          <div className="empty-attacker-content mt-4">
+            <div className="attacker-guide-left font-mono">
+              <h4 className="text-white">Waiting for Attacker IP Attributions...</h4>
+              <p className="text-muted mt-2" style={{ fontSize: '11px', lineHeight: '1.8' }}>
+                Attacker Profiles act as dynamic threat dossiers, collecting telemetry events from repeated scans, login bypass attempts, and malicious uploads associated with a single client IP.
+              </p>
+              
+              <h5 className="text-cyan mt-4 font-semibold">How Dossiers are Compiled:</h5>
+              <ul className="text-muted mt-2" style={{ fontSize: '11px', lineHeight: '1.8' }}>
+                <li>Threat logs and WAF blocks analyze the incoming client request headers and payload.</li>
+                <li>Isolated indicators are clustered by the source IP address in the database.</li>
+                <li>Reputations, coordinates, and geoIP maps compile active records.</li>
+                <li>Defensive playbooks can then be executed directly against targeted dossiers.</li>
+              </ul>
+            </div>
 
-                    <div className="item-meta mt-2">
-                      <span className="meta-label">Events count:</span>
-                      <span className="meta-val font-mono">{a.attack_count + a.waf_count}</span>
-                    </div>
-                    
-                    <div className="item-meta">
-                      <span className="meta-label">Location:</span>
-                      <span className="meta-val text-cyan">{a.city}, {a.country}</span>
-                    </div>
+            <div className="attacker-guide-right font-mono">
+              <h4 className="text-white">Dossier Intelligence Parameters</h4>
+              <p className="text-muted mt-2" style={{ fontSize: '11px', lineHeight: '1.8' }}>
+                Each compiled attacker dossier aggregates critical information:
+              </p>
+              
+              <div className="attacker-preview-card">
+                <div className="attacker-dossier-items-list">
+                  <div className="attacker-dossier-step-row">
+                    <div className="dossier-badge">1</div>
+                    <span className="text-secondary">MITRE ATT&CK Indicators &amp; Technique matches</span>
                   </div>
-                );
-              })}
-              {filteredAttackers.length === 0 && (
-                <div className="empty-text">No dossiers match search query.</div>
-              )}
+                  <div className="attacker-dossier-step-row">
+                    <div className="dossier-badge">2</div>
+                    <span className="text-secondary">GeoIP lookup (City, Country, Latitude, Longitude)</span>
+                  </div>
+                  <div className="attacker-dossier-step-row">
+                    <div className="dossier-badge">3</div>
+                    <span className="text-secondary">Integrated Mitigation Playbook launch console</span>
+                  </div>
+                  <div className="attacker-dossier-step-row">
+                    <div className="dossier-badge">4</div>
+                    <span className="text-secondary">Chronological Threat Activity timeline details</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+      ) : (
+        <div className="waf-main-grid">
+          {/* Profile list table */}
+          <div className="waf-panel card-cyber list-panel-correlation" style={{ flex: 1 }}>
+            <div className="panel-header">
+              <h5 className="panel-title font-mono">Telemetry Attacker Dossiers</h5>
+            </div>
+            <div className="panel-body">
+              <div className="attacker-list-container">
+                {filteredAttackers.map((a) => {
+                  const isSelected = selectedIp === a.ip_address;
+                  return (
+                    <div 
+                      key={a.ip_address} 
+                      className={`attacker-item card-cyber ${isSelected ? 'active-item' : ''}`}
+                      onClick={() => setSelectedIp(a.ip_address)}
+                    >
+                      <div className="item-header">
+                        <div className="d-flex align-items-center gap-2">
+                          <Skull size={14} className={a.highest_severity === 'CRITICAL' ? 'text-red' : 'text-orange'} />
+                          <span className="ip-val font-mono">{a.ip_address}</span>
+                        </div>
+                        <span className={`status-tag ${a.is_blocked ? 'tag-blocked' : 'tag-monitored'}`}>
+                          {a.is_blocked ? 'BLOCKED' : 'MONITORED'}
+                        </span>
+                      </div>
 
-        {/* Detailed profiles section */}
-        <div className="waf-panel card-cyber graph-panel" style={{ flex: 2 }}>
-          {profile ? (
-            <div className="attacker-detail-layout animate-slide-in">
-              <div className="detail-header-block">
-                <div className="left">
-                  <h4 className="font-mono text-cyan" style={{ fontSize: '18px' }}>{profile.ip_address}</h4>
-                  <div className="location-row font-mono mt-1">
-                    <MapPin size={12} className="text-cyan" />
-                    <span>{profile.city}, {profile.country} (Coordinates: {profile.latitude}, {profile.longitude})</span>
+                      <div className="item-meta mt-2">
+                        <span className="meta-label">Events count:</span>
+                        <span className="meta-val font-mono">{a.attack_count + a.waf_count}</span>
+                      </div>
+                      
+                      <div className="item-meta">
+                        <span className="meta-label">Location:</span>
+                        <span className="meta-val text-cyan">{a.city}, {a.country}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                {filteredAttackers.length === 0 && (
+                  <div className="empty-text">No dossiers match search query.</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Detailed profiles section */}
+          <div className="waf-panel card-cyber graph-panel" style={{ flex: 2 }}>
+            {profile ? (
+              <div className="attacker-detail-layout animate-slide-in">
+                <div className="detail-header-block">
+                  <div className="left">
+                    <h4 className="font-mono text-cyan" style={{ fontSize: '18px' }}>{profile.ip_address}</h4>
+                    <div className="location-row font-mono mt-1">
+                      <MapPin size={12} className="text-cyan" />
+                      <span>{profile.city}, {profile.country} (Coordinates: {profile.latitude}, {profile.longitude})</span>
+                    </div>
+                  </div>
+                  
+                  <div className="right">
+                    <button 
+                      className="btn-action btn-analyze-ai"
+                      onClick={() => navigate(`/agent?analyze_attacker=${profile.ip_address}`)}
+                    >
+                      <Cpu size={14} />
+                      Consult AI Security Copilot
+                    </button>
                   </div>
                 </div>
-                
-                <div className="right">
-                  <button 
-                    className="btn-action btn-analyze-ai"
-                    onClick={() => navigate(`/agent?analyze_attacker=${profile.ip_address}`)}
-                  >
-                    <Cpu size={14} />
-                    Consult AI Security Copilot
-                  </button>
-                </div>
-              </div>
 
-              {/* MITRE ATT&CK taxonomy panel */}
-              <div className="mt-4">
-                <h5 className="section-title font-mono mb-2">MITRE ATT&CK Indicators</h5>
-                <div className="mitre-cards-grid">
-                  {profile.mitre_techniques.map((t) => (
-                    <div key={t.id} className="mitre-card font-mono">
-                      <span className="t-id">{t.id}</span>
-                      <span className="t-name">{t.name}</span>
-                      <span className="t-tactic text-muted">{t.tactic}</span>
-                      <div className="t-count badge-cyan mt-1">{t.count} match events</div>
-                    </div>
-                  ))}
-                  {profile.mitre_techniques.length === 0 && (
-                    <div className="empty-small font-mono text-muted">
-                      No technique patterns registered yet.
+                {/* MITRE ATT&CK taxonomy panel */}
+                <div className="mt-4">
+                  <h5 className="section-title font-mono mb-2">MITRE ATT&CK Indicators</h5>
+                  <div className="mitre-cards-grid">
+                    {profile.mitre_techniques.map((t) => (
+                      <div key={t.id} className="mitre-card font-mono">
+                        <span className="t-id">{t.id}</span>
+                        <span className="t-name">{t.name}</span>
+                        <span className="t-tactic text-muted">{t.tactic}</span>
+                        <div className="t-count badge-cyan mt-1">{t.count} match events</div>
+                      </div>
+                    ))}
+                    {profile.mitre_techniques.length === 0 && (
+                      <div className="empty-small font-mono text-muted">
+                        No technique patterns registered yet.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Interactive Response Playbook widget */}
+                <div className="playbook-widget card-cyber mt-4">
+                  <h5 className="panel-title font-mono text-orange mb-2">Automated Threat Mitigation Playbooks</h5>
+                  <div className="playbook-launcher-row mt-2">
+                    <select 
+                      value={selectedPlaybookId} 
+                      onChange={(e) => setSelectedPlaybookId(e.target.value)}
+                      disabled={executingPlaybook}
+                    >
+                      {playbooks.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    <button 
+                      className="btn-run-playbook"
+                      onClick={handleExecutePlaybook}
+                      disabled={executingPlaybook || !selectedPlaybookId}
+                    >
+                      <Play size={12} />
+                      Run Playbook Workflow
+                    </button>
+                  </div>
+
+                  {/* Execution logs display list */}
+                  {executionLogs.length > 0 && (
+                    <div className="playbook-logs-container mt-3 font-mono">
+                      <div className="logs-title">Execution Console Output:</div>
+                      <div className="logs-list">
+                        {executionLogs.map((log, idx) => (
+                          <div key={idx} className="log-line">
+                            <span className="log-time text-muted">[{new Date(log.time || Date.now()).toLocaleTimeString()}]</span>
+                            <span className={`log-step ${log.status === 'FAILED' ? 'text-red' : 'text-cyan'}`}>[{log.step}]</span>
+                            <span className="log-msg"> {log.message}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
 
-              {/* Interactive Response Playbook widget */}
-              <div className="playbook-widget card-cyber mt-4">
-                <h5 className="panel-title font-mono text-orange mb-2">Automated Threat Mitigation Playbooks</h5>
-                <div className="playbook-launcher-row mt-2">
-                  <select 
-                    value={selectedPlaybookId} 
-                    onChange={(e) => setSelectedPlaybookId(e.target.value)}
-                    disabled={executingPlaybook}
-                  >
-                    {playbooks.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                  <button 
-                    className="btn-run-playbook"
-                    onClick={handleExecutePlaybook}
-                    disabled={executingPlaybook || !selectedPlaybookId}
-                  >
-                    <Play size={12} />
-                    Run Playbook Workflow
-                  </button>
-                </div>
-
-                {/* Execution logs display list */}
-                {executionLogs.length > 0 && (
-                  <div className="playbook-logs-container mt-3 font-mono">
-                    <div className="logs-title">Execution Console Output:</div>
-                    <div className="logs-list">
-                      {executionLogs.map((log, idx) => (
-                        <div key={idx} className="log-line">
-                          <span className="log-time text-muted">[{new Date(log.time || Date.now()).toLocaleTimeString()}]</span>
-                          <span className={`log-step ${log.status === 'FAILED' ? 'text-red' : 'text-cyan'}`}>[{log.step}]</span>
-                          <span className="log-msg"> {log.message}</span>
+                {/* Attacker detailed chronological timeline */}
+                <div className="timeline-block mt-4">
+                  <h5 className="section-title font-mono mb-3">Chronological Threat Activity timeline</h5>
+                  <div className="campaign-timeline">
+                    {profile.timeline.map((item, index) => (
+                      <div key={index} className="timeline-item">
+                        <div className="timeline-marker"></div>
+                        <div className="timeline-content">
+                          <div className="d-flex justify-content-between align-items-center">
+                            <span className="time-lbl font-mono text-muted">{new Date(item.time).toLocaleString()}</span>
+                            <span className={`badge badge-${item.severity.toLowerCase()}`}>{item.severity}</span>
+                          </div>
+                          <p className="desc-text font-mono text-sm mt-1">{item.description}</p>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Attacker detailed chronological timeline */}
-              <div className="timeline-block mt-4">
-                <h5 className="section-title font-mono mb-3">Chronological Threat Activity timeline</h5>
-                <div className="campaign-timeline">
-                  {profile.timeline.map((item, index) => (
-                    <div key={index} className="timeline-item">
-                      <div className="timeline-marker"></div>
-                      <div className="timeline-content">
-                        <div className="d-flex justify-content-between align-items-center">
-                          <span className="time-lbl font-mono text-muted">{new Date(item.time).toLocaleString()}</span>
-                          <span className={`badge badge-${item.severity.toLowerCase()}`}>{item.severity}</span>
-                        </div>
-                        <p className="desc-text font-mono text-sm mt-1">{item.description}</p>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="empty-drawer">No attacker IP dossier selected.</div>
-          )}
+            ) : (
+              <div className="empty-drawer">No attacker IP dossier selected.</div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

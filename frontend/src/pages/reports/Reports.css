@@ -1,26 +1,32 @@
 .reports-root {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   width: 100%;
 }
 
 .reports-grid {
   display: grid;
-  grid-template-columns: 1fr 1.5fr;
+  grid-template-columns: 350px 1fr;
   gap: 20px;
+  align-items: start;
 }
 
-@media (max-width: 800px) {
+@media (max-width: 950px) {
   .reports-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.reports-sidebar-left {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .generate-card {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  height: fit-content;
   background: var(--surface-primary);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -43,7 +49,7 @@
 }
 
 .form-row label {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-secondary);
   font-weight: 700;
   text-transform: uppercase;
@@ -61,35 +67,22 @@
   font-family: var(--font-mono);
   cursor: pointer;
   transition: border-color var(--transition-fast);
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.form-row select:hover {
+.form-row select:hover:not(:disabled) {
   border-color: var(--border-active);
 }
 
-.checkbox-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background-color: rgba(2, 6, 12, 0.45);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 12px;
+.targets-fetching {
+  padding: 8px 12px;
+  background-color: rgba(2, 6, 12, 0.25);
+  border: 1px dashed var(--border-subtle);
+  color: var(--text-muted);
   font-size: 11px;
-  font-family: var(--font-mono);
-}
-
-.checkbox-group label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  color: var(--text-secondary);
-}
-
-.checkbox-group input {
-  cursor: pointer;
-  accent-color: var(--cyan-primary);
+  border-radius: var(--radius-sm);
+  text-align: center;
 }
 
 .generate-btn {
@@ -106,6 +99,7 @@
   outline: none;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  width: 100%;
 }
 
 .generate-btn:hover:not(:disabled) {
@@ -115,7 +109,7 @@
 }
 
 .generate-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -124,7 +118,6 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  min-height: 350px;
   background: var(--surface-primary);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -132,21 +125,22 @@
   border-radius: var(--radius-md);
   box-shadow: var(--glow-subtle);
   padding: 20px;
+  min-height: 250px;
 }
 
 .jobs-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  max-height: 300px;
   overflow-y: auto;
-  flex: 1;
 }
 
 .job-item {
   background-color: rgba(2, 6, 12, 0.25);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 12px;
+  padding: 10px 12px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -161,24 +155,24 @@
 .job-meta {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .job-title-box {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .job-name {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-primary);
   font-family: var(--font-mono);
 }
 
 .job-date {
-  font-size: 9px;
+  font-size: 8px;
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
@@ -186,15 +180,14 @@
 .job-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
 }
 
-.download-btn {
-  background-color: rgba(2, 6, 12, 0.45);
-  border: 1px solid var(--border-subtle);
+.btn-trash-action {
+  background: transparent;
+  border: none;
   color: var(--text-secondary);
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
@@ -204,18 +197,186 @@
   outline: none;
 }
 
-.download-btn:hover {
-  border-color: var(--border-active);
-  color: var(--cyan-primary);
-  box-shadow: var(--glow-subtle);
+.btn-trash-action:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--red);
 }
 
 .loading-jobs, .empty-jobs {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 150px;
+  height: 120px;
   color: var(--text-muted);
   font-size: 11px;
   font-family: var(--font-mono);
+}
+
+/* Right Column Preview Panel */
+.reports-main-preview {
+  min-height: 550px;
+  background: var(--surface-primary);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glow-subtle);
+  padding: 24px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: var(--text-muted);
+}
+
+.preview-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.preview-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+}
+
+.badge-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge-ready {
+  letter-spacing: 0.05em;
+}
+
+.export-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-export {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  outline: none;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.btn-pdf {
+  background-color: rgba(139, 92, 246, 0.05);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  color: var(--purple);
+}
+
+.btn-pdf:hover {
+  background-color: rgba(139, 92, 246, 0.15);
+  border-color: var(--purple);
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);
+}
+
+.btn-csv {
+  background-color: rgba(16, 185, 129, 0.05);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: var(--green);
+}
+
+.btn-csv:hover {
+  background-color: rgba(16, 185, 129, 0.15);
+  border-color: var(--green);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+}
+
+/* Report Markdown Rendering Elements */
+.report-markdown-container {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 600px;
+  padding-right: 8px;
+}
+
+.md-h1 {
+  font-size: 18px;
+  font-weight: 700;
+  border-bottom: 2px solid var(--border-subtle);
+  padding-bottom: 8px;
+  margin: 0 0 20px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.md-h2 {
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 6px;
+  margin: 25px 0 12px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.md-h3 {
+  font-size: 11px;
+  font-weight: 700;
+  margin: 18px 0 8px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.md-p {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.8;
+  margin: 8px 0;
+  word-break: break-word;
+}
+
+.md-li {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-left: 20px;
+  margin-bottom: 6px;
+  list-style-type: square;
+}
+
+.md-hr {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: 20px 0;
+}
+
+.md-code {
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background-color: rgba(2, 6, 12, 0.5);
+  border: 1px solid var(--border-subtle);
+  color: var(--cyan-primary);
+  font-size: 10px;
+  display: inline-block;
+  vertical-align: middle;
 }

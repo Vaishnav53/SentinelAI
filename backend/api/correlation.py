@@ -2,7 +2,7 @@ import logging
 import json
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel
 
@@ -160,3 +160,72 @@ async def get_normalized_logs(
             (NormalizedLog.user_name.like(f"%{search}%"))
         )
     return query.order_by(NormalizedLog.created_at.desc()).limit(100).all()
+
+@router.post("/seed-demo", response_model=Dict[str, Any])
+async def seed_demo_incidents(db: Session = Depends(get_db)):
+    """Seed sample failed and successful logon event logs, then execute correlation to spawn a demo incident graph."""
+    from backend.services.correlation_engine import CorrelationEngine
+    
+    # Clean old demo entries to prevent duplicate clutter
+    db.query(NormalizedLog).filter(NormalizedLog.source_ip == "10.99.99.99").delete()
+    db.query(CorrelatedIncident).filter(CorrelatedIncident.title.like("%10.99.99.99%")).delete()
+    db.commit()
+    
+    # 1. Add logon failure logs
+    failure1 = NormalizedLog(
+        log_source="WINDOWS",
+        event_id="4625",
+        source_ip="10.99.99.99",
+        user_name="admin",
+        hostname="DEC-SERVER-01",
+        message="An account failed to log on. Source Address: 10.99.99.99. User Name: admin",
+        severity="MEDIUM",
+        created_at=datetime.utcnow()
+    )
+    db.add(failure1)
+    
+    failure2 = NormalizedLog(
+        log_source="WINDOWS",
+        event_id="4625",
+        source_ip="10.99.99.99",
+        user_name="admin",
+        hostname="DEC-SERVER-01",
+        message="An account failed to log on. Source Address: 10.99.99.99. User Name: admin",
+        severity="MEDIUM",
+        created_at=datetime.utcnow()
+    )
+    db.add(failure2)
+    db.commit()
+    
+    # 2. Add successful bypass login and call CorrelationEngine
+    success = NormalizedLog(
+        log_source="WINDOWS",
+        event_id="4624",
+        source_ip="10.99.99.99",
+        user_name="admin",
+        hostname="DEC-SERVER-01",
+        message="An account was successfully logged on. Source Address: 10.99.99.99. User Name: admin",
+        severity="HIGH",
+        created_at=datetime.utcnow()
+    )
+    db.add(success)
+    db.commit()
+    
+    # Run the engine
+    engine = CorrelationEngine(db)
+    engine.process_log(success)
+    
+    # Find the created incident to confirm
+    incident = db.query(CorrelatedIncident).filter(
+        CorrelatedIncident.title.like("%10.99.99.99%")
+    ).first()
+    
+    if not incident:
+        return {"status": "ERROR", "message": "Failed to trigger incident chain correlation."}
+        
+    return {
+        "status": "SUCCESS",
+        "message": "Demo log records seeded. Attack chain successfully correlated.",
+        "incident_id": incident.id
+    }
+

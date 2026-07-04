@@ -13,7 +13,6 @@ import {
   Menu,
   X,
   Database,
-  BookOpen,
   Clock,
   ShieldAlert,
   GitBranch,
@@ -244,7 +243,6 @@ export default function DashboardLayout() {
     { name: 'Honeypot Lab', path: '/sensors', icon: Radio },
     { name: 'AI Assistant', path: '/agent', icon: Terminal },
     { name: 'Reports', path: '/reports', icon: FileText },
-    { name: 'Blueprint', path: '/blueprint', icon: BookOpen },
     { name: 'Settings', path: '/settings', icon: Settings },
   ];
 
