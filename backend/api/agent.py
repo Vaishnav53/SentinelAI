@@ -21,6 +21,27 @@ from backend.schemas.agent import (
     AnalysisResponse
 )
 
+def map_model_to_groq(model_name: str) -> str:
+    """Map a local model name or custom input to a valid Groq model ID."""
+    if not model_name:
+        return settings.DEFAULT_GROQ_MODEL
+    model_name_lower = model_name.lower()
+    if "llama" in model_name_lower:
+        if "70b" in model_name_lower or "versatile" in model_name_lower:
+            return "llama-3.3-70b-versatile"
+        return "llama-3.1-8b-instant"
+    elif "qwen" in model_name_lower:
+        return "llama-3.1-8b-instant"
+    elif "mixtral" in model_name_lower:
+        return "mixtral-8x7b-32768"
+    elif "gemma" in model_name_lower:
+        return "gemma2-9b-it"
+    
+    valid_groq_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it", "llama3-8b-8192"]
+    if model_name in valid_groq_models:
+        return model_name
+    return settings.DEFAULT_GROQ_MODEL
+
 async def resolve_ollama_model_name(model_name: str) -> str:
     """Resolve requested base model name to the exact tag string returned by Ollama."""
     try:
@@ -43,16 +64,27 @@ async def get_agent_status(
     db: Session = Depends(get_db),
     settings_service = Depends(get_settings_service)
 ):
-    """Verify Ollama status and fetch installed model names dynamically."""
+    """Verify Groq status and fetch available model names dynamically."""
+    if not settings.GROQ_API_KEY:
+        return AgentStatus(status="OFFLINE", models_available=[])
     try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            response = await client.get(f"{settings.OLLAMA_BASE_URL}/api/tags")
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            response = await client.get(
+                "https://api.groq.com/openai/v1/models",
+                headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"}
+            )
             if response.status_code == 200:
                 data = response.json()
-                raw_models = [model["name"] for model in data.get("models", [])]
+                non_chat_patterns = ["whisper", "prompt-guard", "safeguard", "moderation", "audio", "speech", "embedding"]
+                raw_models = [
+                    model["id"] for model in data.get("data", [])
+                    if not any(pat in model["id"].lower() for pat in non_chat_patterns)
+                ]
                 return AgentStatus(status="ONLINE", models_available=raw_models)
+            else:
+                logging.warning(f"Groq models lookup returned status code: {response.status_code}")
     except Exception as e:
-        logging.warning(f"Ollama offline during status discovery: {e}")
+        logging.warning(f"Groq offline during status discovery: {e}")
         
     return AgentStatus(
         status="OFFLINE", 
@@ -90,7 +122,7 @@ async def post_chat_stream(
 ):
     """Submit prompt to Copilot, returning a streaming response chunk-by-chunk."""
     raw_model = payload.model or settings_service.get_setting(db, "default_ollama_model", settings.DEFAULT_OLLAMA_MODEL)
-    model_name = await resolve_ollama_model_name(raw_model)
+    model_name = map_model_to_groq(raw_model)
     
     conv_key = payload.conversation_id
     linked_attack_id = payload.context.attack_id if payload.context else None
@@ -129,7 +161,7 @@ async def post_chat_stream(
     system_prompt = settings_service.get_setting(
         db, 
         "ollama_system_prompt", 
-        "You are a cyber security SOC analyst. For security incidents and threat analyses, organize your response using exactly these sections in Markdown headers:\n### Threat Summary\n### MITRE ATT&CK\n### Confidence\n### Impact\n### Detection\n### Remediation\n### References\nBe direct, technical, and beginner-friendly. For general conversational messages (such as greetings, questions about how you work, or casual chats like 'hi'), respond in a friendly, conversational style without using these report headers. Do not mention any local templates or fallbacks."
+        "You are SentinelAI SOC Copilot, a senior cyber security SOC analyst. For security incidents and threat analyses, organize your response using exactly these sections in Markdown headers:\n### Threat Summary\n### MITRE ATT&CK\n### Confidence\n### Impact\n### Detection\n### Remediation\n### References\nFocus technical answers specifically on threat detection, incident response, IOC explanation, payload analysis, firewall/WAF rules, SIEM queries, and executive summaries. Be direct, technical, and beginner-friendly. For general conversational messages, respond in a friendly, conversational style without using these report headers. Do not mention any local templates or fallbacks."
     )
     
     incident_context = ""
@@ -193,40 +225,13 @@ async def post_chat_stream(
             "content": msg.content
         })
 
-    # Dynamically verify installed models before running call
-    installed_models = []
-    is_ollama_online = False
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{settings.OLLAMA_BASE_URL}/api/tags")
-            if resp.status_code == 200:
-                is_ollama_online = True
-                installed_models = [m["name"] for m in resp.json().get("models", [])]
-    except Exception as e:
-        logging.warning(f"Ollama connection check failed: {e}")
+    # Check if Groq API is configured
+    is_ollama_online = bool(settings.GROQ_API_KEY)
 
     async def generate_response():
         start_time = datetime.utcnow()
         response_text = ""
-        source = "ollama"
-        
-        # 1. If Ollama is online, but model is not installed -> yield explicit error and terminate
-        if is_ollama_online:
-            if model_name not in installed_models:
-                error_msg = "Selected model is not installed. Please choose an available model."
-                yield f"data: {json.dumps({'text': error_msg, 'done': True, 'error': True, 'conversation_id': conv_key, 'model': model_name, 'latency': 0.0, 'source': 'ollama'})}\n\n"
-                
-                # Save the error message in the DB
-                ai_msg = AIMessage(
-                    conversation_id=conv.id,
-                    role="assistant",
-                    content=error_msg,
-                    model=model_name,
-                    latency=0.0
-                )
-                db.add(ai_msg)
-                db.commit()
-                return
+        source = "groq"
 
         # 2. If Ollama is completely offline, fall back to offline simulation
         if not is_ollama_online:
@@ -398,9 +403,9 @@ I was unable to establish a timely connection with the local Ollama service.
                 yield f"data: {json.dumps({'text': text_chunk, 'done': False, 'conversation_id': conv_key, 'model': model_name})}\n\n"
                 await asyncio.sleep(0.03)
         else:
-            # Call Ollama API
-            ollama_url = f"{settings.OLLAMA_BASE_URL}/api/chat"
-            timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 120.0))
+            # Call Groq API
+            groq_url = "https://api.groq.com/openai/v1/chat/completions"
+            timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 90.0))
             temperature = payload.temperature if payload.temperature is not None else 0.7
             max_tokens = payload.max_tokens if payload.max_tokens is not None else 256
             
@@ -408,16 +413,14 @@ I was unable to establish a timely connection with the local Ollama service.
                 async with httpx.AsyncClient(timeout=timeout_seconds) as client:
                     async with client.stream(
                         "POST",
-                        ollama_url,
+                        groq_url,
+                        headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"},
                         json={
                             "model": model_name,
                             "messages": messages_payload,
-                            "options": {
-                                "num_predict": max_tokens,
-                                "temperature": temperature,
-                                "top_p": 0.9,
-                                "repeat_penalty": 1.1
-                            },
+                            "temperature": temperature,
+                            "max_tokens": max_tokens,
+                            "top_p": 0.9,
                             "stream": True
                         }
                     ) as response:
@@ -425,34 +428,38 @@ I was unable to establish a timely connection with the local Ollama service.
                             async for line in response.aiter_lines():
                                 if not line:
                                     continue
-                                try:
-                                    chunk_json = json.loads(line)
-                                    text_chunk = chunk_json.get("message", {}).get("content", "")
-                                    if text_chunk:
-                                        response_text += text_chunk
-                                        yield f"data: {json.dumps({'text': text_chunk, 'done': False, 'conversation_id': conv_key, 'model': model_name})}\n\n"
-                                except Exception:
-                                    pass
+                                line = line.strip()
+                                if line.startswith("data:"):
+                                    data_content = line[5:].strip()
+                                    if data_content == "[DONE]":
+                                        break
+                                    try:
+                                        chunk_json = json.loads(data_content)
+                                        text_chunk = chunk_json.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                                        if text_chunk:
+                                            response_text += text_chunk
+                                            yield f"data: {json.dumps({'text': text_chunk, 'done': False, 'conversation_id': conv_key, 'model': model_name})}\n\n"
+                                    except Exception:
+                                        pass
                         else:
-                            raise Exception(f"Ollama stream status {response.status_code}")
+                            raise Exception(f"Groq stream status {response.status_code}")
             except Exception as e:
                 source = "fallback"
                 error_name = type(e).__name__
-                logging.warning(f"Ollama stream error ({error_name}): {str(e)}.")
+                logging.warning(f"Groq stream error ({error_name}): {str(e)}.")
                 if not response_text:
-                    err_msg = f"""### ⚠️ Local AI Model Offline or Timed Out
+                    err_msg = f"""### ⚠️ Groq Cloud AI Offline or Timed Out
 
-I was unable to establish a timely connection with the local Ollama service ({error_name}).
+I was unable to establish a timely connection with the Groq Cloud service ({error_name}).
 
 **Possible Causes:**
-1. **Ollama Service is Not Running:** Ensure that the Ollama application is active on your host system.
-2. **Model Not Pulled:** The requested model (`{model_name}`) might not be downloaded. Run `ollama pull {model_name}` in your terminal.
-3. **Hardware Latency:** Running larger LLMs on CPU can lead to timeouts.
+1. **API Key Missing or Invalid:** Ensure that your `GROQ_API_KEY` is correctly defined in `backend/.env`.
+2. **Network Connection Issues:** Verify that the host is connected to the internet and can access `https://api.groq.com`.
+3. **Rate Limits / Quotas:** You may have exceeded your Groq account's rate limits.
 
 **Recommended Troubleshooting:**
-- Select a smaller, faster model (e.g., `llama3.2:1b`, `tinydolphin`, or `phi3`) from the dropdown above.
-- Verify Ollama is running by executing: `curl http://127.0.0.1:11434/` in your command prompt.
-- Increase the AI timeout threshold in Platform Settings."""
+- Check your internet access.
+- Validate your `GROQ_API_KEY` settings."""
                     words = err_msg.split(" ")
                     for idx, word in enumerate(words):
                         space = " " if idx < len(words) - 1 else ""
@@ -464,7 +471,7 @@ I was unable to establish a timely connection with the local Ollama service ({er
                     latency = (datetime.utcnow() - start_time).total_seconds()
                     yield f"data: {json.dumps({'text': '', 'done': True, 'conversation_id': conv_key, 'model': model_name, 'latency': latency, 'source': 'fallback'})}\n\n"
                 else:
-                    yield f"data: {json.dumps({'text': f'\\n[Stream Interrupted: {error_name}]', 'done': True, 'error': True, 'conversation_id': conv_key, 'model': model_name, 'latency': 0.0, 'source': 'ollama'})}\n\n"
+                    yield f"data: {json.dumps({'text': f'\\n[Stream Interrupted: {error_name}]', 'done': True, 'error': True, 'conversation_id': conv_key, 'model': model_name, 'latency': 0.0, 'source': 'groq'})}\n\n"
                 return
         
         latency = (datetime.utcnow() - start_time).total_seconds()
@@ -501,7 +508,7 @@ async def post_chat(
     """Submit prompt to Copilot, persisting conversations in SQLite db."""
     start_time = datetime.utcnow()
     raw_model = payload.model or settings_service.get_setting(db, "default_ollama_model", settings.DEFAULT_OLLAMA_MODEL)
-    model_name = await resolve_ollama_model_name(raw_model)
+    model_name = map_model_to_groq(raw_model)
     
     # 1. Retrieve or Create AIConversation context
     conv_key = payload.conversation_id
@@ -544,7 +551,7 @@ async def post_chat(
     system_prompt = settings_service.get_setting(
         db, 
         "ollama_system_prompt", 
-        "You are a cyber security SOC analyst. For security incidents and threat analyses, organize your response using exactly these sections in Markdown headers:\n### Threat Summary\n### MITRE ATT&CK\n### Confidence\n### Impact\n### Detection\n### Remediation\n### References\nBe direct, technical, and beginner-friendly. Do not mention any local templates or fallbacks."
+        "You are SentinelAI SOC Copilot, a senior cyber security SOC analyst. For security incidents and threat analyses, organize your response using exactly these sections in Markdown headers:\n### Threat Summary\n### MITRE ATT&CK\n### Confidence\n### Impact\n### Detection\n### Remediation\n### References\nFocus technical answers specifically on threat detection, incident response, IOC explanation, payload analysis, firewall/WAF rules, SIEM queries, and executive summaries. Be direct, technical, and beginner-friendly. Do not mention any local templates or fallbacks."
     )
     
     incident_context = ""
@@ -609,43 +616,42 @@ async def post_chat(
             "content": msg.content
         })
 
-    # 4. Attempt Ollama Call
+    # 4. Attempt Groq Call
     response_text = ""
     source = "model"
-    ollama_url = f"{settings.OLLAMA_BASE_URL}/api/chat"
-    timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 90.0))
-    
-    # Custom options
-    temperature = payload.temperature if payload.temperature is not None else 0.7
-    max_tokens = payload.max_tokens if payload.max_tokens is not None else 256
-    
-    try:
-        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-            response = await client.post(
-                ollama_url,
-                json={
-                    "model": model_name,
-                    "messages": messages_payload,
-                    "options": {
-                        "num_predict": max_tokens,
+    if settings.GROQ_API_KEY:
+        groq_url = "https://api.groq.com/openai/v1/chat/completions"
+        timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 90.0))
+        
+        # Custom options
+        temperature = payload.temperature if payload.temperature is not None else 0.7
+        max_tokens = payload.max_tokens if payload.max_tokens is not None else 256
+        
+        try:
+            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                response = await client.post(
+                    groq_url,
+                    headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"},
+                    json={
+                        "model": model_name,
+                        "messages": messages_payload,
                         "temperature": temperature,
+                        "max_tokens": max_tokens,
                         "top_p": 0.9,
-                        "repeat_penalty": 1.1
-                    },
-                    "stream": False
-                }
-            )
-            if response.status_code == 200:
-                data = response.json()
-                response_text = data.get("message", {}).get("content", "")
-    except Exception as e:
+                        "stream": False
+                    }
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    response_text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        except Exception as e:
+            source = "fallback"
+            error_name = type(e).__name__
+            logging.warning(f"Groq chat error ({error_name}): {str(e)}. Executing fallback.", exc_info=True)
+            if "Timeout" in error_name:
+                response_text = "The Groq Cloud model responded too slowly. Try lowering max tokens or check your network limits."
+    else:
         source = "fallback"
-        error_name = type(e).__name__
-        logging.warning(f"Ollama chat error ({error_name}): {str(e)}. Executing fallback.", exc_info=True)
-        if "Timeout" in error_name:
-            response_text = "The local AI model is online but responded too slowly. Try using a smaller model, lower max tokens, or run Ollama with GPU acceleration."
-        else:
-            response_text = "Security Copilot is currently offline. Ensure Ollama is running locally."
 
     # 5. Local Mock Fallback if Ollama Offline/Timed Out or returns empty
     if not response_text:
@@ -837,7 +843,7 @@ async def analyze_attack(
         raise HTTPException(status_code=404, detail="Attack event not found")
 
     raw_model = settings_service.get_setting(db, "default_ollama_model", settings.DEFAULT_OLLAMA_MODEL)
-    model_name = await resolve_ollama_model_name(raw_model)
+    model_name = map_model_to_groq(raw_model)
     conv_key = f"analysis_attack_{attack_id}"
     
     # 1. Retrieve or Create Conversation
@@ -906,43 +912,42 @@ Begin the analysis now:"""
     db.add(user_msg)
     db.commit()
 
-    # 4. Attempt Ollama Analysis Call
+    # 4. Attempt Groq Analysis Call
     response_text = ""
     source = "model"
-    ollama_url = f"{settings.OLLAMA_BASE_URL}/api/chat"
-    timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 90.0))
-    
     messages_payload = [
         {"role": "system", "content": "SYSTEM DIRECTIVE: ZERO-TRUST SOC COPILET. You are a highly experienced SOC analyst investigating a threat event. Respond using the requested markdown headings structure."},
         {"role": "user", "content": prompt}
     ]
     
-    try:
-        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-            response = await client.post(
-                ollama_url,
-                json={
-                    "model": model_name, 
-                    "messages": messages_payload, 
-                    "options": {
-                        "num_predict": 512,
+    if settings.GROQ_API_KEY:
+        groq_url = "https://api.groq.com/openai/v1/chat/completions"
+        timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 90.0))
+        
+        try:
+            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                response = await client.post(
+                    groq_url,
+                    headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"},
+                    json={
+                        "model": model_name, 
+                        "messages": messages_payload, 
                         "temperature": 0.2,
+                        "max_tokens": 512,
                         "top_p": 0.9,
-                        "repeat_penalty": 1.1
-                    },
-                    "stream": False
-                }
-            )
-            if response.status_code == 200:
-                data = response.json()
-                response_text = data.get("message", {}).get("content", "")
-    except Exception as e:
-        error_name = type(e).__name__
-        logging.warning(f"Ollama analyze failed ({error_name}): {str(e)}. Executing fallback.", exc_info=True)
-        if "Timeout" in error_name:
-            response_text = "### EXECUTIVE SUMMARY\nThe local AI model is online but responded too slowly. Try using a smaller model, lower max tokens, or run Ollama with GPU acceleration."
-        else:
-            response_text = "### EXECUTIVE SUMMARY\nSecurity Copilot is currently offline. Ensure Ollama is running locally."
+                        "stream": False
+                    }
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    response_text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        except Exception as e:
+            error_name = type(e).__name__
+            logging.warning(f"Groq analyze failed ({error_name}): {str(e)}. Executing fallback.", exc_info=True)
+            if "Timeout" in error_name:
+                response_text = "### EXECUTIVE SUMMARY\nThe Groq Cloud model responded too slowly. Try lowering max tokens or check your network limits."
+    else:
+        source = "fallback"
 
     # 5. Fallback Mock response dictionary
     parsed_json = {}

@@ -2,12 +2,14 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 1600px;
+  max-width: 100%;
   margin: 0 auto;
   width: 100%;
   height: 100%;
   position: relative;
   box-sizing: border-box;
+  overflow-x: hidden !important;
+  min-width: 0;
 }
 
 /* Viewport constraints */
@@ -17,6 +19,9 @@
   overflow: visible;
   padding: 6px 16px;
   box-sizing: border-box;
+  max-width: 100%;
+  width: 100%;
+  min-width: 0;
 }
 
 /* Background Atmosphere and Grid Overlay */
@@ -177,6 +182,13 @@
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.telemetry-cards > * {
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 @media (max-width: 1200px) {
@@ -328,6 +340,13 @@
   align-items: stretch;
   flex: 1;
   min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.command-center-v2 > * {
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 @media (min-width: 1200px) and (max-width: 1399px) {
@@ -533,6 +552,9 @@
   gap: 12px;
   margin-top: 10px;
   flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+  align-items: stretch;
 }
 
 .ai-advisor-box-v2 {
@@ -542,6 +564,10 @@
   padding: 10px;
   display: flex;
   flex-direction: column;
+  flex: 1;
+  width: 50%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .ai-advisor-header {
@@ -691,6 +717,10 @@
   padding: 10px;
   display: flex;
   flex-direction: column;
+  flex: 1;
+  width: 50%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .act-btn-cyber {
@@ -827,9 +857,10 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  flex-wrap: nowrap;
-  justify-content: space-between;
+  flex-wrap: wrap;
+  justify-content: flex-start;
   flex: 1;
+  min-width: 0;
 }
 
 .strip-item {
@@ -978,14 +1009,15 @@
   position: relative;
   width: 100%;
   height: 100%;
-  overflow: hidden;
+  overflow: hidden !important;
   box-sizing: border-box;
 }
 
 .command-center-scale {
   width: 100%;
-  height: calc(100vh - 38px); /* Account for compact 38px DashboardLayout header */
-  overflow-y: auto;
+  height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
   position: relative;
   box-sizing: border-box;
 }
@@ -1038,9 +1070,14 @@
   }
 }
 
-/* Remove unnecessary top spacing above main dashboard content */
+/* Remove unnecessary top spacing above main dashboard content and lock scroll */
 .main-viewport:has(.command-center-v2) .viewport-content {
   padding: 0px 16px 16px 16px;
+  overflow: hidden !important;
+  height: calc(100vh - 64px) !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
 /* KPI Premium Visual Effects */

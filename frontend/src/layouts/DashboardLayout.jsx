@@ -237,8 +237,6 @@ export default function DashboardLayout() {
     { name: 'Incident Response', path: '/attacks', icon: Shield },
     { name: 'Threat Correlation', path: '/correlation', icon: GitBranch },
     { name: 'Sandbox Console', path: '/sandbox', icon: Folder },
-    { name: 'Attacker Profiles', path: '/attackers', icon: Skull },
-    { name: 'Threat Playbooks', path: '/playbooks', icon: Workflow },
     { name: 'WAF Manager', path: '/waf', icon: ShieldAlert },
     { name: 'Honeypot Lab', path: '/sensors', icon: Radio },
     { name: 'AI Assistant', path: '/agent', icon: Terminal },
@@ -398,39 +396,41 @@ export default function DashboardLayout() {
         </main>
 
         {/* Floating Real-time SOC Toasts */}
-        <div className="toast-container">
-          {toasts.map((toast) => (
-            <div key={toast.id} className={`toast-card ${toast.severity.toLowerCase()}`}>
-              <div className={`toast-icon-box ${toast.severity.toLowerCase()}`}>
-                <ShieldAlert size={18} className="pulse" />
-              </div>
-              <div className="toast-body">
-                <div className="toast-title">{toast.attack_type}</div>
-                <div className="toast-desc">
-                  Intrusion signature detected from {toast.source_ip}. Severity: <strong>{toast.severity}</strong> (Score: {toast.threat_score}/10).
+        {(location.pathname === '/' || location.pathname === '/dashboard') && (
+          <div className="toast-container">
+            {toasts.map((toast) => (
+              <div key={toast.id} className={`toast-card ${toast.severity.toLowerCase()}`}>
+                <div className={`toast-icon-box ${toast.severity.toLowerCase()}`}>
+                  <ShieldAlert size={18} className="pulse" />
                 </div>
-                <div className="toast-footer">
-                  <span className="toast-time">{new Date(toast.created_at).toLocaleTimeString()}</span>
-                  <span 
-                    className="toast-view-link"
-                    onClick={() => {
-                      setToasts(toasts.filter(t => t.id !== toast.id));
-                      navigate('/attacks');
-                    }}
-                  >
-                    View Details
-                  </span>
+                <div className="toast-body">
+                  <div className="toast-title">{toast.attack_type}</div>
+                  <div className="toast-desc">
+                    Intrusion signature detected from {toast.source_ip}. Severity: <strong>{toast.severity}</strong> (Score: {toast.threat_score}/10).
+                  </div>
+                  <div className="toast-footer">
+                    <span className="toast-time">{new Date(toast.created_at).toLocaleTimeString()}</span>
+                    <span 
+                      className="toast-view-link"
+                      onClick={() => {
+                        setToasts(toasts.filter(t => t.id !== toast.id));
+                        navigate('/attacks');
+                      }}
+                    >
+                      View Details
+                    </span>
+                  </div>
                 </div>
+                <button 
+                  className="toast-close-btn"
+                  onClick={() => setToasts(toasts.filter(t => t.id !== toast.id))}
+                >
+                  <X size={12} />
+                </button>
               </div>
-              <button 
-                className="toast-close-btn"
-                onClick={() => setToasts(toasts.filter(t => t.id !== toast.id))}
-              >
-                <X size={12} />
-              </button>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

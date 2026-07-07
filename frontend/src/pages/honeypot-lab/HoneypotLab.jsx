@@ -12,6 +12,7 @@ export default function HoneypotLab() {
   const [lanMode, setLanMode] = useState(false);
   const [liveActivity, setLiveActivity] = useState([]);
   const [logFilter, setLogFilter] = useState('ALL');
+  const [showAdvancedDecoys, setShowAdvancedDecoys] = useState(false);
 
   const formatLocalTime = (utcString) => {
     if (!utcString) return "";
@@ -285,58 +286,80 @@ export default function HoneypotLab() {
         </div>
       </div>
 
-      {/* Grid of other simulated sensors */}
-      <h5 className="section-title">Decoy Sandbox Listener Nodes</h5>
-      <div className="sensor-grid">
-        {fallbackSensors.map((sensor) => {
-          const isOnline = sensor.state === 'ONLINE';
-          return (
-            <div key={sensor.id} className={`sensor-card card-cyber ${sensor.state.toLowerCase()}`}>
-              <div className="sensor-card-header">
-                <span className={`badge badge-${sensor.state.toLowerCase()}`}>{sensor.state}</span>
-                <button 
-                  className={`power-btn ${isOnline ? 'active' : ''}`}
-                  onClick={() => handleToggleSimulatedSensor(sensor.id, sensor.state)}
-                  title={isOnline ? "Stop Listener" : "Start Listener"}
-                >
-                  <Power size={14} />
-                </button>
-              </div>
+      {/* Collapsible Advanced Decoy Services */}
+      <div className="advanced-decoys-collapsible card-cyber" style={{ padding: '16px', marginTop: '20px', marginBottom: '20px' }}>
+        <h5 
+          className="section-title collapsible-title" 
+          onClick={() => setShowAdvancedDecoys(!showAdvancedDecoys)}
+          style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: 0 }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Terminal size={14} className="text-purple" /> 
+            Advanced Decoy Services
+          </span>
+          <span className="toggle-indicator font-mono" style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
+            {showAdvancedDecoys ? '▼' : '►'}
+          </span>
+        </h5>
+        
+        {showAdvancedDecoys && (
+          <div style={{ marginTop: '16px' }}>
+            <p className="text-muted text-xs mb-3 font-mono" style={{ fontSize: '11px', color: '#8b949e', lineHeight: '1.4' }}>
+              * NOTE: These decoy listeners represent inactive simulated service models used to capture automated network scanning. They are currently visual decoy placeholders for SSH, FTP, and Telnet protocols.
+            </p>
+            <div className="sensor-grid">
+              {fallbackSensors.map((sensor) => {
+                const isOnline = sensor.state === 'ONLINE';
+                return (
+                  <div key={sensor.id} className={`sensor-card card-cyber ${sensor.state.toLowerCase()}`}>
+                    <div className="sensor-card-header">
+                      <span className={`badge badge-${sensor.state.toLowerCase()}`}>{sensor.state}</span>
+                      <button 
+                        className={`power-btn ${isOnline ? 'active' : ''}`}
+                        onClick={() => handleToggleSimulatedSensor(sensor.id, sensor.state)}
+                        title={isOnline ? "Stop Listener" : "Start Listener"}
+                      >
+                        <Power size={14} />
+                      </button>
+                    </div>
 
-              <div className="sensor-card-body">
-                <h4 className="sensor-name">{sensor.name}</h4>
-                <div className="sensor-meta font-mono">
-                  <div className="sm-row">
-                    <span className="sm-label">Port:</span>
-                    <span className="sm-val">{sensor.port}</span>
-                  </div>
-                  <div className="sm-row">
-                    <span className="sm-label">Protocol:</span>
-                    <span className="sm-val">{sensor.type}</span>
-                  </div>
-                  <div className="sm-row">
-                    <span className="sm-label">Binding:</span>
-                    <span className="sm-val">{sensor.host}</span>
-                  </div>
-                </div>
-              </div>
+                    <div className="sensor-card-body">
+                      <h4 className="sensor-name">{sensor.name}</h4>
+                      <div className="sensor-meta font-mono">
+                        <div className="sm-row">
+                          <span className="sm-label">Port:</span>
+                          <span className="sm-val">{sensor.port}</span>
+                        </div>
+                        <div className="sm-row">
+                          <span className="sm-label">Protocol:</span>
+                          <span className="sm-val">{sensor.type}</span>
+                        </div>
+                        <div className="sm-row">
+                          <span className="sm-label">Binding:</span>
+                          <span className="sm-val">{sensor.host}</span>
+                        </div>
+                      </div>
+                    </div>
 
-              <div className="sensor-card-footer">
-                {isOnline ? (
-                  <div className="sensor-status-msg text-green">
-                    <ShieldCheck size={14} />
-                    <span>Listening on Port {sensor.port}</span>
+                    <div className="sensor-card-footer">
+                      {isOnline ? (
+                        <div className="sensor-status-msg text-green">
+                          <ShieldCheck size={14} />
+                          <span>Listening on Port {sensor.port}</span>
+                        </div>
+                      ) : (
+                        <div className="sensor-status-msg text-muted">
+                          <AlertTriangle size={14} />
+                          <span>Port is closed</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  <div className="sensor-status-msg text-muted">
-                    <AlertTriangle size={14} />
-                    <span>Port is closed</span>
-                  </div>
-                )}
-              </div>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        )}
       </div>
 
       {/* Copy paste test payloads instructions */}

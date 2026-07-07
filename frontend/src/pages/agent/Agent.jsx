@@ -21,11 +21,36 @@ export default function Agent() {
   
   // Input settings
   const [inputValue, setInputValue] = useState('');
-  const [modelName, setModelName] = useState('llama3.2:3b');
+  const [modelName, setModelName] = useState('llama-3.3-70b-versatile');
   const [availableModels, setAvailableModels] = useState([]);
   const [agentStatus, setAgentStatus] = useState('OFFLINE');
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [lastLatency, setLastLatency] = useState(null);
+
+  const getModelLabel = (modelId) => {
+    if (!modelId) return '';
+    const mappings = {
+      'llama-3.3-70b-versatile': 'Llama 3.3 70B Versatile',
+      'llama-3.1-8b-instant': 'Llama 3.1 8B Instant',
+      'llama-3.1-70b-versatile': 'Llama 3.1 70B Versatile',
+      'llama3-70b-8192': 'Llama 3 70B',
+      'llama3-8b-8192': 'Llama 3 8B',
+      'mixtral-8x7b-32768': 'Mixtral 8x7B',
+      'gemma2-9b-it': 'Gemma 2 9B',
+      'gemma-7b-it': 'Gemma 7B',
+      'qwen-2.5-32b': 'Qwen 2.5 32B',
+      'qwen-2.5-coder-32b': 'Qwen 2.5 Coder 32B',
+      'deepseek-r1-distill-llama-70b': 'DeepSeek R1 Llama 70B',
+      'deepseek-r1-distill-qwen-32b': 'DeepSeek R1 Qwen 32B'
+    };
+    if (mappings[modelId]) return mappings[modelId];
+    return modelId
+      .replace(/[-_]/g, ' ')
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  };
 
   // Selected threat context
   const [selectedAttack, setSelectedAttack] = useState(null);
@@ -34,9 +59,10 @@ export default function Agent() {
   const [selectedAttackerIp, setSelectedAttackerIp] = useState(null);
 
   // Settings Overlay Configurations
-  const [temp, setTemp] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(256);
+  const [temp, setTemp] = useState(0.2);
+  const [maxTokens, setMaxTokens] = useState(128);
   const [systemPrompt, setSystemPrompt] = useState('Zero-Trust SOC Assistant');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const messagesEndRef = useRef(null);
 
@@ -67,9 +93,17 @@ export default function Agent() {
       setAgentStatus(status.status);
       setAvailableModels(status.models_available);
       
-      // Load default model from platform setting or first available
-      if (status.models_available.length > 0 && !modelName) {
-        setModelName(status.models_available[0]);
+      // Load default model prioritizing llama-3.3-70b-versatile, then llama-3.1-8b-instant
+      if (status.models_available.length > 0) {
+        const hasLlama70b = status.models_available.includes('llama-3.3-70b-versatile');
+        const hasLlama8b = status.models_available.includes('llama-3.1-8b-instant');
+        if (hasLlama70b) {
+          setModelName('llama-3.3-70b-versatile');
+        } else if (hasLlama8b) {
+          setModelName('llama-3.1-8b-instant');
+        } else if (!modelName || !status.models_available.includes(modelName)) {
+          setModelName(status.models_available[0]);
+        }
       }
     } catch (e) {
       setAgentStatus('OFFLINE');
@@ -200,6 +234,9 @@ export default function Agent() {
             try {
               const data = JSON.parse(rawJson);
               if (data.done) {
+                if (data.latency !== undefined) {
+                  setLastLatency(data.latency);
+                }
                 setMessages(prev => {
                   const updated = [...prev];
                   updated[assistantMsgIndex] = {
@@ -241,6 +278,9 @@ export default function Agent() {
         try {
           const data = JSON.parse(rawJson);
           if (data.done) {
+            if (data.latency !== undefined) {
+              setLastLatency(data.latency);
+            }
             setMessages(prev => {
               const updated = [...prev];
               updated[assistantMsgIndex] = {
@@ -483,24 +523,33 @@ export default function Agent() {
               >
                 {availableModels.length > 0 ? (
                   availableModels.map(m => (
-                    <option key={m} value={m}>{m}</option>
+                    <option key={m} value={m}>{getModelLabel(m)}</option>
                   ))
                 ) : (
                   <>
-                    <option value="llama3.2:3b">llama3.2:3b (3B - Standard)</option>
-                    <option value="llama3.2:1b">llama3.2:1b (1B - Faster)</option>
-                    <option value="tinydolphin">tinydolphin (1.1B - Ultra-Fast)</option>
-                    <option value="phi3">phi3 (3.8B - Balanced)</option>
-                    <option value="gemma2:2b">gemma2:2b (2B - Efficient)</option>
+                    <option value="llama-3.3-70b-versatile">{getModelLabel("llama-3.3-70b-versatile")}</option>
+                    <option value="llama-3.1-8b-instant">{getModelLabel("llama-3.1-8b-instant")}</option>
                   </>
                 )}
               </select>
             </div>
             
             <div className="control-item">
+              <span className="text-muted">PROVIDER:</span>
+              <span className="font-mono text-cyan" style={{ fontSize: '10px' }}>Groq Cloud</span>
+            </div>
+            
+            <div className="control-item">
               <span className="text-muted">STATUS:</span>
               <span className={`status-tag status-${agentStatus.toLowerCase()}`}>{agentStatus}</span>
             </div>
+
+            {lastLatency !== null && (
+              <div className="control-item">
+                <span className="text-muted">LATENCY:</span>
+                <span className="font-mono text-purple">{lastLatency.toFixed(2)}s</span>
+              </div>
+            )}
 
             <button 
               className={`sync-btn-copilot ${isSyncing ? 'syncing' : ''}`}
@@ -516,6 +565,10 @@ export default function Agent() {
         <div className="copilot-messages-container scroll-bar">
           {messages.map((msg, index) => {
             const isUser = msg.role === 'user';
+            // Skip rendering assistant placeholder if it is empty and streaming (typing bubble covers this)
+            if (msg.role === 'assistant' && !msg.content && msg.isStreaming) {
+              return null;
+            }
             return (
               <div key={index} className={`msg-bubble-wrapper ${msg.role}`}>
                 <div className={`msg-bubble ${msg.role}`}>
@@ -544,7 +597,7 @@ export default function Agent() {
               </div>
             );
           })}
-          {loading && (
+          {loading && (messages.length === 0 || messages[messages.length - 1].role !== 'assistant' || !messages[messages.length - 1].content) && (
             <div className="msg-bubble-wrapper assistant">
               <div className="msg-bubble assistant typing-bubble-card">
                 <div className="msg-meta font-mono text-xxs">
@@ -565,21 +618,6 @@ export default function Agent() {
             </div>
           )}
           <div ref={messagesEndRef} />
-        </div>
-
-        {/* Quick action triggers */}
-        <div className="copilot-quick-actions font-mono text-xs">
-          {quickActions.map(action => (
-            <button 
-              key={action.label} 
-              className="quick-action-btn"
-              onClick={() => handleSendMessage(action.query)}
-              disabled={loading || !selectedAttack}
-              title={!selectedAttack ? "Link an attack context on the right to trigger" : ""}
-            >
-              {action.label}
-            </button>
-          ))}
         </div>
 
         {/* Input message box */}
@@ -638,57 +676,90 @@ export default function Agent() {
           ) : (
             <div className="empty-context text-center text-muted font-mono text-xs py-4">
               <AlertTriangle size={16} className="block mx-auto mb-2 text-muted" />
-              No Threat Context Linked.<br />Select analyze on the Attack Feed.
+              No incident linked. Select Analyze from Attack Feed to attach threat context.
             </div>
           )}
         </div>
 
+        {/* Quick Scans Panel */}
+        <div className="card-cyber copilot-settings-card" style={{ marginTop: '0' }}>
+          <h5 className="section-title"><Activity size={14} className="text-cyan" /> Quick Scans</h5>
+          <div className="settings-controls font-mono text-xs mt-2" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {quickActions.map(action => (
+              <button 
+                key={action.label} 
+                className="quick-action-btn"
+                onClick={() => handleSendMessage(action.query)}
+                disabled={loading || !selectedAttack}
+                title={!selectedAttack ? "Link an attack context on the right to trigger" : ""}
+                style={{ width: '100%', textAlign: 'left', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Hyper-parameters configurations block */}
         <div className="card-cyber copilot-settings-card">
-          <h5 className="section-title"><Sliders size={14} className="text-purple" /> Copilot Hyperparameters</h5>
-          <div className="settings-controls font-mono text-xs">
-            <div className="setting-slider-box">
-              <div className="slider-label">
-                <span>Temperature:</span>
-                <span className="text-cyan font-bold">{temp}</span>
+          <h5 
+            className="section-title collapsible-title" 
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Sliders size={14} className="text-purple" /> 
+              Advanced AI Settings
+            </span>
+            <span className="toggle-indicator font-mono" style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
+              {showAdvanced ? '▼' : '►'}
+            </span>
+          </h5>
+          {showAdvanced && (
+            <div className="settings-controls font-mono text-xs mt-2">
+              <div className="setting-slider-box">
+                <div className="slider-label">
+                  <span>Temperature:</span>
+                  <span className="text-cyan font-bold">{temp}</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0.1" 
+                  max="1.0" 
+                  step="0.05"
+                  value={temp}
+                  onChange={(e) => setTemp(parseFloat(e.target.value))}
+                />
               </div>
-              <input 
-                type="range" 
-                min="0.1" 
-                max="1.0" 
-                step="0.05"
-                value={temp}
-                onChange={(e) => setTemp(parseFloat(e.target.value))}
-              />
-            </div>
 
-            <div className="setting-slider-box">
-              <div className="slider-label">
-                <span>Max Tokens:</span>
-                <span className="text-purple font-bold">{maxTokens}</span>
+              <div className="setting-slider-box">
+                <div className="slider-label">
+                  <span>Max Tokens:</span>
+                  <span className="text-purple font-bold">{maxTokens}</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="128" 
+                  max="4096" 
+                  step="128"
+                  value={maxTokens}
+                  onChange={(e) => setMaxTokens(parseInt(e.target.value))}
+                />
               </div>
-              <input 
-                type="range" 
-                min="128" 
-                max="4096" 
-                step="128"
-                value={maxTokens}
-                onChange={(e) => setMaxTokens(parseInt(e.target.value))}
-              />
-            </div>
 
-            <div className="setting-slider-box">
-              <div className="slider-label">
-                <span>System Role Directive:</span>
+              <div className="setting-slider-box">
+                <div className="slider-label">
+                  <span>System Role Directive:</span>
+                </div>
+                <input 
+                  type="text" 
+                  className="text-input-field text-xs font-mono"
+                  value={systemPrompt}
+                  onChange={(e) => setSystemPrompt(e.target.value)}
+                />
               </div>
-              <input 
-                type="text" 
-                className="text-input-field text-xs font-mono"
-                value={systemPrompt}
-                onChange={(e) => setSystemPrompt(e.target.value)}
-              />
             </div>
-          </div>
+          )}
         </div>
       </aside>
     </div>
