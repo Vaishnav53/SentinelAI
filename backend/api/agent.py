@@ -164,6 +164,27 @@ async def post_chat_stream(
         "You are SentinelAI SOC Copilot, a senior cyber security SOC analyst. For security incidents and threat analyses, organize your response using exactly these sections in Markdown headers:\n### Threat Summary\n### MITRE ATT&CK\n### Confidence\n### Impact\n### Detection\n### Remediation\n### References\nFocus technical answers specifically on threat detection, incident response, IOC explanation, payload analysis, firewall/WAF rules, SIEM queries, and executive summaries. Be direct, technical, and beginner-friendly. For general conversational messages, respond in a friendly, conversational style without using these report headers. Do not mention any local templates or fallbacks."
     )
     
+    attack_context = ""
+    effective_attack_id = linked_attack_id or conv.linked_attack_id
+    if effective_attack_id:
+        from backend.models.models import AttackEvent
+        attack = db.query(AttackEvent).filter(AttackEvent.id == effective_attack_id).first()
+        if attack:
+            attack_context = (
+                f"\n\n[ATTACK EVENT CONTEXT]\n"
+                f"Attack ID: {attack.id}\n"
+                f"External ID: {attack.external_id}\n"
+                f"Attack Type: {attack.attack_type}\n"
+                f"Severity: {attack.severity} | Status: {attack.status}\n"
+                f"Source: {attack.source_ip}:{attack.source_port} | Destination Port: {attack.destination_port}\n"
+                f"Protocol: {attack.protocol} | Target Service: {attack.target_service}\n"
+                f"GeoIP Location: {attack.city}, {attack.country}\n"
+                f"Confidence: {int(attack.confidence*100)}% | Threat Score: {attack.threat_score}/100\n"
+                f"Payload: {attack.payload or 'No payload data'}\n"
+                f"User Agent: {attack.user_agent or 'Unknown'}\n"
+                f"[END CONTEXT]"
+            )
+
     incident_context = ""
     if linked_incident_id:
         from backend.models.models import CorrelatedIncident
@@ -217,7 +238,7 @@ async def post_chat_stream(
                 f"[END CONTEXT]"
             )
             
-    messages_payload.append({"role": "system", "content": system_prompt + incident_context + sandbox_context + attacker_context})
+    messages_payload.append({"role": "system", "content": system_prompt + attack_context + incident_context + sandbox_context + attacker_context})
     
     for msg in history_messages:
         messages_payload.append({
@@ -554,6 +575,27 @@ async def post_chat(
         "You are SentinelAI SOC Copilot, a senior cyber security SOC analyst. For security incidents and threat analyses, organize your response using exactly these sections in Markdown headers:\n### Threat Summary\n### MITRE ATT&CK\n### Confidence\n### Impact\n### Detection\n### Remediation\n### References\nFocus technical answers specifically on threat detection, incident response, IOC explanation, payload analysis, firewall/WAF rules, SIEM queries, and executive summaries. Be direct, technical, and beginner-friendly. Do not mention any local templates or fallbacks."
     )
     
+    attack_context = ""
+    effective_attack_id = linked_attack_id or conv.linked_attack_id
+    if effective_attack_id:
+        from backend.models.models import AttackEvent
+        attack = db.query(AttackEvent).filter(AttackEvent.id == effective_attack_id).first()
+        if attack:
+            attack_context = (
+                f"\n\n[ATTACK EVENT CONTEXT]\n"
+                f"Attack ID: {attack.id}\n"
+                f"External ID: {attack.external_id}\n"
+                f"Attack Type: {attack.attack_type}\n"
+                f"Severity: {attack.severity} | Status: {attack.status}\n"
+                f"Source: {attack.source_ip}:{attack.source_port} | Destination Port: {attack.destination_port}\n"
+                f"Protocol: {attack.protocol} | Target Service: {attack.target_service}\n"
+                f"GeoIP Location: {attack.city}, {attack.country}\n"
+                f"Confidence: {int(attack.confidence*100)}% | Threat Score: {attack.threat_score}/100\n"
+                f"Payload: {attack.payload or 'No payload data'}\n"
+                f"User Agent: {attack.user_agent or 'Unknown'}\n"
+                f"[END CONTEXT]"
+            )
+
     incident_context = ""
     if linked_incident_id:
         from backend.models.models import CorrelatedIncident
@@ -607,7 +649,7 @@ async def post_chat(
                 f"[END CONTEXT]"
             )
             
-    messages_payload.append({"role": "system", "content": system_prompt + incident_context + sandbox_context + attacker_context})
+    messages_payload.append({"role": "system", "content": system_prompt + attack_context + incident_context + sandbox_context + attacker_context})
     
     # Historical turns
     for msg in history_messages:

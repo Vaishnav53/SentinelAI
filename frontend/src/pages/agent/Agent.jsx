@@ -161,6 +161,33 @@ export default function Agent() {
     }
   };
 
+  // Handle context-aware Quick Scan Actions
+  const handleQuickAction = (label) => {
+    if (!selectedAttack) return;
+    
+    let queryText = "";
+    switch (label) {
+      case "Explain Attack":
+        queryText = `Analyze and explain the root cause, severity, and potential vector of this ${selectedAttack.attack_type} attack event targeting service ${selectedAttack.target_service} on port ${selectedAttack.destination_port}.`;
+        break;
+      case "Recommend Firewall Rule":
+        queryText = `Generate concrete, actionable firewall block rules (e.g., iptables, Cisco ACL, pfSense, or Windows Firewall) and WAF filtering guidelines to mitigate future malicious traffic from source IP ${selectedAttack.source_ip}.`;
+        break;
+      case "Explain Payload":
+        queryText = `Perform a deep technical dissection of the captured payload for this event: "${selectedAttack.payload || 'No raw payload data captured'}". Identify potential query patterns, traversal keywords, or signature exploit indicators.`;
+        break;
+      case "Map to MITRE":
+        queryText = `Map this ${selectedAttack.attack_type} event to specific MITRE ATT&CK techniques, tactics, and mitigation IDs. Provide technique codes (e.g. T1059) and explain your mapping rationale.`;
+        break;
+      case "IOC Summary":
+        queryText = `Compile a formal Indicators of Compromise (IOC) summary details list containing the malicious source IP (${selectedAttack.source_ip}), target port (${selectedAttack.destination_port}), protocol (${selectedAttack.protocol}), threat score (${selectedAttack.threat_score}/100), and confidence score (${(selectedAttack.confidence*100).toFixed(0)}%).`;
+        break;
+      default:
+        return;
+    }
+    handleSendMessage(queryText);
+  };
+
   // Handle Send message
   const handleSendMessage = async (textToSend) => {
     const text = textToSend || inputValue;
@@ -407,50 +434,126 @@ export default function Agent() {
     { label: "IOC Summary", query: "Summarize the indicators of compromise (IP, port, signature patterns) for this event." },
   ];
 
-  // Inline badge highlights helper
+  // Inline badge and markdown highlights tokenizing parser
   const formatInlineTags = (line) => {
-    const mitreRegex = /\b(T\d{4}(?:\.\d{3})?)\b/g;
-    const percentRegex = /\b(\d{1,3}%)\b/g;
-    const ipRegex = /\b((?:[0-9]{1,3}\.){3}[0-9]{1,3})\b/g;
+    if (!line) return "";
+    let parts = [{ text: line, type: 'text' }];
     
-    const mitreMatches = [...line.matchAll(mitreRegex)];
-    const percentMatches = [...line.matchAll(percentRegex)];
-    const ipMatches = [...line.matchAll(ipRegex)];
-    
-    if (mitreMatches.length === 0 && percentMatches.length === 0 && ipMatches.length === 0) {
-      return line;
+    // 1. Parse inline code: `code`
+    let nextParts = [];
+    for (const part of parts) {
+      if (part.type === 'text') {
+        const subParts = part.text.split(/(`[^`]+`)/g);
+        for (const sub of subParts) {
+          if (sub.startsWith('`') && sub.endsWith('`')) {
+            nextParts.push({ text: sub.slice(1, -1), type: 'code' });
+          } else {
+            nextParts.push({ text: sub, type: 'text' });
+          }
+        }
+      } else {
+        nextParts.push(part);
+      }
     }
-    
-    let currentText = line;
-    currentText = currentText.replace(mitreRegex, '##MITRE_START##$1##MITRE_END##');
-    currentText = currentText.replace(percentRegex, '##PCT_START##$1##PCT_END##');
-    currentText = currentText.replace(ipRegex, '##IP_START##$1##IP_END##');
-    
-    const splitParts = currentText.split(/(##MITRE_START##.*?##MITRE_END##|##PCT_START##.*?##PCT_END##|##IP_START##.*?##IP_END##)/g);
-    
-    return splitParts.map((part, pidx) => {
-      if (part.startsWith('##MITRE_START##')) {
-        const id = part.replace('##MITRE_START##', '').replace('##MITRE_END##', '');
-        return <span key={pidx} className="inline-mitre-badge">{id}</span>;
+    parts = nextParts;
+
+    // 2. Parse bold: **text**
+    nextParts = [];
+    for (const part of parts) {
+      if (part.type === 'text') {
+        const subParts = part.text.split(/(\*\*[^*]+\*\*)/g);
+        for (const sub of subParts) {
+          if (sub.startsWith('**') && sub.endsWith('**')) {
+            nextParts.push({ text: sub.slice(2, -2), type: 'bold' });
+          } else {
+            nextParts.push({ text: sub, type: 'text' });
+          }
+        }
+      } else {
+        nextParts.push(part);
       }
-      if (part.startsWith('##PCT_START##')) {
-        const pct = part.replace('##PCT_START##', '').replace('##PCT_END##', '');
-        return <span key={pidx} className="inline-percent-badge">{pct}</span>;
+    }
+    parts = nextParts;
+
+    // 3. Parse MITRE badge: (T\d{4})
+    nextParts = [];
+    for (const part of parts) {
+      if (part.type === 'text') {
+        const subParts = part.text.split(/\b(T\d{4}(?:\.\d{3})?)\b/g);
+        for (const sub of subParts) {
+          if (/\b(T\d{4}(?:\.\d{3})?)\b/.test(sub)) {
+            nextParts.push({ text: sub, type: 'mitre' });
+          } else {
+            nextParts.push({ text: sub, type: 'text' });
+          }
+        }
+      } else {
+        nextParts.push(part);
       }
-      if (part.startsWith('##IP_START##')) {
-        const ipVal = part.replace('##IP_START##', '').replace('##IP_END##', '');
-        return (
-          <span 
-            key={pidx} 
-            className="clickable-ip-address"
-            onClick={() => setSelectedIntelIp(ipVal)}
-            title="Click to query Threat Intelligence profile"
-          >
-            {ipVal}
-          </span>
-        );
+    }
+    parts = nextParts;
+
+    // 4. Parse percentage badge: (100%)
+    nextParts = [];
+    for (const part of parts) {
+      if (part.type === 'text') {
+        const subParts = part.text.split(/\b(\d{1,3}%)\b/g);
+        for (const sub of subParts) {
+          if (/\b(\d{1,3}%)\b/.test(sub)) {
+            nextParts.push({ text: sub, type: 'percent' });
+          } else {
+            nextParts.push({ text: sub, type: 'text' });
+          }
+        }
+      } else {
+        nextParts.push(part);
       }
-      return part;
+    }
+    parts = nextParts;
+
+    // 5. Parse IP Address highlights
+    nextParts = [];
+    for (const part of parts) {
+      if (part.type === 'text') {
+        const subParts = part.text.split(/\b((?:[0-9]{1,3}\.){3}[0-9]{1,3})\b/g);
+        for (const sub of subParts) {
+          if (/\b((?:[0-9]{1,3}\.){3}[0-9]{1,3})\b/.test(sub)) {
+            nextParts.push({ text: sub, type: 'ip' });
+          } else {
+            nextParts.push({ text: sub, type: 'text' });
+          }
+        }
+      } else {
+        nextParts.push(part);
+      }
+    }
+    parts = nextParts;
+
+    // Map tokens to React nodes
+    return parts.map((part, idx) => {
+      switch (part.type) {
+        case 'code':
+          return <code key={idx} className="inline-code-badge font-mono">{part.text}</code>;
+        case 'bold':
+          return <strong key={idx} className="font-bold text-cyan">{part.text}</strong>;
+        case 'mitre':
+          return <span key={idx} className="inline-mitre-badge">{part.text}</span>;
+        case 'percent':
+          return <span key={idx} className="inline-percent-badge">{part.text}</span>;
+        case 'ip':
+          return (
+            <span 
+              key={idx} 
+              className="clickable-ip-address"
+              onClick={() => setSelectedIntelIp(part.text)}
+              title="Click to query Threat Intelligence profile"
+            >
+              {part.text}
+            </span>
+          );
+        default:
+          return part.text;
+      }
     });
   };
 
@@ -482,6 +585,14 @@ export default function Agent() {
         if (line.startsWith("- ") || line.startsWith("* ")) {
           return <li key={lIdx} className="md-li list-disc ml-4 font-mono text-xs">{formatInlineTags(line.substring(2))}</li>;
         }
+        
+        // Match ordered list patterns: e.g. "1. " or "2. "
+        const orderedListRegex = /^(\d+)\.\s+(.*)$/;
+        if (orderedListRegex.test(line)) {
+          const match = line.match(orderedListRegex);
+          return <li key={lIdx} className="md-li list-decimal ml-4 font-mono text-xs" style={{ listStyleType: 'decimal' }}>{formatInlineTags(match[2])}</li>;
+        }
+        
         if (line.trim() === "") return <div key={lIdx} className="h-2"></div>;
         return <p key={lIdx} className="md-p my-1 font-mono text-xs leading-relaxed">{formatInlineTags(line)}</p>;
       });
@@ -689,7 +800,7 @@ export default function Agent() {
               <button 
                 key={action.label} 
                 className="quick-action-btn"
-                onClick={() => handleSendMessage(action.query)}
+                onClick={() => handleQuickAction(action.label)}
                 disabled={loading || !selectedAttack}
                 title={!selectedAttack ? "Link an attack context on the right to trigger" : ""}
                 style={{ width: '100%', textAlign: 'left', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
