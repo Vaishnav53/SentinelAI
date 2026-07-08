@@ -32,6 +32,7 @@ backend/storage/reports/*
 .env.development.local
 .env.test.local
 .env.production.local
+backend/.env
 
 # IDEs and OS
 .vscode/
@@ -39,3 +40,16 @@ backend/storage/reports/*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Demo recordings, temporary files, and exports
+*.mp4
+*.webm
+*.webp
+*.diff
+*.patch
+storage/
+browser_recordings/
+*.csv
+demo_walkthrough.md
+scripts/demo_run.ps1
+scripts/playwright_demo.js
