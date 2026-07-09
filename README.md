@@ -1,3 +1,18 @@
+<p align="center">
+  <img src="docs/assets/branding/banner.svg" alt="SentinelAI Banner" width="100%">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.14-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python Badge">
+  <img src="https://img.shields.io/badge/FastAPI-0.111.0-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI Badge">
+  <img src="https://img.shields.io/badge/React-18-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React Badge">
+  <img src="https://img.shields.io/badge/Vite-5-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite Badge">
+  <img src="https://img.shields.io/badge/Groq%20Cloud-ONLINE-orange?style=for-the-badge" alt="Groq Badge">
+  <img src="https://img.shields.io/badge/MITRE%20ATT%26CK-Aligned-red?style=for-the-badge" alt="MITRE ATT&CK Badge">
+</p>
+
+---
+
 # SentinelAI — AI-Powered Cyber Defense Platform
 
 SentinelAI is a professional, local-first, AI-powered cyber-defense platform and Security Operations Center (SOC) simulation system. It integrates host monitoring, intrusion sensors, dynamic honeypot decoy engines, and automated MITRE ATT&CK mapping with high-performance cognitive intelligence models (via Groq Cloud API & Ollama) to build a robust security copilot experience.
@@ -22,7 +37,7 @@ SentinelAI is a professional, local-first, AI-powered cyber-defense platform and
 ## 🚀 Key Features
 
 * **Real-time Threat Monitoring**: Captures live syslog stream telemetry, TCP ports scan activities, and honeypot traps triggers.
-* **AI Security Copilot**: Stream-based SOC agent powered by Groq Cloud models (`llama-3.3-70b-versatile`) offering context-aware chat, incident analysis, packet dissection, and mitigation rules.
+* **AI Security Copilot**: Stream-based SOC agent powered by Groq Cloud models (`llama-3.3-70b-versatile`) offering context-aware chat, incident analysis, payload dissection, and mitigation rules.
 * **Incident-Aware Routing**: Attaches localized attack details (GeoIP, payload buffers, signatures, destination ports) automatically to assistant workflows.
 * **MITRE ATT&CK Mapping**: Parses and maps indicators of compromise (IOCs) dynamically to ATT&CK tactics, techniques, and procedures (TTPs).
 * **Decoy Sandbox Analyst**: Inspects simulated malicious payloads inside safe behavioral containment structures.
@@ -51,10 +66,25 @@ SentinelAI is a professional, local-first, AI-powered cyber-defense platform and
 
 ## 🖼️ Screenshots
 
-*Placeholders for user interface visuals:*
-* *[SOC Command Center Dashboard] - Live graphs, system vitals, and geographical threat map.*
-* *[Copilot Assistant Workspace] - Contextual AI streaming, MITRE maps, and quick scans drawer.*
-* *[Active Decoy Sandbox] - Behavior analyzer outputs and Honeypot logs feed.*
+### 🖥️ SOC Command Center Dashboard
+Live logs, system vitals graph, active decoy sensor counters, and geographical threat map.
+![SOC Command Center Dashboard](docs/assets/screenshots/dashboard.png)
+
+### 🤖 AI Security Copilot Workspace
+Streaming incident analyst chat with automated Threat Telemetry Context integration, MITRE ATT&CK codes formatting, and quick scans drawer.
+![AI Security Copilot Workspace](docs/assets/screenshots/copilot.png)
+
+### 🛡️ Honeypot & Decoy Lab
+Logs and threat signatures captured from SSH, Telnet, HTTP, and SMB honey-pots.
+![Honeypot Decoy Lab](docs/assets/screenshots/honeypot.png)
+
+### 🔬 Decoy Sandbox & Behavioral Analytics
+Malicious file upload nodes, MD5 signature correlation, and dynamic simulation environments.
+![Sandbox Emulation](docs/assets/screenshots/reports.png)
+
+### 📊 Aggregated Threat Correlation Graph
+Visualizing attacker coordinate vectors, network connections, and intrusion graphs.
+![Correlation Graph](docs/assets/screenshots/correlation.png)
 
 ---
 
@@ -173,11 +203,11 @@ Distributed under the MIT License. See `LICENSE` for more information (Placehold
 ## 📚 Additional Documentation
 
 For detailed analysis, implementation details, and structural design logs, refer to the following project documents:
-* [Project Vision & Overview](file:///d:/Documents/SentinelAI/docs/PROJECT_OVERVIEW.md) — Mission guidelines and core modules.
-* [System Architecture & DB Models](file:///d:/Documents/SentinelAI/docs/ARCHITECTURE.md) — Topology charts and schema models lists.
-* [Installation & Setup Guide](file:///d:/Documents/SentinelAI/docs/SETUP.md) — Prerequisites and startup terminal commands.
-* [Operations Workflow](file:///d:/Documents/SentinelAI/docs/WORKFLOW.md) — Step-by-step alert correlation lifecycle.
-* [Feature Reference](file:///d:/Documents/SentinelAI/docs/FEATURES.md) — Copilot specifications and decoy honeypots.
-* [API Reference](file:///d:/Documents/SentinelAI/docs/API_REFERENCE.md) — FastAPI endpoint JSON schemas and parameters.
-* [Development Roadmap](file:///d:/Documents/SentinelAI/docs/ROADMAP.md) — Progress mapping and future phases.
-* [Security Notes & Policies](file:///d:/Documents/SentinelAI/docs/SECURITY_NOTES.md) — Key rotations and sandbox warnings.
+* [Project Vision & Overview](docs/PROJECT_OVERVIEW.md) — Mission guidelines and core modules.
+* [System Architecture & DB Models](docs/ARCHITECTURE.md) — Topology charts and schema models lists.
+* [Installation & Setup Guide](docs/SETUP.md) — Prerequisites and startup terminal commands.
+* [Operations Workflow](docs/WORKFLOW.md) — Step-by-step alert correlation lifecycle.
+* [Feature Reference](docs/FEATURES.md) — Copilot specifications and decoy honeypots.
+* [API Reference](docs/API_REFERENCE.md) — FastAPI endpoint JSON schemas and parameters.
+* [Development Roadmap](docs/ROADMAP.md) — Progress mapping and future phases.
+* [Security Notes & Policies](docs/SECURITY_NOTES.md) — Key rotations and sandbox warnings.

@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0a1128"/>
+      <stop offset="100%" stop-color="#02050f"/>
+    </radialGradient>
+    
+    <!-- Shield Gradient -->
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f2fe"/>
+      <stop offset="50%" stop-color="#4facfe"/>
+      <stop offset="100%" stop-color="#7f00ff"/>
+    </linearGradient>
+
+    <!-- Glowing effect -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="500" height="500" rx="40" fill="url(#bgGrad)"/>
+
+  <!-- Neural Network Grid in Background -->
+  <g stroke="#00f2fe" stroke-width="0.5" opacity="0.15">
+    <line x1="100" y1="100" x2="250" y2="70"/>
+    <line x1="250" y1="70" x2="400" y2="100"/>
+    <line x1="400" y1="100" x2="430" y2="250"/>
+    <line x1="430" y1="250" x2="250" y2="430"/>
+    <line x1="250" y1="430" x2="70" y2="250"/>
+    <line x1="70" y1="250" x2="100" y2="100"/>
+    <line x1="250" y1="70" x2="250" y2="180"/>
+    <line x1="100" y1="100" x2="250" y2="180"/>
+    <line x1="400" y1="100" x2="250" y2="180"/>
+    <line x1="70" y1="250" x2="180" y2="250"/>
+    <line x1="430" y1="250" x2="320" y2="250"/>
+    <line x1="180" y1="250" x2="250" y2="430"/>
+    <line x1="320" y1="250" x2="250" y2="430"/>
+  </g>
+
+  <!-- Hexagonal Grid Details -->
+  <polygon points="250,90 380,165 380,315 250,390 120,315 120,165" fill="none" stroke="#7f00ff" stroke-width="1.5" opacity="0.3" stroke-dasharray="5,5"/>
+
+  <!-- Glowing Radar Rings -->
+  <circle cx="250" cy="250" r="160" fill="none" stroke="#00f2fe" stroke-width="1" opacity="0.2"/>
+  <circle cx="250" cy="250" r="130" fill="none" stroke="#7f00ff" stroke-width="1" opacity="0.2"/>
+
+  <!-- Cyber Shield Outline (Glow effect) -->
+  <path d="M250,110 L370,150 C370,270 320,350 250,390 C180,350 130,270 130,150 Z" 
+        fill="none" stroke="url(#shieldGrad)" stroke-width="6" filter="url(#glow)"/>
+
+  <!-- Inner Tech Shield -->
+  <path d="M250,130 L350,165 C350,260 310,330 250,365 C190,330 150,260 150,165 Z" 
+        fill="none" stroke="#00f2fe" stroke-width="2" opacity="0.6"/>
+
+  <!-- Core AI Brain / Node Symbol (Cyber Security Grid) -->
+  <g filter="url(#glow)">
+    <!-- Central Core -->
+    <circle cx="250" cy="230" r="20" fill="none" stroke="#00f2fe" stroke-width="3"/>
+    <circle cx="250" cy="230" r="8" fill="#7f00ff"/>
+
+    <!-- Perimeter Nodes -->
+    <circle cx="200" cy="200" r="6" fill="#00f2fe"/>
+    <circle cx="300" cy="200" r="6" fill="#00f2fe"/>
+    <circle cx="180" cy="260" r="6" fill="#7f00ff"/>
+    <circle cx="320" cy="260" r="6" fill="#7f00ff"/>
+    <circle cx="250" cy="300" r="8" fill="#00f2fe"/>
+
+    <!-- Neural Connectors -->
+    <line x1="250" y1="230" x2="200" y2="200" stroke="#00f2fe" stroke-width="2"/>
+    <line x1="250" y1="230" x2="300" y2="200" stroke="#00f2fe" stroke-width="2"/>
+    <line x1="250" y1="230" x2="180" y2="260" stroke="#7f00ff" stroke-width="2"/>
+    <line x1="250" y1="230" x2="320" y2="260" stroke="#7f00ff" stroke-width="2"/>
+    <line x1="250" y1="230" x2="250" y2="300" stroke="#00f2fe" stroke-width="2"/>
+    <line x1="200" y1="200" x2="300" y2="200" stroke="#00f2fe" stroke-width="1" stroke-dasharray="3,3"/>
+    <line x1="180" y1="260" x2="320" y2="260" stroke="#7f00ff" stroke-width="1" stroke-dasharray="3,3"/>
+  </g>
+
+  <!-- Futuristic Corner Brackets -->
+  <path d="M 50,80 L 50,50 L 80,50" fill="none" stroke="#00f2fe" stroke-width="3" opacity="0.7"/>
+  <path d="M 450,80 L 450,50 L 420,50" fill="none" stroke="#00f2fe" stroke-width="3" opacity="0.7"/>
+  <path d="M 50,420 L 50,450 L 80,450" fill="none" stroke="#00f2fe" stroke-width="3" opacity="0.7"/>
+  <path d="M 450,420 L 450,450 L 420,450" fill="none" stroke="#00f2fe" stroke-width="3" opacity="0.7"/>
+
+  <!-- Logo text -->
+  <text x="250" y="445" font-family="'Segoe UI', Roboto, Helvetica, sans-serif" font-weight="900" font-size="28" fill="#ffffff" text-anchor="middle" letter-spacing="4">
+    SENTINEL<tspan fill="#00f2fe">AI</tspan>
+  </text>
+</svg>
