@@ -163,7 +163,10 @@ export default function Dashboard() {
     const interval = setInterval(() => fetchData(true), 5000);
     
     // Connect to backend WebSocket threat stream on port 8000
-    const wsUrl = `ws://${window.location.hostname || '127.0.0.1'}:8000/api/attacks/ws`;
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = import.meta.env.VITE_WS_BASE_URL || (window.location.port === '5173'
+      ? `${wsProtocol}//127.0.0.1:8000/api/attacks/ws`
+      : `${wsProtocol}//${window.location.host}/api/attacks/ws`);
     const socket = new WebSocket(wsUrl);
     
     socket.onopen = () => {

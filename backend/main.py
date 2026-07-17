@@ -1,6 +1,7 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from contextlib import asynccontextmanager
 
 from backend.core.config import settings
@@ -69,10 +70,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Setup
-origins = [
-    settings.FRONTEND_ORIGIN
-]
+# Trusted Host Middleware (Host Header Injection protection)
+trusted_hosts = [host.strip() for host in settings.TRUSTED_HOSTS.split(",") if host.strip()]
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=trusted_hosts
+)
+
+# CORS Setup (Supports comma-separated origins)
+origins = [origin.strip() for origin in settings.FRONTEND_ORIGIN.split(",") if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,

@@ -53,3 +53,4 @@ browser_recordings/
 demo_walkthrough.md
 scripts/demo_run.ps1
 scripts/playwright_demo.js
+backups/

@@ -12,15 +12,22 @@ if db_url.startswith("sqlite:///"):
         db_dir = os.path.dirname(os.path.abspath(db_path))
         os.makedirs(db_dir, exist_ok=True)
 
-# For SQLite, check if we need to enable multi-thread access
-connect_args = {}
-if db_url.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
-
-engine = create_engine(
-    db_url,
-    connect_args=connect_args
-)
+# Configure connection parameters and pool based on database dialect
+if "postgresql" in db_url or "postgres" in db_url:
+    engine = create_engine(
+        db_url,
+        pool_size=10,
+        max_overflow=20,
+        pool_recycle=1800,
+        pool_pre_ping=True
+    )
+else:
+    # Fallback/Default to SQLite
+    connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}
+    engine = create_engine(
+        db_url,
+        connect_args=connect_args
+    )
 
 SessionLocal = sessionmaker(
     autocommit=False,

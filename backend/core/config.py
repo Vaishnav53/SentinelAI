@@ -21,6 +21,10 @@ class Settings(BaseModel):
     # Frontend Settings
     FRONTEND_ORIGIN: str = Field(default_factory=lambda: os.getenv("FRONTEND_ORIGIN", "http://localhost:5173"))
     
+    # Production Security settings
+    SECRET_KEY: str = Field(default_factory=lambda: os.getenv("SECRET_KEY", "placeholder_secret_key"))
+    TRUSTED_HOSTS: str = Field(default_factory=lambda: os.getenv("TRUSTED_HOSTS", "127.0.0.1,localhost,testserver"))
+
     # Local AI Settings
     OLLAMA_BASE_URL: str = Field(default_factory=lambda: os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"))
     DEFAULT_OLLAMA_MODEL: str = Field(default_factory=lambda: os.getenv("DEFAULT_OLLAMA_MODEL", "llama3.2:3b"))
