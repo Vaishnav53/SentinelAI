@@ -19,7 +19,7 @@ class Settings(BaseModel):
     DATABASE_URL: str = Field(default_factory=lambda: os.getenv("DATABASE_URL", "sqlite:///./storage/sentinelai.db"))
     
     # Frontend Settings
-    FRONTEND_ORIGIN: str = Field(default_factory=lambda: os.getenv("FRONTEND_ORIGIN", "http://localhost:5173"))
+    FRONTEND_ORIGIN: str = Field(default_factory=lambda: os.getenv("FRONTEND_ORIGIN", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"))
     
     # Production Security settings
     SECRET_KEY: str = Field(default_factory=lambda: os.getenv("SECRET_KEY", "placeholder_secret_key"))
