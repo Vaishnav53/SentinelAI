@@ -1,20 +1,31 @@
 # 00 — SentinelAI Master Guide
 
+> [!NOTE]
+> **Design Specification**: This document serves as an initial design specification. For current live platform documentation, refer to:
+> * [Project Overview](PROJECT_OVERVIEW.md)
+> * [System Architecture](ARCHITECTURE.md)
+> * [Feature Reference](FEATURES.md)
+> * [API Reference](API_REFERENCE.md)
+> * [Installation & Setup](SETUP.md)
+> * [Development Roadmap](ROADMAP.md)
+
+---
+
 ## Mission
 
-SentinelAI is a local-first defensive cybersecurity platform that combines SOC visualization, honeypot telemetry, system and event-log monitoring, local LLM assistance, MITRE ATT&CK mapping, incident analysis and reporting.
+SentinelAI is a local-first defensive cybersecurity platform that combines SOC visualization, honeypot telemetry, system and event-log monitoring, AI assistance (Groq Cloud API & local fallback), MITRE ATT&CK mapping, incident analysis and reporting.
 
-## Product principles
+## Product Principles
 
-1. **Defensive by design** — features support detection, analysis, containment recommendations and authorized local response.
-2. **Local-first intelligence** — Ollama is the default AI runtime.
-3. **Observable systems** — health, connection and collector states are visible and dynamic.
-4. **Modular architecture** — page modules and backend services remain isolated.
-5. **No hidden automation** — sensitive actions require clear user intent and audit logging.
-6. **Reference-driven UI** — each uploaded image defines its page layout.
-7. **Incremental quality** — every phase must compile, test and document changes.
+1. **Defensive by Design** — features support detection, analysis, containment recommendations and authorized local response.
+2. **Local-First & Privacy Conscious** — designed for privacy and local control with cloud AI options.
+3. **Observable Systems** — health, connection and collector states are visible and dynamic.
+4. **Modular Architecture** — page modules and backend services remain isolated.
+5. **No Hidden Automation** — sensitive actions require clear user intent and audit logging.
+6. **Reference-Driven UI** — clean layout standards maintain visual consistency across pages.
+7. **Incremental Quality** — every phase must compile, test and document changes.
 
-## Primary users
+## Primary Users
 
 - Cybersecurity students
 - SOC analysts in training
@@ -23,34 +34,28 @@ SentinelAI is a local-first defensive cybersecurity platform that combines SOC v
 - Portfolio reviewers
 - Authorized blue-team environments
 
-## Major domains
+## Major Domains
 
-- SOC Overview
-- AI Assistant
-- Attack Telemetry
-- Honeypot Operations
-- Host Monitoring
-- Windows Event Analysis
-- Threat Intelligence
-- MITRE ATT&CK
-- Incident Reporting
-- Platform Settings
+- SOC Overview (`/`)
+- Incident Response (`/attacks`)
+- AI Assistant & Investigator (`/agent`)
+- Honeypot Operations (`/sensors`)
+- Sandbox Console (`/sandbox`)
+- WAF Manager (`/waf`)
+- Threat Intelligence (`/attackers`)
+- Threat Correlation (`/correlation`)
+- Incident Reporting (`/reports`)
+- Platform Settings (`/settings`)
 
-## Definition of done
+## Definition of Done
 
 SentinelAI is considered stable when:
 
 - All routes load without runtime errors
 - Backend starts cleanly
 - Database initializes idempotently
-- Ollama status and models are discovered dynamically
+- AI status and models are discovered dynamically
 - Attack events flow from honeypot to database, WebSocket and UI
 - Reports are generated asynchronously from real filters
-- Monitoring and Windows-log collectors expose heartbeats
-- UI pages match their reference images closely
 - Tests, lint and builds pass
 - Security limitations are documented
-
-## Governance
-
-This guide is the source of truth. If implementation and guide conflict, either update implementation or revise the guide explicitly. Avoid silent architectural drift.

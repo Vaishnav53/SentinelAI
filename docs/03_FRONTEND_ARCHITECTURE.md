@@ -1,79 +1,48 @@
 # 03 — Frontend Architecture
 
-## Shared structure
+> [!NOTE]
+> **Design Specification**: This document is an initial frontend design specification. For current live frontend architecture details, refer to [ARCHITECTURE.md](ARCHITECTURE.md) and [FEATURES.md](FEATURES.md).
+
+---
+
+## Directory Structure
 
 ```text
-src/
-├── app/
-├── api/
-├── assets/
-├── components/
-├── hooks/
-├── layouts/
-├── pages/
-├── routes/
-├── styles/
-└── utils/
+frontend/src/
+├── api/          # Axios API client setup (client.js)
+├── assets/       # Static branding and icons
+├── components/   # Reusable UI cards, tables, maps, modals
+├── layouts/      # DashboardLayout shell
+├── pages/        # Views (Dashboard, AttackFeed, Agent, HoneypotLab, WAF, etc.)
+├── routes/       # React Router index definitions
+├── styles/       # CSS tokens and styling rules
+└── utils/        # Helper functions and formatters
 ```
 
-## Page-module pattern
+## Page-Module Pattern
 
-Create a folder only when implementing that page.
+Each primary view lives in its dedicated folder containing its component logic and CSS module:
 
 ```text
 pages/attack-feed/
 ├── AttackFeed.jsx
-├── AttackFeed.css
-├── components/
-├── hooks/
-├── services/
-├── utils/
-└── assets/
+└── AttackFeed.css
 ```
 
-## State strategy
+## State Strategy
 
-- Local UI state: `useState`
-- Reusable logic: custom hooks
-- Server state: centralized API hooks or a query library if introduced
-- WebSocket data: one connection owner with subscriptions
-- Settings: application context
-- Avoid page-global mutable variables
+- Local UI state: `useState` & `useEffect`
+- Global telemetry: WebSocket connection owned by `DashboardLayout` broadcasting alerts via custom events
+- Server communication: Axios client pointing to `VITE_API_BASE_URL` (`http://127.0.0.1:8000/api`)
 
-## Shared components
+## Shared UI Primitives
 
-Recommended shared components:
+- `AppCard` / `MetricCard`: KPI metrics and chart panels
+- `StatusBadge`: Colored status badges (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`)
+- `ThreatIntelPanel`: IP intelligence details overlay
+- `Toast notifications`: Real-time alert notifications
 
-- AppCard
-- StatusBadge
-- MetricCard
-- IconButton
-- PageHeader
-- LoadingState
-- EmptyState
-- ErrorState
-- ConfirmDialog
-- SearchInput
-- FilterChip
-- DataTable shell
-- ChartCard
-- Toast notifications
+## Styling & Layout Rules
 
-## Accessibility
-
-- Keyboard operable controls
-- Visible focus state
-- Labels for icon-only controls
-- Reduced-motion support
-- Adequate contrast
-- Semantic headings
-- Table headers and accessible row selection
-
-## Performance
-
-- Memoize expensive charts
-- Virtualize long log tables
-- Debounce filters
-- Avoid one WebSocket per component
-- Lazy-load major routes
-- Paginate backend data
+- Fixed single-shell dashboard view maintaining 100% viewport stability without horizontal scrolling.
+- Modern dark mode styling with custom CSS design tokens (`#0a0f1d` background, cyan and red glow accents).

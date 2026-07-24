@@ -1,32 +1,13 @@
-# 15 — Threat Intelligence
+# 15 — Threat Intelligence Specification
 
+> [!NOTE]
+> **Design Specification**: This document is an initial Threat Intelligence design specification. For current live threat intelligence features, refer to [FEATURES.md](FEATURES.md).
 
-## Purpose
-Enrich local indicators and correlate attacks.
+---
 
-## Initial scope
-- Local IOC store
-- Source IP history
-- Known-bad/manual indicators
-- Confidence and last-seen
-- Attack correlations
-- Future provider adapters
+## GeoIP & Attacker Profiling
 
-## Acceptance
-The module works without paid external services and clearly distinguishes local observations from third-party intelligence.
-
-
-## Architecture rule
-
-Create the page folder only when this module is implemented. Keep page-specific components, hooks, services, utilities and assets inside that folder. Shared primitives remain in the shared component library.
-
-## Testing
-
-- Rendering test
-- Loading state
-- Empty state
-- Error state
-- API success
-- API failure
-- Critical interaction
-- Responsive desktop layout
+The Threat Intelligence subsystem (`/attackers`) enriches incoming source IP addresses:
+- **GeoIP Resolution**: Resolves country, city, and geographical map coordinates for external IPs.
+- **IP Reputation Database**: Tracks historical intrusion attempts and WAF block history per source IP.
+- **Threat Actor Profiling**: Categorizes IP activities (Scanner, Brute-Force Bot, Exploit Probe).

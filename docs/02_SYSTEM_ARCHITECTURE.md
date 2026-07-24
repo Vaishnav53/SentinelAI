@@ -1,62 +1,60 @@
 # 02 — System Architecture
 
-## Logical architecture
+> [!NOTE]
+> **Design Specification**: This document is an initial system architecture design blueprint. For the comprehensive live system topology, schema models, and containerized hybrid deployment architecture, refer to [ARCHITECTURE.md](ARCHITECTURE.md).
+
+---
+
+## Logical Architecture Blueprint
 
 ```mermaid
 flowchart LR
-    Sensors[Honeypots and Collectors] --> API[FastAPI Ingestion]
-    API --> Services[Domain Services]
-    Services --> DB[(SQLite)]
+    Sensors[Honeypots and WAF Engine] --> API[FastAPI Backend Layer]
+    API --> Services[Correlation & Services]
+    Services --> DB[(SQLite / PostgreSQL)]
     Services --> WS[WebSocket Manager]
-    Services --> Ollama[Local Ollama]
+    Services --> AI[Groq Cloud & Local Fallback Engine]
     DB --> Reports[Report Engine]
-    DB --> Intelligence[MITRE and IOC Mapping]
-    WS --> UI[React Frontend]
+    DB --> Intelligence[MITRE & IOC Mapping]
+    WS --> UI[React Frontend UI]
     API --> UI
-    Ollama --> API
 ```
 
-## Runtime processes
+## Runtime Services
 
-1. Ollama service
-2. FastAPI backend
-3. React development server or production static frontend
-4. Optional local collectors
-5. Optional honeypot listeners
+1. FastAPI backend application (`main.py` on port `8000`)
+2. React frontend application (`http://localhost:5173`)
+3. Multi-protocol honeypot listeners (ports 8088, 2222, 2121, 2323)
+4. Groq Cloud API & local fallback response engine
+5. Containerized Nginx & PostgreSQL services (Phase 16 hybrid setup)
 
-## Domain boundaries
+## Domain Boundaries
 
-- **Attacks:** normalized security events
-- **Sensors:** honeypot and collector state
-- **Monitoring:** host metrics
-- **AI:** model discovery, chat and analysis
-- **Reports:** jobs, artifacts and exports
-- **MITRE:** tactics, techniques and mappings
-- **Windows logs:** event ingestion and analysis
-- **Settings:** validated configuration
-- **Audit:** user and system actions
+- **Attacks:** normalized security events and payload logs
+- **Sensors:** honeypot traps and active WAF rules
+- **Monitoring:** host CPU, RAM, and Disk metrics via `psutil`
+- **AI:** status discovery, SSE chat, and 7 structured investigation actions
+- **Reports:** asynchronous PDF reports and CSV log exports
+- **MITRE:** ATT&CK tactics, techniques, and procedure mappings
+- **Settings:** platform preferences and alert severity thresholds
 
-## Event flow
+## Event Flow
 
 ```text
-Sensor event
+Sensor / WAF event
   -> validation
-  -> normalization
-  -> classification
-  -> database
+  -> normalization & GeoIP enrichment
+  -> threat correlation
+  -> database persistence
   -> WebSocket broadcast
   -> UI update
-  -> optional AI analysis
-  -> optional MITRE mapping
-  -> optional report inclusion
+  -> AI analysis & MITRE mapping
+  -> PDF / CSV report export
 ```
 
-## Reliability principles
+## Reliability Principles
 
-- All external calls have timeouts.
-- WebSockets reconnect with backoff.
-- Collectors send heartbeats.
-- Report generation uses jobs.
-- Startup is idempotent.
-- Shutdown closes connections and tasks.
-- Errors use stable response formats.
+- All external API calls use strict timeouts.
+- WebSockets reconnect automatically.
+- Database startup and seeding is idempotent.
+- Graceful error responses use standard FastAPI validators.

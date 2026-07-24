@@ -1,45 +1,21 @@
 # 21 — Coding Standards
 
-## Python
+> [!NOTE]
+> **Design Specification**: This document provides coding guidelines and quality standards for SentinelAI development.
 
-- Type hints
-- Pydantic schemas
-- Async I/O for network operations
-- Small route handlers
-- Service-layer logic
-- Clear exception types
-- Docstrings for public services
-- Ruff or Flake8-compatible style
-- pytest tests
+---
 
-## React
+## Code Quality & Style Standards
 
-- Functional components
-- Custom hooks
-- Stable keys
-- No API calls directly in deeply nested presentation components
-- Accessible controls
-- Avoid giant JSX files
-- Avoid duplicated styles
-- Cleanup effects and WebSockets
-- ESLint clean
-
-## Naming
-
-- React components: PascalCase
-- Hooks: useCamelCase
-- Python modules: snake_case
-- API fields: snake_case unless a documented convention changes
-- Constants: UPPER_SNAKE_CASE
-
-## Git
-
-Recommended checkpoints:
-
-- `chore/foundation`
-- `feat/backend-core`
-- `feat/dashboard`
-- `feat/agent`
-- one feature branch per phase
-
-Never mix unrelated page changes in one commit.
+1. **Python (Backend)**:
+   - PEP 8 code formatting compliance.
+   - Type annotations for functions and FastAPI endpoint signatures.
+   - Pydantic models for request/response serialization.
+   - Async endpoints for long-running or IO-bound operations.
+2. **JavaScript / React (Frontend)**:
+   - Functional React components with hooks.
+   - Modular CSS files co-located with page components.
+   - Descriptive variable naming and clean component decomposition.
+3. **Documentation & Testing**:
+   - Maintain clear docstrings for backend services.
+   - Ensure all automated unit tests (`pytest`) pass before releasing patches.

@@ -1,82 +1,44 @@
 # 06 — API Reference
 
-## Common conventions
+> [!NOTE]
+> **Design Specification**: This document represents the **ORIGINAL API DESIGN SPECIFICATION**. For current implemented endpoints, parameters, payloads, WebSockets (`ws://127.0.0.1:8000/api/attacks/ws`), and status codes, refer to [API_REFERENCE.md](API_REFERENCE.md).
 
-- Prefix: `/api`
-- JSON responses
-- ISO 8601 timestamps
-- Cursor or page pagination
-- Stable error envelope
-- Filter parameters validated
+---
 
-## Attack endpoints
+## Initial API Design Conventions
 
+- Base Path: `/api`
+- JSON request and response payloads
+- ISO 8601 timestamp formats
+- Pagination and severity filtering
+- Unified FastAPI exception handlers
+
+## Planned Initial Endpoint Categories
+
+### Attacks Router
 ```text
 GET /api/attacks
 GET /api/attacks/{id}
 GET /api/attacks/stats
-POST /api/attacks/{id}/status
+POST /api/attacks/simulate
 ```
 
-Suggested filters:
-
-- page
-- page_size
-- severity
-- attack_type
-- source_ip
-- target_service
-- sensor_id
-- status
-- date_from
-- date_to
-- search
-
-## AI endpoints
-
+### AI Agent Router
 ```text
 GET /api/agent/status
-GET /api/agent/models
-POST /api/agent/chat
+GET /api/agent/conversations
+GET /api/agent/conversations/{id}
 POST /api/agent/chat/stream
+POST /api/agent/chat
+POST /api/agent/analyze/{attack_id}
 ```
 
-Chat request:
-
-```json
-{
-  "message": "Explain this attack.",
-  "model": "llama3.1",
-  "conversation_id": null,
-  "context": {
-    "attack_id": null
-  }
-}
-```
-
-## Report endpoints
-
+### Reports Router
 ```text
-POST /api/reports/jobs
-GET /api/reports/jobs
-GET /api/reports/jobs/{id}
-GET /api/reports/{id}
-GET /api/reports/{id}/download
-DELETE /api/reports/{id}
+POST /api/reports/generate
+GET /api/reports/download/{filename}
 ```
 
-## Monitoring endpoints
-
-```text
-GET /api/monitoring/current
-GET /api/monitoring/history
-```
-
-## WebSockets
-
-- `/ws/alerts`
-- `/ws/metrics`
-- `/ws/reports`
-- `/ws/agent`
-
-Each message must include `type`, `timestamp` and `payload`.
+### WebSockets Stream
+- Endpoint: `/api/attacks/ws`
+- Pushes real-time normalized threat events to client views.

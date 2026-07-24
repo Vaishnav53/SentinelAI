@@ -1,59 +1,10 @@
-# 24 — Development Roadmap
+# 24 — Development Roadmap Specification
 
-## Milestone A — Foundation
+> [!NOTE]
+> **Design Specification**: This document is an initial roadmap planning blueprint. For current completed milestones and project roadmap, refer to [ROADMAP.md](ROADMAP.md).
 
-- Repository
-- Backend core
-- Frontend shell
-- Database
-- Health APIs
-- Shared design system
+---
 
-## Milestone B — Telemetry
+## Roadmap Blueprint Overview
 
-- Attack model
-- HTTP honeypot
-- WebSocket alerts
-- Monitoring service
-- Sensor management
-
-## Milestone C — Core pages
-
-- Dashboard
-- AI Agent
-- Attack Feed
-- Reports
-- Monitoring
-- Honeypot Lab
-
-## Milestone D — Intelligence
-
-- MITRE mapping
-- Threat Intelligence
-- Windows Logs
-- AI event explanation
-
-## Milestone E — Hardening
-
-- Settings
-- Retention
-- Audit logs
-- Tests
-- Accessibility
-- Performance
-- Documentation
-
-## Milestone F — Future enterprise capabilities
-
-- Authentication
-- RBAC
-- PostgreSQL
-- Distributed collectors
-- SIEM connectors
-- SOAR playbooks
-- Multi-agent AI
-- Cloud deployment
-
-## Recommended rule
-
-Do not begin a new visual page until the current page passes its functional and visual acceptance criteria.
+For full details on completed phases (Phases 1–13 Core Platform, Phase 14 Groq Migration, Phase 15A AI Copilot Upgrade, Phase 15B AI Investigator Workspace, and Phase 16 Deployment Foundation), see [ROADMAP.md](ROADMAP.md).

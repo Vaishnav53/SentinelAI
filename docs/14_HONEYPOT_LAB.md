@@ -1,39 +1,14 @@
-# 14 — Honeypot Lab
+# 14 — Honeypot Lab Specification
 
+> [!NOTE]
+> **Design Specification**: This document is an initial Honeypot Lab design specification. For current live honeypot sensor specifications, refer to [FEATURES.md](FEATURES.md).
 
-## Purpose
-Operate safe local honeypot sensors and investigate captured sessions.
+---
 
-## Required sections
-- Lab status and isolation warning
-- Sensor cards
-- Start/stop controls
-- Listener ports
-- Recent sessions
-- Captured interactions
-- Attack distribution
-- Source map
-- Sensor configuration drawer
-- Health and uptime
+## Multi-Protocol Decoy Sensors
 
-## Safety
-Controls only manage local configured listeners. Show clear warnings before exposing listeners beyond localhost or a lab interface.
-
-## Acceptance
-Sensor state reflects backend state and every action is audited.
-
-
-## Architecture rule
-
-Create the page folder only when this module is implemented. Keep page-specific components, hooks, services, utilities and assets inside that folder. Shared primitives remain in the shared component library.
-
-## Testing
-
-- Rendering test
-- Loading state
-- Empty state
-- Error state
-- API success
-- API failure
-- Critical interaction
-- Responsive desktop layout
+The Honeypot Lab (`/sensors`) operates isolated Python socket listeners emulating vulnerable protocol services:
+- **HTTP Decoy Sensor** (Port `8088`): Captures web exploit probes and path traversal attempts (`/../../etc/passwd`).
+- **SSH Decoy Sensor** (Port `2222`): Captures SSH credential brute-force attempts.
+- **FTP Decoy Sensor** (Port `2121`): Captures anonymous file upload and scanning attempts.
+- **Telnet Decoy Sensor** (Port `2323`): Captures IoT botnet reconnaissance probes.

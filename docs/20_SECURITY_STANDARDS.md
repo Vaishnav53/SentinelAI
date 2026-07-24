@@ -1,45 +1,13 @@
 # 20 — Security Standards
 
-## Principles
+> [!NOTE]
+> **Design Specification**: This document is a security policies specification. For current live security notes and key management policies, refer to [SECURITY_NOTES.md](SECURITY_NOTES.md).
 
-- Least privilege
-- Local-first data handling
-- Explicit authorization
-- Safe defaults
-- Input validation
-- Auditability
-- Reversible actions
-- Clear trust boundaries
+---
 
-## API security
+## Security Policies & Guidelines
 
-- Validate every request
-- Limit payload sizes
-- Sanitize filenames
-- Prevent path traversal
-- Avoid shell command construction
-- Use timeouts
-- Restrict CORS
-- Hide internal stack traces
-- Rate-limit sensitive endpoints
-
-## Honeypot security
-
-- Isolate listeners
-- Avoid real vulnerable software
-- Store raw payloads safely
-- Escape payloads in UI
-- Never execute captured content
-- Configure retention and truncation
-
-## AI security
-
-- Treat logs and payloads as untrusted input
-- Separate system instructions from event content
-- Do not permit prompt content to invoke tools automatically
-- Require confirmation for future response actions
-- Keep local model traffic local by default
-
-## Secrets
-
-Use environment variables. Never commit secrets, tokens, private keys or production credentials.
+1. **Environment Secrets Isolation**: Sensitive API credentials (`GROQ_API_KEY`, `SECRET_KEY`) must load exclusively via `backend/.env` and must never be committed to source control or exposed in API response headers.
+2. **Sandbox Isolation**: Decoy sandbox execution tests payloads safely using MD5/SHA256 signature matching and heuristic checks.
+3. **CORS Restrictions**: Frontend API access is restricted strictly to permitted origins via `FRONTEND_ORIGIN` settings (`http://localhost:5173`).
+4. **Input Validation**: All REST request bodies are validated using Pydantic models to prevent invalid parameter injection.

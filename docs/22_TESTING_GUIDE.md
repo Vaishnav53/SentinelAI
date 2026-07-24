@@ -1,47 +1,24 @@
 # 22 — Testing Guide
 
-## Backend tests
+> [!NOTE]
+> **Design Specification**: This document provides automated testing specifications. For current setup instructions and test execution commands, refer to [SETUP.md](SETUP.md).
 
-- Health endpoints
-- Attack filtering and pagination
-- Sensor state transitions
-- Ollama offline behavior
-- Model discovery
-- Report job lifecycle
-- Monitoring data serialization
-- Windows-log normalization
-- Settings validation
-- WebSocket manager behavior
+---
 
-## Frontend tests
+## Test Execution Guidelines
 
-- Route rendering
-- Loading/error/empty states
-- Filter interactions
-- Row selection
-- Model selection
-- Message sending
-- Report form validation
-- Settings validation
+### 1. Backend Pytest Suite
+Run the backend automated integration test suite from the repository root:
+```powershell
+$env:PYTHONPATH="D:\Documents\SentinelAI"
+backend\.venv\Scripts\python.exe -m pytest backend\tests -q
+```
+*Executes 19 test cases validating database models, API routers, WAF inspection rules, correlation logic, and report generation.*
 
-## End-to-end smoke flow
-
-1. Start Ollama.
-2. Start backend.
-3. Start frontend.
-4. Open Dashboard.
-5. Trigger a safe local honeypot request.
-6. Confirm attack appears live.
-7. Open Attack Feed details.
-8. Ask AI to explain the attack.
-9. Generate a report.
-10. Verify downloaded artifact.
-11. Check monitoring.
-12. Check logs and settings.
-
-## Performance targets
-
-- Dashboard first meaningful render under 2 seconds on local development hardware after warm start
-- Attack filter response under 500ms for typical local datasets
-- No uncontrolled WebSocket growth
-- Long tables paginated or virtualized
+### 2. Frontend Production Build Verification
+Verify React/Vite bundle compilation:
+```powershell
+cd D:\Documents\SentinelAI\frontend
+npm run build
+```
+*Ensures all UI modules and CSS tokens compile cleanly.*

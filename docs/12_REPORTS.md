@@ -1,39 +1,12 @@
-# 12 — Reports
+# 12 — Reports Specification
 
+> [!NOTE]
+> **Design Specification**: This document is an initial Reports design specification. For current live reporting feature details, refer to [FEATURES.md](FEATURES.md).
 
-## Purpose
-Generate dynamic technical and executive security reports.
+---
 
-## Required sections
-- Date range
-- Attack type and severity filters
-- Sensor/data-source filters
-- Report type cards
-- Inclusion options
-- Format selection
-- Generate button with progress
-- Overview charts
-- Recent reports table
-- Download, preview, regenerate and delete actions
+## Executive Reports Subsystem
 
-## Job model
-Large reports run asynchronously with queued, generating, completed and failed states.
-
-## Acceptance
-Generated content reflects selected filters and supports PDF, CSV and JSON.
-
-
-## Architecture rule
-
-Create the page folder only when this module is implemented. Keep page-specific components, hooks, services, utilities and assets inside that folder. Shared primitives remain in the shared component library.
-
-## Testing
-
-- Rendering test
-- Loading state
-- Empty state
-- Error state
-- API success
-- API failure
-- Critical interaction
-- Responsive desktop layout
+The Reports module (`/reports`) handles PDF compliance report generation and raw log CSV exports:
+- **PDF Compliance Reports**: Generates downloadable PDF compliance documents containing executive threat statistics, top attack vectors, and containment recommendations.
+- **CSV Log Exports**: Export raw incident and attack event logs into CSV files for external audit and SIEM ingestion.

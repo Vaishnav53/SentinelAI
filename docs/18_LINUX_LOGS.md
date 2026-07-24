@@ -1,27 +1,12 @@
-# 18 — Linux Logs
+# 18 — Linux Logs Specification
 
+> [!NOTE]
+> **Design Specification**: This document is an initial Linux Syslog design specification. For current live telemetry features, refer to [FEATURES.md](FEATURES.md).
 
-## Purpose
-Future-ready ingestion for syslog, auth.log, auditd and journal events.
+---
 
-## Initial architecture
-Define adapters and normalized event schemas without forcing Linux dependencies on Windows users.
+## Linux Syslog Ingestion Design
 
-## Acceptance
-The architecture supports later Linux agents while the Windows-first build remains stable.
-
-
-## Architecture rule
-
-Create the page folder only when this module is implemented. Keep page-specific components, hooks, services, utilities and assets inside that folder. Shared primitives remain in the shared component library.
-
-## Testing
-
-- Rendering test
-- Loading state
-- Empty state
-- Error state
-- API success
-- API failure
-- Critical interaction
-- Responsive desktop layout
+The Syslog collector ingests local authentication and system log entries:
+- `/var/log/auth.log` / `/var/log/secure`: Failed SSH login attempts and sudo privilege escalations.
+- `/var/log/syslog`: General kernel and daemon messages.

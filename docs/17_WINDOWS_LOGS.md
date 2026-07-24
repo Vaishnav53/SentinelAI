@@ -1,41 +1,14 @@
-# 17 — Windows Logs
+# 17 — Windows Event Logs Specification
 
+> [!NOTE]
+> **Design Specification**: This document is an initial Windows Event Log design specification. For current live telemetry features, refer to [FEATURES.md](FEATURES.md).
 
-## Purpose
-Collect, normalize, filter and analyze Windows event logs.
+---
 
-## Required sections
-- Collector state
-- Channel filters
-- Severity/event level filters
-- Event ID search
-- Provider and host filters
-- Summary cards
-- Timeline/source charts
-- Paginated event table
-- Event detail panel
-- Raw XML view
-- AI explanation
-- MITRE mapping
+## Windows Log Collector Design
 
-## Safety
-No privilege escalation. Permission failures are explained clearly.
-
-## Acceptance
-Collector heartbeat, pagination, filtering and event detail work reliably.
-
-
-## Architecture rule
-
-Create the page folder only when this module is implemented. Keep page-specific components, hooks, services, utilities and assets inside that folder. Shared primitives remain in the shared component library.
-
-## Testing
-
-- Rendering test
-- Loading state
-- Empty state
-- Error state
-- API success
-- API failure
-- Critical interaction
-- Responsive desktop layout
+The Windows Log Ingestion service processes local Event Log records:
+- **Event ID 4625**: Failed Security Account Login (Brute force indicator)
+- **Event ID 4624**: Successful Security Account Login
+- **Event ID 4688**: Process Creation (Process execution tracking)
+- **Event ID 7045**: New Service Installation

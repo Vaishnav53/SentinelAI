@@ -1,54 +1,47 @@
 # 01 — Project Vision and Scope
 
-## Vision statement
+> [!NOTE]
+> **Design Specification**: This document serves as an initial vision specification. For current live platform vision and implementation details, refer to [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) and [FEATURES.md](FEATURES.md).
 
-Build a visually polished, technically credible and safe AI-powered cyber-defense command center that can run on a Windows development laptop and demonstrate modern SOC workflows without depending on cloud AI.
+---
 
-## Core outcomes
+## Vision Statement
 
-- Detect and classify activity captured by local honeypots.
-- Visualize attacks and system state in real time.
-- Explain incidents using a local AI model.
-- Map activity to MITRE ATT&CK.
-- Analyze Windows event logs.
-- Produce technical and executive reports.
-- Offer a clean platform for future threat-intelligence and response integrations.
+Build a visually polished, technically credible and safe AI-powered cyber-defense command center that can run on local workstations and containerized hybrid setups, demonstrating modern SOC workflows and threat telemetry analysis.
 
-## In scope for the first stable release
+## Core Outcomes
 
-- Local user, single-workstation deployment
-- FastAPI backend
-- React frontend
-- SQLite
-- HTTP honeypot
-- Simulated lab sensors
-- WebSocket alerting
-- Local monitoring
-- Ollama model discovery and chat
-- Report generation
-- MITRE mapping
-- Windows log ingestion
-- Settings and retention controls
+- Detect and classify activity captured by local honeypots and active WAF rules.
+- Visualize attacks and system state in real time via WebSockets.
+- Explain incidents and extract IOCs using AI analysis.
+- Map threat activity to MITRE ATT&CK techniques.
+- Produce executive PDF compliance and CSV reports.
+- Offer a clean foundation for future threat-intelligence and response integrations.
 
-## Later scope
+## In Scope for Stable Release (v0.15.2)
 
-- Authentication and RBAC
-- PostgreSQL
-- Distributed sensors
-- Multi-tenant deployments
-- Cloud collectors
-- Full SIEM integrations
-- SOAR playbooks
-- Container orchestration
-- Message queues
-- Advanced IOC enrichment
+- FastAPI backend & React/Vite frontend
+- SQLite & PostgreSQL support
+- Multi-protocol decoy honeypots (HTTP 8088, SSH 2222, FTP 2121, Telnet 2323)
+- Real-time WebSocket threat stream (`/api/attacks/ws`)
+- System vitals monitoring
+- AI Security Copilot & AI Investigator Workspace (7 structured actions)
+- Active WAF Manager and Decoy Sandbox Environment
+- Report generation (PDF & CSV)
+- MITRE ATT&CK mapping
+- Containerized Hybrid Deployment Support (Docker Compose & Nginx)
 
-## Explicitly out of scope
+## Future Scope
+
+- Authentication and RBAC (Role-Based Access Control)
+- Distributed multi-agent remote sensors
+- Cloud SIEM exporter integrations (Splunk SPL, Elastic DSL, KQL)
+- Hands-free voice I/O controls (postponed)
+- Dynamic honeypot IP rotation (postponed)
+
+## Explicitly Out of Scope
 
 - Unauthorized scanning
 - Automated exploitation
-- Malware creation
-- Offensive persistence
-- Credential theft
-- Destructive actions
-- Third-party target testing without authorization
+- Malware creation or distribution
+- Destructive actions against unauthorized targets
