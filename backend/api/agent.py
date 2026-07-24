@@ -707,7 +707,9 @@ async def post_chat(
                 f"Recent Timeline path:\n{json.dumps(profile['timeline'][:10])}\n"
                 f"[END CONTEXT]"
             )
-            
+
+    messages_payload = []
+
     if effective_mode == "general_chat":
         system_prompt = (
             "You are SentinelAI Assistant, a knowledgeable, helpful, and friendly AI security copilot. "
