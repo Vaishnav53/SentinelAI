@@ -1415,68 +1415,128 @@ class HoneypotManager:
         self.server: Optional[http.server.HTTPServer] = None
         self.thread: Optional[threading.Thread] = None
         self.is_running = False
-        self.host = "127.0.0.1"
+        self.is_ready = False
+        self.lan_mode = False
+        self.bind_host = "127.0.0.1"
+        self.display_host = "127.0.0.1"
         self.port = 8088
+        self.last_error: Optional[str] = None
+
+    def get_local_lan_ip(self) -> str:
+        """Resolve primary LAN IPv4 address non-blocking without external network hangs."""
+        import socket
+        try:
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+            if local_ip and not local_ip.startswith("127.") and not local_ip.startswith("169.254."):
+                return local_ip
+        except Exception:
+            pass
+
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.settimeout(0.2)
+            s.connect(("10.255.255.255", 1))
+            ip = s.getsockname()[0]
+            s.close()
+            if ip and not ip.startswith("127."):
+                return ip
+        except Exception:
+            pass
+
+        return "127.0.0.1"
 
     def start(self, lan_mode: bool = False) -> str:
         """Startup honeypot listener thread on port 8088."""
         if self.is_running:
-            return "ONLINE"
+            if self.lan_mode == lan_mode:
+                return "ONLINE"
+            self.stop()
+
+        self.last_error = None
+        self.lan_mode = lan_mode
+        self.bind_host = "0.0.0.0" if lan_mode else "127.0.0.1"
+        self.display_host = self.get_local_lan_ip() if lan_mode else "127.0.0.1"
 
         try:
-            # Enforce localhost only by default, allow 0.0.0.0 binding in LAN Lab mode
-            bind_host = "0.0.0.0" if lan_mode else "127.0.0.1"
-            
-            # Resolve dynamic local network LAN IP
-            import socket
-            def get_local_lan_ip():
-                try:
-                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    # Use Google DNS resolver to find routing address
-                    s.connect(("8.8.8.8", 80))
-                    ip = s.getsockname()[0]
-                    s.close()
-                    return ip
-                except Exception:
-                    return "127.0.0.1"
-            
-            display_host = get_local_lan_ip() if lan_mode else "127.0.0.1"
-
             self.server = http.server.HTTPServer(
-                (bind_host, self.port),
+                (self.bind_host, self.port),
                 HoneypotRequestHandler
             )
+            self.server.allow_reuse_address = True
+
             def run_server():
-                logger.info(f"Honeypot listening on http://{bind_host}:{self.port} starting...")
-                self.server.serve_forever()
+                logger.info(f"Honeypot listening on http://{self.bind_host}:{self.port} starting...")
+                try:
+                    self.server.serve_forever()
+                except Exception as ex:
+                    logger.error(f"Honeypot server loop error: {ex}")
                 logger.info("Honeypot server thread stopped.")
 
             self.thread = threading.Thread(target=run_server, daemon=True)
             self.thread.start()
             self.is_running = True
-            
+            self.is_ready = False
+
+            # Verify socket readiness quickly (<2.0s bounded polling)
+            import socket, time
+            start_check = time.time()
+            check_host = "127.0.0.1" if self.bind_host == "0.0.0.0" else self.bind_host
+            while time.time() - start_check < 2.0:
+                try:
+                    test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    test_sock.settimeout(0.2)
+                    res = test_sock.connect_ex((check_host, self.port))
+                    test_sock.close()
+                    if res == 0:
+                        self.is_ready = True
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.05)
+
+            if not self.is_ready:
+                # Still mark as running if server thread is alive
+                self.is_ready = self.thread.is_alive()
+
             # Sync ONLINE state and resolved decoy IP/host in database
-            self._update_sensor_db_state("ONLINE", display_host)
-            logger.info(f"Honeypot service started successfully. Mode: {'LAN' if lan_mode else 'LOCAL'}, Display IP: {display_host}")
+            self._update_sensor_db_state("ONLINE", self.display_host)
+            logger.info(f"Honeypot service started successfully. Mode: {'LAN' if lan_mode else 'LOCAL'}, Display IP: {self.display_host}")
             return "ONLINE"
+        except OSError as oe:
+            err_msg = f"Port {self.port} is already in use or unavailable: {oe}"
+            logger.error(f"Failed to start honeypot service: {err_msg}")
+            self.last_error = f"Port {self.port} is already in use by another process."
+            self.is_running = False
+            self.is_ready = False
+            self._update_sensor_db_state("OFFLINE")
+            return "ERROR"
         except Exception as e:
             logger.error(f"Failed to start honeypot service: {e}", exc_info=True)
+            self.last_error = f"Failed to start listener: {e}"
+            self.is_running = False
+            self.is_ready = False
+            self._update_sensor_db_state("OFFLINE")
             return "ERROR"
 
     def stop(self) -> str:
         """Shutdown honeypot server thread cleanly."""
-        if not self.is_running or not self.server:
+        if not self.is_running and not self.server:
+            self.is_running = False
+            self.is_ready = False
             return "OFFLINE"
 
         try:
-            self.server.shutdown()
-            self.server.server_close()
+            if self.server:
+                self.server.shutdown()
+                self.server.server_close()
             if self.thread:
-                self.thread.join(timeout=2.0)
+                self.thread.join(timeout=1.5)
                 
             self.server = None
             self.thread = None
             self.is_running = False
+            self.is_ready = False
             
             # Sync OFFLINE state in database
             self._update_sensor_db_state("OFFLINE")
@@ -1484,14 +1544,62 @@ class HoneypotManager:
             return "OFFLINE"
         except Exception as e:
             logger.error(f"Failed to stop honeypot server: {e}", exc_info=True)
-            return "ERROR"
+            self.is_running = False
+            self.is_ready = False
+            return "OFFLINE"
 
     def get_status(self) -> str:
         """Check server state."""
         if self.is_running and (self.thread is None or not self.thread.is_alive()):
             self.is_running = False
+            self.is_ready = False
             self._update_sensor_db_state("OFFLINE")
-        return "ONLINE" if self.is_running else "OFFLINE"
+        return "ONLINE" if (self.is_running and self.is_ready) else ("STARTING" if self.is_running else "OFFLINE")
+
+    def get_full_status(self) -> Dict[str, Any]:
+        """Check detailed server state."""
+        if self.is_running and (self.thread is None or not self.thread.is_alive()):
+            self.is_running = False
+            self.is_ready = False
+            self._update_sensor_db_state("OFFLINE")
+
+        if self.last_error and not self.is_running:
+            status_str = "ERROR"
+        elif self.is_running and self.is_ready:
+            status_str = "ONLINE"
+        elif self.is_running:
+            status_str = "STARTING"
+        else:
+            status_str = "OFFLINE"
+
+        current_lan_ip = self.get_local_lan_ip()
+        active_display_host = current_lan_ip if self.lan_mode else "127.0.0.1"
+
+        return {
+            "status": status_str,
+            "ready": self.is_running and self.is_ready,
+            "lan_mode": self.lan_mode,
+            "bind_host": self.bind_host,
+            "host": active_display_host,
+            "port": self.port,
+            "url": f"http://{active_display_host}:{self.port}",
+            "local_url": f"http://127.0.0.1:{self.port}",
+            "lan_ip": current_lan_ip,
+            "error": self.last_error
+        }
+
+    def set_mode(self, lan_mode: bool) -> Dict[str, Any]:
+        """Switch binding mode between Local Only and LAN Lab."""
+        if self.is_running:
+            self.stop()
+            self.start(lan_mode=lan_mode)
+        else:
+            self.lan_mode = lan_mode
+            self.bind_host = "0.0.0.0" if lan_mode else "127.0.0.1"
+            self.display_host = self.get_local_lan_ip() if lan_mode else "127.0.0.1"
+            self._update_sensor_db_state("OFFLINE", self.display_host)
+
+        return self.get_full_status()
 
     def _update_sensor_db_state(self, state: str, host_ip: str = "127.0.0.1"):
         db = SessionLocal()

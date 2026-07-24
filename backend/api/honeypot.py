@@ -15,17 +15,8 @@ router = APIRouter(prefix="/honeypot", tags=["Honeypot Core"])
 
 @router.get("/status", response_model=Dict[str, Any])
 async def get_honeypot_status(db: Session = Depends(get_db), manager: HoneypotManager = Depends(get_honeypot_manager)):
-    """Retrieve the current online state of the HTTP Honeypot."""
-    status = manager.get_status()
-    from backend.models.models import HoneypotSensor
-    sensor = db.query(HoneypotSensor).filter(HoneypotSensor.name == "HTTP Honeypot").first()
-    host = sensor.host if sensor else manager.host
-    return {
-        "status": status,
-        "host": host,
-        "port": manager.port,
-        "url": f"http://{host}:{manager.port}"
-    }
+    """Retrieve the current online state and bind details of the HTTP Honeypot."""
+    return manager.get_full_status()
 
 @router.post("/start", response_model=Dict[str, Any])
 async def start_honeypot_service(
@@ -33,32 +24,25 @@ async def start_honeypot_service(
     db: Session = Depends(get_db), 
     manager: HoneypotManager = Depends(get_honeypot_manager)
 ):
-    """Enable the HTTP Honeypot background thread."""
+    """Enable the HTTP Honeypot background listener thread."""
     lan_mode = payload.lan_mode if payload else False
-    status = manager.start(lan_mode=lan_mode)
-    from backend.models.models import HoneypotSensor
-    sensor = db.query(HoneypotSensor).filter(HoneypotSensor.name == "HTTP Honeypot").first()
-    host = sensor.host if sensor else manager.host
-    return {
-        "status": status,
-        "host": host,
-        "port": manager.port,
-        "url": f"http://{host}:{manager.port}"
-    }
+    manager.start(lan_mode=lan_mode)
+    return manager.get_full_status()
 
 @router.post("/stop", response_model=Dict[str, Any])
 async def stop_honeypot_service(db: Session = Depends(get_db), manager: HoneypotManager = Depends(get_honeypot_manager)):
     """Deactivate the HTTP Honeypot background listener."""
-    status = manager.stop()
-    from backend.models.models import HoneypotSensor
-    sensor = db.query(HoneypotSensor).filter(HoneypotSensor.name == "HTTP Honeypot").first()
-    host = sensor.host if sensor else manager.host
-    return {
-        "status": status,
-        "host": host,
-        "port": manager.port,
-        "url": f"http://{host}:{manager.port}"
-    }
+    manager.stop()
+    return manager.get_full_status()
+
+@router.post("/mode", response_model=Dict[str, Any])
+async def switch_honeypot_mode(
+    payload: StartPayload,
+    db: Session = Depends(get_db),
+    manager: HoneypotManager = Depends(get_honeypot_manager)
+):
+    """Switch honeypot listener bind mode (Local Only vs LAN Lab)."""
+    return manager.set_mode(lan_mode=payload.lan_mode)
 
 @router.get("/events", response_model=List[AttackEventRead])
 async def get_honeypot_captured_events(db: Session = Depends(get_db)):

@@ -13,6 +13,11 @@ export default function HoneypotLab() {
   const [liveActivity, setLiveActivity] = useState([]);
   const [logFilter, setLogFilter] = useState('ALL');
   const [showAdvancedDecoys, setShowAdvancedDecoys] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  const [lanIp, setLanIp] = useState("127.0.0.1");
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [statusNotice, setStatusNotice] = useState(null);
 
   const formatLocalTime = (utcString) => {
     if (!utcString) return "";
@@ -33,6 +38,16 @@ export default function HoneypotLab() {
     return true;
   });
 
+  const applyStatusData = (statusData) => {
+    if (!statusData) return;
+    setHoneypotStatus(statusData.status || 'OFFLINE');
+    setHoneypotUrl(statusData.url || 'http://127.0.0.1:8088');
+    setIsReady(!!statusData.ready);
+    setLanMode(!!statusData.lan_mode);
+    setLanIp(statusData.lan_ip || "127.0.0.1");
+    setErrorMessage(statusData.error || null);
+  };
+
   const fetchStatusAndSensors = async () => {
     try {
       setLoading(true);
@@ -42,14 +57,10 @@ export default function HoneypotLab() {
         apiClient.get('/honeypot/events')
       ]);
       setSensors(sensorsData);
-      setHoneypotStatus(statusData.status);
-      setHoneypotUrl(statusData.url);
+      applyStatusData(statusData);
       setLiveActivity(eventsData);
-      if (statusData.host !== '127.0.0.1' && statusData.host !== 'localhost') {
-        setLanMode(true);
-      }
     } catch (e) {
-      console.error(e);
+      console.error("Failed to load Honeypot Lab status:", e);
     } finally {
       setLoading(false);
     }
@@ -62,12 +73,12 @@ export default function HoneypotLab() {
     const interval = setInterval(async () => {
       try {
         const statusData = await apiClient.get('/honeypot/status');
-        setHoneypotStatus(statusData.status);
-        setHoneypotUrl(statusData.url);
+        applyStatusData(statusData);
       } catch (err) {
         setHoneypotStatus('OFFLINE');
+        setIsReady(false);
       }
-    }, 5000);
+    }, 3000);
 
     // Live WebSocket connection to capture and append attacks in real time
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -115,18 +126,64 @@ export default function HoneypotLab() {
   }, []);
 
   const handleToggleHoneypot = async () => {
+    if (isTransitioning) return;
     try {
-      const endpoint = honeypotStatus === 'ONLINE' ? '/honeypot/stop' : '/honeypot/start';
-      const payload = endpoint === '/honeypot/start' ? { lan_mode: lanMode } : {};
-      const res = await apiClient.post(endpoint, payload);
-      setHoneypotStatus(res.status);
-      setHoneypotUrl(res.url);
-      
-      // Refresh the static sensors list as well to reflect state changes
+      setIsTransitioning(true);
+      setErrorMessage(null);
+
+      if (honeypotStatus === 'ONLINE' || honeypotStatus === 'STARTING') {
+        setStatusNotice("Stopping HTTP Decoy listener...");
+        const res = await apiClient.post('/honeypot/stop');
+        applyStatusData(res);
+      } else {
+        setStatusNotice("Starting HTTP Decoy listener...");
+        setHoneypotStatus('STARTING');
+        const res = await apiClient.post('/honeypot/start', { lan_mode: lanMode });
+        applyStatusData(res);
+      }
+
       const sensorsData = await apiClient.get('/sensors');
       setSensors(sensorsData);
     } catch (e) {
-      console.error(e);
+      console.error("Failed to toggle honeypot state:", e);
+      setHoneypotStatus('ERROR');
+      setErrorMessage(e.message || "Failed to toggle honeypot service state.");
+    } finally {
+      setIsTransitioning(false);
+      setStatusNotice(null);
+    }
+  };
+
+  const handleModeChange = async (targetLanMode) => {
+    if (isTransitioning) return;
+
+    if (targetLanMode) {
+      const confirmLan = window.confirm(
+        "WARNING: Enabling LAN Mode will bind the vulnerable sandbox decoy server to 0.0.0.0, allowing inbound connections from your local network subnet.\n\nEnsure your network is trusted. Proceed?"
+      );
+      if (!confirmLan) return;
+    }
+
+    try {
+      setIsTransitioning(true);
+      setErrorMessage(null);
+      if (honeypotStatus === 'ONLINE' || honeypotStatus === 'STARTING') {
+        setStatusNotice("Rebinding listener interface & restarting HTTP Decoy...");
+      } else {
+        setStatusNotice("Applying interface binding mode...");
+      }
+
+      const res = await apiClient.post('/honeypot/mode', { lan_mode: targetLanMode });
+      applyStatusData(res);
+
+      const sensorsData = await apiClient.get('/sensors');
+      setSensors(sensorsData);
+    } catch (e) {
+      console.error("Failed to change binding interface mode:", e);
+      setErrorMessage(e.message || "Failed to update binding interface mode.");
+    } finally {
+      setIsTransitioning(false);
+      setStatusNotice(null);
     }
   };
 
@@ -200,30 +257,49 @@ export default function HoneypotLab() {
       <div className="main-honeypot-controller card-cyber">
         <div className="hp-control-header">
           <div className="hp-meta-desc">
-            <span className={`badge badge-${honeypotStatus.toLowerCase()}`}>{honeypotStatus}</span>
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`badge badge-${honeypotStatus.toLowerCase()}`}>{honeypotStatus}</span>
+              {statusNotice && <span className="text-purple font-mono text-xxs animate-pulse">{statusNotice}</span>}
+            </div>
             <h3 className="sensor-name">Local HTTP Decoy Service</h3>
             <p className="text-muted font-mono">
-              {honeypotStatus === 'ONLINE' ? `Active Binding URL: ${honeypotUrl}` : `Target Binding IP: ${lanMode ? '0.0.0.0 (LAN)' : '127.0.0.1 (Local Only)'}`}
+              {honeypotStatus === 'ONLINE' ? `Active Binding: ${lanMode ? '0.0.0.0:8088 (LAN)' : '127.0.0.1:8088 (Local Only)'}` : `Target Binding IP: ${lanMode ? '0.0.0.0 (LAN)' : '127.0.0.1 (Local Only)'}`}
             </p>
-            {honeypotStatus === 'ONLINE' && (
+            {honeypotStatus === 'ONLINE' && isReady && (
               <p className="text-cyan font-mono text-xs mt-1">
-                Access Lab Portal: <a href={lanMode ? honeypotUrl : "http://127.0.0.1:8088"} target="_blank" rel="noreferrer" className="underline text-cyan" style={{ textDecoration: 'underline' }}>{lanMode ? honeypotUrl : "http://127.0.0.1:8088"}</a>
+                Access Lab Portal: <a href={honeypotUrl} target="_blank" rel="noopener noreferrer" className="underline text-cyan font-bold" style={{ textDecoration: 'underline' }}>{honeypotUrl}</a>
+              </p>
+            )}
+            {honeypotStatus === 'STARTING' && (
+              <p className="text-purple font-mono text-xs mt-1">
+                Starting listener on port 8088...
+              </p>
+            )}
+            {errorMessage && (
+              <p className="text-red font-mono text-xs mt-1">
+                ⚠️ {errorMessage}
               </p>
             )}
           </div>
           <button 
             className={`hp-power-btn ${honeypotStatus === 'ONLINE' ? 'active' : ''}`}
             onClick={handleToggleHoneypot}
+            disabled={isTransitioning}
             title={honeypotStatus === 'ONLINE' ? "Stop Honeypot" : "Start Honeypot"}
           >
             <Power size={18} />
           </button>
         </div>
 
-        {honeypotStatus === 'ONLINE' ? (
+        {honeypotStatus === 'ONLINE' && isReady ? (
           <div className="sensor-status-msg text-green font-mono">
             <ShieldCheck size={16} />
-            <span>DECOY ACTIVE: Listening on {lanMode ? "all interfaces (0.0.0.0)" : "loopback interface (127.0.0.1)"} port 8088. Capturing raw payloads.</span>
+            <span>DECOY ACTIVE: Listening on {lanMode ? `all interfaces (0.0.0.0) — LAN IP: ${lanIp}` : "loopback interface (127.0.0.1)"} port 8088. Capturing raw payloads.</span>
+          </div>
+        ) : honeypotStatus === 'STARTING' ? (
+          <div className="sensor-status-msg text-purple font-mono">
+            <Activity size={16} className="animate-spin" />
+            <span>DECOY INITIALIZING: Binding to port 8088 and verifying socket readiness...</span>
           </div>
         ) : (
           <div className="sensor-status-msg text-muted font-mono">
@@ -237,28 +313,25 @@ export default function HoneypotLab() {
           <div className="flex flex-col">
             <span className="font-mono text-xs text-white" style={{ fontSize: '11px' }}>BINDING INTERFACE MODE</span>
             <span className="text-muted text-xxs mt-0.5" style={{ fontSize: '10px', color: '#8b949e' }}>
-              {lanMode 
-                ? "LAN Lab Mode: Honeypot binds to 0.0.0.0 and will accept connections from remote LAN devices." 
-                : "Local Only Mode: Honeypot binds strictly to 127.0.0.1 (sandbox isolation)."}
+              {lanMode
+                ? `LAN Lab Mode: Honeypot binds to 0.0.0.0 (LAN IPv4: ${lanIp}). Accepts connections from local subnet.`
+                : "Local Only Mode: Honeypot binds strictly to 127.0.0.1 (Loopback sandbox isolation)."}
             </span>
+            {lanMode && (
+              <span className="text-yellow text-xxs font-mono mt-1" style={{ fontSize: '9px', color: '#ffd32a' }}>
+                Note: Windows Firewall must allow inbound TCP traffic on port 8088 for LAN devices to connect.
+              </span>
+            )}
           </div>
-          
+
           <div className="flex items-center gap-2" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span className="font-mono" style={{ fontSize: '10px', color: !lanMode ? 'var(--cyan-primary)' : '#8b949e' }}>LOCAL ONLY</span>
             <label className="cyber-switch">
-              <input 
-                type="checkbox" 
-                checked={lanMode} 
-                disabled={honeypotStatus === 'ONLINE'}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    const confirmLan = window.confirm(
-                      "WARNING: Enabling LAN Mode will expose this vulnerable sandbox web server to your local network subnet. Do not execute this on untrusted public networks. Proceed?"
-                    );
-                    if (!confirmLan) return;
-                  }
-                  setLanMode(e.target.checked);
-                }} 
+              <input
+                type="checkbox"
+                checked={lanMode}
+                disabled={isTransitioning}
+                onChange={(e) => handleModeChange(e.target.checked)}
               />
               <span className="slider round"></span>
             </label>
