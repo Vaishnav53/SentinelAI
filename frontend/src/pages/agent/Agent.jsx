@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Terminal, Send, Cpu, ShieldAlert, BookOpen, Trash2, Plus,
   Search, Shield, ShieldAlert as AlertIcon, AlertTriangle,
-  Activity, Settings, Sliders, Database, User, Check, RefreshCw
+  Activity, Settings, Sliders, Database, User, Check, Copy, RefreshCw
 } from 'lucide-react';
 import apiClient from '../../api/client';
 import './Agent.css';
@@ -68,7 +68,7 @@ export default function Agent() {
 
   // Settings Overlay Configurations
   const [temp, setTemp] = useState(0.2);
-  const [maxTokens, setMaxTokens] = useState(128);
+  const [maxTokens, setMaxTokens] = useState(768);
   const [systemPrompt, setSystemPrompt] = useState('Zero-Trust SOC Assistant');
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -173,10 +173,14 @@ export default function Agent() {
     setMessages([
       {
         role: 'assistant',
-        content: 'Hello! I am your local cyber defense assistant. I analyze honeypot payloads, log entries, and suggest active mitigation tactics. Ask me anything about current platform events.'
+        content: 'Hello! I am SentinelAI Assistant. How can I help you today?'
       }
     ]);
     setSelectedAttack(null);
+    setSelectedIncident(null);
+    setSelectedIntelIp(null);
+    setSelectedSandboxId(null);
+    setSelectedAttackerIp(null);
     setSearchParams({});
   };
 
@@ -218,7 +222,7 @@ export default function Agent() {
       default:
         return;
     }
-    handleSendMessage(queryText);
+    handleSendMessage(queryText, "security_analysis");
   };
 
   // Handle context-aware Quick Investigation Actions
@@ -255,11 +259,11 @@ export default function Agent() {
       default:
         return;
     }
-    handleSendMessage(queryText);
+    handleSendMessage(queryText, "investigator_action", action);
   };
 
   // Handle Send message
-  const handleSendMessage = async (textToSend) => {
+  const handleSendMessage = async (textToSend, modeOverride = null, actionName = null) => {
     const text = textToSend || inputValue;
     if (!text.trim() || loading) return;
 
@@ -267,6 +271,19 @@ export default function Agent() {
       setInputValue('');
     }
 
+    const isTypedMessage = !textToSend;
+    let responseMode = modeOverride;
+    if (!responseMode) {
+      if (isTypedMessage) {
+        responseMode = 'general_chat';
+      } else if (selectedIncident || selectedAttack) {
+        responseMode = 'security_analysis';
+      } else {
+        responseMode = 'general_chat';
+      }
+    }
+
+    const includeContext = responseMode !== 'general_chat' || !isTypedMessage;
     const convId = currentConversation?.conversation_key || null;
     const userMsg = { role: 'user', content: text, created_at: new Date() };
     const tempMessages = [...messages, userMsg];
@@ -287,11 +304,13 @@ export default function Agent() {
           message: text,
           model: modelName,
           conversation_id: convId,
+          response_mode: responseMode,
+          action: actionName,
           context: {
-            attack_id: selectedAttack ? selectedAttack.id : (searchParams.get('analyze_attack') ? parseInt(searchParams.get('analyze_attack')) : null),
-            incident_id: selectedIncident ? selectedIncident.id : (searchParams.get('analyze_incident') ? parseInt(searchParams.get('analyze_incident')) : null),
-            sandbox_file_id: selectedSandboxId || (searchParams.get('analyze_sandbox') ? parseInt(searchParams.get('analyze_sandbox')) : null),
-            attacker_ip: selectedAttackerIp || searchParams.get('analyze_attacker') || null
+            attack_id: (includeContext && selectedAttack) ? selectedAttack.id : (includeContext && searchParams.get('analyze_attack') ? parseInt(searchParams.get('analyze_attack')) : null),
+            incident_id: (includeContext && selectedIncident) ? selectedIncident.id : (includeContext && searchParams.get('analyze_incident') ? parseInt(searchParams.get('analyze_incident')) : null),
+            sandbox_file_id: (includeContext && selectedSandboxId) ? selectedSandboxId : (includeContext && searchParams.get('analyze_sandbox') ? parseInt(searchParams.get('analyze_sandbox')) : null),
+            attacker_ip: (includeContext && selectedAttackerIp) ? selectedAttackerIp : (includeContext && searchParams.get('analyze_attacker') || null)
           },
           temperature: temp,
           max_tokens: maxTokens
@@ -643,6 +662,63 @@ export default function Agent() {
     });
   };
 
+  // Code Block Component with Copy button
+  const CodeBlock = ({ lang, code }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = async () => {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(code);
+        } else {
+          // Fallback for non-HTTPS / legacy browser environments
+          const textArea = document.createElement("textarea");
+          textArea.value = code;
+          textArea.style.position = "fixed";
+          textArea.style.left = "-999999px";
+          textArea.style.top = "-999999px";
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          document.execCommand("copy");
+          document.body.removeChild(textArea);
+        }
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        console.error("Failed to copy code:", err);
+      }
+    };
+
+    const displayLang = (lang || "code").toUpperCase().trim();
+
+    return (
+      <pre className="markdown-code-block font-mono">
+        <div className="code-header font-mono">
+          <span className="code-lang-label">{displayLang}</span>
+          <button
+            className="code-copy-btn font-mono text-xxs"
+            onClick={handleCopy}
+            title="Copy code block to clipboard"
+          >
+            {copied ? (
+              <>
+                <Check size={11} className="text-cyan" />
+                <span className="text-cyan font-bold">COPIED!</span>
+              </>
+            ) : (
+              <>
+                <Copy size={11} />
+                <span>COPY</span>
+              </>
+            )}
+          </button>
+        </div>
+        <code>{code}</code>
+      </pre>
+    );
+  };
+
   // Custom Markdown renderer inside bubble
   const renderMarkdown = (text) => {
     if (!text) return "";
@@ -653,10 +729,7 @@ export default function Agent() {
         const lang = lines[0];
         const code = lines.slice(1).join("\n");
         return (
-          <pre key={idx} className="markdown-code-block font-mono">
-            <div className="code-lang-label">{lang || "code"}</div>
-            <code>{code}</code>
-          </pre>
+          <CodeBlock key={idx} lang={lang} code={code} />
         );
       }
 
@@ -821,7 +894,7 @@ export default function Agent() {
         <div className="copilot-input-area">
           <input
             type="text"
-            placeholder={selectedAttack ? "Ask Copilot to investigate this payload..." : "Ask general cybersecurity query..."}
+            placeholder={selectedAttack || selectedIncident ? (selectedAttack ? `Ask Copilot about attack HON-${selectedAttack.id}...` : `Ask Copilot about incident ID-${selectedIncident.id}...`) : "Ask SentinelAI anything..."}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}

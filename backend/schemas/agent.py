@@ -13,6 +13,8 @@ class ChatRequest(BaseModel):
     model: Optional[str] = "llama3.1"
     conversation_id: Optional[str] = None
     context: Optional[ChatContext] = None
+    response_mode: Optional[str] = "general_chat"
+    action: Optional[str] = None
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
 
