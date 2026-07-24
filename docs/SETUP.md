@@ -1,136 +1,145 @@
 # Installation & Setup — SentinelAI
 
-This guide provides step-by-step instructions to configure, initialize, and execute the SentinelAI platform for local development.
+This guide provides step-by-step instructions to configure, initialize, and execute the SentinelAI platform for local development and containerized hybrid deployment foundation testing.
 
 ---
 
 ## 💻 System Prerequisites
 
-* **OS**: Windows 10/11, macOS, or Ubuntu Linux.
-* **Python**: Version 3.14.x or higher.
-* **Node.js**: Version 18.x or higher (npm package manager included).
+* **Operating System**: Windows 10/11, macOS, or Ubuntu Linux.
+* **Python**: Python 3.11 or later. The backend container uses Python 3.11, and local development has been verified with Python 3.14.
+* **Node.js**: Version 18.x or higher (with npm package manager).
 * **AI Provider**:
-  * **Groq Cloud** (Recommended): Requires an active API key from [Groq Console](https://console.groq.com/).
-  * **Ollama** (Local Fallback): Installed locally and running on default port `11434`.
+  * **Groq Cloud** (Primary Live LLM Provider): Requires an API key from [Groq Console](https://console.groq.com/). When Groq is unavailable or unconfigured, SentinelAI uses a deterministic local fallback response engine.
+* **Docker & Docker Compose** (Optional for Hybrid Container Setup): Docker Desktop or Docker Engine.
 
 ---
 
-## 📥 Step-by-Step Installation
+## 🔑 Environment Variables Reference
 
-Clone the repository to your local workspace, then configure the separate layers:
+Copy `.env.example` templates to `.env` files in both backend and frontend directories:
+
+### Backend (`backend/.env`):
+```env
+APP_NAME=SentinelAI
+APP_ENV=development
+APP_HOST=127.0.0.1
+APP_PORT=8000
+
+# Database Settings
+DATABASE_URL=sqlite:///./storage/sentinelai.db
+
+# Frontend Security & CORS Settings
+FRONTEND_ORIGIN=http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
+
+# Production Security
+SECRET_KEY=placeholder_secret_key
+TRUSTED_HOSTS=127.0.0.1,localhost,testserver
+
+# Groq Cloud AI Settings
+GROQ_API_KEY=your_groq_api_key_here
+DEFAULT_GROQ_MODEL=llama-3.3-70b-versatile
+
+# Storage & Logging
+REPORT_STORAGE=./storage/reports
+LOG_LEVEL=INFO
+```
+
+### Frontend (`frontend/.env`):
+```env
+VITE_API_BASE_URL=http://127.0.0.1:8000/api
+VITE_WS_BASE_URL=ws://127.0.0.1:8000
+```
+
+> [!WARNING]
+> Do **not** commit `.env` files containing sensitive keys to version control. They are ignored by default in `.gitignore`.
+
+---
+
+## 🔌 Network Ports Reference
+
+| Service / Subsystem | Host Port | Protocol | Usage / Purpose |
+| :--- | :---: | :---: | :--- |
+| **Frontend Web App** | `5173` | HTTP | React / Vite SOC Console UI |
+| **Backend Application API** | `8000` | HTTP/WS | FastAPI REST API & WebSocket Stream (`/api/attacks/ws`) |
+| **HTTP Decoy Sensor** | `8088` | HTTP | Honeypot web exploit & traversal sensor |
+| **SSH Decoy Sensor** | `2222` | TCP/SSH | Honeypot brute-force login sensor |
+| **FTP Decoy Sensor** | `2121` | TCP/FTP | Honeypot anonymous file scan sensor |
+| **Telnet Decoy Sensor** | `2323` | TCP/Telnet | Honeypot IoT botnet probe sensor |
+
+---
+
+## 📥 Local Development Setup
 
 ### 1. Backend Service Setup
 
-First, initialize python dependencies and configure the environment:
+```powershell
+# 1. Navigate to backend directory
+cd D:\Documents\SentinelAI\backend
 
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-2. Create and activate a Python virtual environment:
-   ```bash
-   # Windows PowerShell
-   python -m venv .venv
-   .venv\Scripts\activate
+# 2. Create and activate virtual environment
+python -m venv .venv
+.\.venv\Scripts\activate
 
-   # macOS / Linux
-   python -m venv .venv
-   source .venv/bin/activate
-   ```
-3. Install package requirements:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Copy the environment variables template:
-   ```bash
-   cp .env.example .env
-   ```
-5. Open `backend/.env` in your text editor and specify your keys:
-   ```env
-   GROQ_API_KEY=gsk_your_key_here
-   DEFAULT_GROQ_MODEL=llama-3.3-70b-versatile
-   DATABASE_URL=sqlite:///./sentinel.db
-   ENVIRONMENT=development
-   ```
+# 3. Install requirements
+pip install -r requirements.txt
 
-> [!WARNING]
-> Do **not** commit `backend/.env` to source control. It is ignored by default via the main `.gitignore` file.
+# 4. Set Python path and start backend server
+$env:PYTHONPATH="D:\Documents\SentinelAI"
+.\.venv\Scripts\python.exe -m uvicorn main:app --port 8000
+```
+*The FastAPI server will boot at `http://127.0.0.1:8000`. On startup, SQLite tables are created automatically and seeded with demo telemetry via `populate_demo_data()`.*
+
+### 2. Frontend Application Setup
+
+```powershell
+# 1. Open a new terminal and navigate to frontend directory
+cd D:\Documents\SentinelAI\frontend
+
+# 2. Install Node packages
+npm install
+
+# 3. Start Vite dev server on port 5173
+npm run dev -- --port 5173
+```
+*Access the SOC Command Center in your browser at:* **`http://localhost:5173`**
 
 ---
 
-### 2. Database Initialization
-SQLite requires no manual service installation. The application automatically initializes tables and populates base seed data on startup:
+## ⚠️ Database Reset & Data Loss Warning
 
-If you wish to test database creation manually, run:
-```bash
-$env:PYTHONPATH=".."  # Windows PowerShell
-# OR export PYTHONPATH=".." on Linux/macOS
-.venv\Scripts\python -c "from backend.database.session import engine; from backend.models.base import Base; Base.metadata.create_all(bind=engine); print('Database ready')"
-```
+> [!CAUTION]
+> **Data Loss Warning**: Deleting `backend/storage/sentinelai.db` permanently removes all existing local SQLite data. This procedure should be used **only for disposable demonstration environments**. If existing attacks, incidents, reports, settings, or investigation data must be preserved, create a backup file before deletion. On the next backend startup, the database schema and default demonstration records are automatically recreated.
 
 ---
 
-### 3. Frontend App Setup
+## 🐳 Hybrid Deployment Support (Phase 16)
 
-Initialize Node dependencies for the React Vite project:
+SentinelAI includes containerized deployment foundation assets for hybrid lab setups:
 
-1. Navigate to the frontend directory:
-   ```bash
-   cd ../frontend
-   ```
-2. Install npm packages:
-   ```bash
-   npm install
-   ```
+```powershell
+# Build and start Docker containers
+docker-compose up -d --build
+```
+Orchestrates FastAPI backend, static Nginx reverse proxy, and PostgreSQL database.
+
+* **Database Backup**: `./scripts/db_backup.sh`
+* **Database Restore**: `./scripts/db_restore.sh ./backups/sentinelai_backup_*.sql`
 
 ---
 
-## 🏃 Running the Services
+## 🧪 Verification & Testing
 
-### Command Line Startup (Individual)
-
-#### Start Backend Service
-Run from `backend/` folder:
-```bash
-# Set Python path to project root
-$env:PYTHONPATH="d:\Documents\SentinelAI"
-.venv\Scripts\uvicorn main:app --reload --port 8000
+### 1. Backend Pytest Suite
+```powershell
+$env:PYTHONPATH="D:\Documents\SentinelAI"
+backend\.venv\Scripts\python.exe -m pytest backend\tests -q
 ```
-This runs the FastAPI server at `http://127.0.0.1:8000` with hot-reloading active.
+*Expected Result: All 19 unit tests pass cleanly.*
 
-#### Start Frontend Application
-Run from `frontend/` folder:
-```bash
-npm run dev
-```
-The developer server will boot up at `http://localhost:5173`.
-
----
-
-### Launcher Script Startup
-For convenience, you can run the batch launcher from the root folder:
-```cmd
-.\scripts\start.bat
-```
-This script checks Ollama, prompt choices, and launches both services in independent command prompts automatically.
-
----
-
-## 🧪 Validating Installation
-
-### 1. Run Automated Unit Tests
-To verify all APIs, ingestion logic, and WAF rules are functioning:
-Navigate to the `backend/` folder and execute the test runner:
-```bash
-$env:PYTHONPATH="d:\Documents\SentinelAI"
-.venv\Scripts\pytest
-```
-*Expected output: All 19 tests pass.*
-
-### 2. Confirm Frontend Compile
-To verify that UI styling rules compile correctly:
-Navigate to the `frontend/` folder and build:
-```bash
+### 2. Frontend Production Build Check
+```powershell
+cd D:\Documents\SentinelAI\frontend
 npm run build
 ```
-*Expected output: Successful Vite production bundle output.*
+*Expected Result: Vite production bundle compiles cleanly.*
