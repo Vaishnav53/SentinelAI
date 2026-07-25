@@ -80,7 +80,7 @@ export default function KPICard({ title, value, change, changeType, icon: Icon, 
       {sparklinePoints && (
         <div className="kpi-sparkline ms-auto">
           <svg viewBox="0 0 100 30" width="70" height="20">
-            <path d={sparklinePoints} fill="none" stroke={`var(--${colorClass || 'cyan-primary'})`} strokeWidth="1.5" />
+            <path d={sparklinePoints} fill="none" stroke={getLedColor()} strokeWidth="1.5" />
           </svg>
         </div>
       )}

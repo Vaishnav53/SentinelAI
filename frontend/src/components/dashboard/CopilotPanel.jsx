@@ -72,7 +72,7 @@ export default function CopilotPanel({ latestAttack }) {
         <div className="actions-buttons-grid font-mono text-xxs mt-3 flex flex-col gap-2">
           <button 
             className="act-btn-cyber btn-critical"
-            onClick={() => alert(`IP Address ${targetIp} successfully isolated.`)}
+            onClick={() => navigate(`/waf`)}
           >
             <span>BLOCK IP: {targetIp}</span>
             <span className="badge-critical ml-auto">CRITICAL</span>
@@ -80,7 +80,7 @@ export default function CopilotPanel({ latestAttack }) {
           
           <button 
             className="act-btn-cyber btn-orange"
-            onClick={() => alert('WAF Policies successfully enforced.')}
+            onClick={() => navigate('/waf')}
           >
             <span>ENABLE WAF PROTECTION</span>
             <span className="badge-high ml-auto">HIGH</span>
@@ -88,7 +88,7 @@ export default function CopilotPanel({ latestAttack }) {
           
           <button 
             className="act-btn-cyber btn-yellow"
-            onClick={() => alert('Interaction threshold level increased.')}
+            onClick={() => navigate('/sensors')}
           >
             <span>INCREASE HONEYPOT INTERACTION</span>
             <span className="badge-medium ml-auto">MEDIUM</span>

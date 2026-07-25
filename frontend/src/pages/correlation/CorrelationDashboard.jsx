@@ -228,7 +228,7 @@ export default function CorrelationDashboard() {
         const midX = (sNode.x + tNode.x) / 2;
         const midY = (sNode.y + tNode.y) / 2;
         ctx.font = '8px monospace';
-        ctx.fillStyle = 'var(--text-muted)';
+        ctx.fillStyle = '#5f748d';
         ctx.textAlign = 'center';
         ctx.fillText(link.relation || '', midX, midY - 4);
       });
@@ -237,13 +237,13 @@ export default function CorrelationDashboard() {
       nodes.forEach(n => {
         // Node severity glow color
         let glowColor = 'rgba(0, 229, 255, 0.4)';
-        let strokeColor = 'var(--cyan-primary)';
+        let strokeColor = '#00e5ff';
         let fillBg = 'rgba(2, 6, 12, 0.9)';
 
-        if (n.type === 'IP') { glowColor = 'rgba(239, 68, 68, 0.4)'; strokeColor = 'var(--red)'; }
-        else if (n.type === 'USER') { glowColor = 'rgba(139, 92, 246, 0.4)'; strokeColor = 'var(--purple)'; }
-        else if (n.type === 'HOST') { glowColor = 'rgba(249, 115, 22, 0.4)'; strokeColor = 'var(--orange)'; }
-        else if (n.type === 'SERVICE') { glowColor = 'rgba(16, 185, 129, 0.4)'; strokeColor = 'var(--green)'; }
+        if (n.type === 'IP') { glowColor = 'rgba(239, 68, 68, 0.4)'; strokeColor = '#ff3366'; }
+        else if (n.type === 'USER') { glowColor = 'rgba(139, 92, 246, 0.4)'; strokeColor = '#9b5cff'; }
+        else if (n.type === 'HOST') { glowColor = 'rgba(249, 115, 22, 0.4)'; strokeColor = '#ff9f43'; }
+        else if (n.type === 'SERVICE') { glowColor = 'rgba(16, 185, 129, 0.4)'; strokeColor = '#00ff88'; }
 
         // Glow ring
         ctx.shadowBlur = 12;
@@ -268,7 +268,7 @@ export default function CorrelationDashboard() {
 
         // Node Type badge
         ctx.font = '7px monospace';
-        ctx.fillStyle = 'var(--text-muted)';
+        ctx.fillStyle = '#5f748d';
         ctx.fillText(n.type, n.x, n.y - n.radius - 4);
       });
 

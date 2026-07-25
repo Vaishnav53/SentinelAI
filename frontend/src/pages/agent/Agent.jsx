@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Terminal, Send, Cpu, ShieldAlert, BookOpen, Trash2, Plus,
-  Search, Shield, ShieldAlert as AlertIcon, AlertTriangle,
-  Activity, Settings, Sliders, Database, User, Check, Copy, RefreshCw
+  Send, Cpu, ShieldAlert, BookOpen, Plus,
+  Shield, AlertTriangle,
+  Activity, Sliders, Database, User, Check, Copy, RefreshCw
 } from 'lucide-react';
 import apiClient from '../../api/client';
 import './Agent.css';
@@ -17,7 +17,7 @@ export default function Agent() {
   const [conversations, setConversations] = useState([]);
   const [currentConversation, setCurrentConversation] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [_searchQuery, _setSearchQuery] = useState('');
 
   // Input settings
   const [inputValue, setInputValue] = useState('');
@@ -136,7 +136,7 @@ export default function Agent() {
           setModelName(status.models_available[0]);
         }
       }
-    } catch (e) {
+    } catch (_err) {
       setAgentStatus('OFFLINE');
     } finally {
       setIsSyncing(false);
@@ -144,7 +144,7 @@ export default function Agent() {
   };
 
   // Load a single conversation detail
-  const handleSelectConversation = async (conv) => {
+  const _handleSelectConversation = async (conv) => {
     try {
       setLoading(true);
       const detail = await apiClient.get(`/agent/conversations/${conv.id}`);
@@ -160,8 +160,8 @@ export default function Agent() {
         setSelectedAttack(null);
         setSelectedIncident(null);
       }
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -185,7 +185,7 @@ export default function Agent() {
   };
 
   // Delete conversation
-  const handleDeleteConversation = async (id, e) => {
+  const _handleDeleteConversation = async (id, e) => {
     e.stopPropagation();
     try {
       await apiClient.delete(`/agent/conversations/${id}`);
@@ -425,7 +425,7 @@ export default function Agent() {
               return updated;
             });
           }
-        } catch (err) {}
+        } catch (_err) {}
       }
 
       // Sync conversations list
@@ -758,8 +758,8 @@ export default function Agent() {
     });
   };
 
-  const filteredConversations = conversations.filter(c =>
-    (c.title || '').toLowerCase().includes(searchQuery.toLowerCase())
+  const _filteredConversations = conversations.filter(c =>
+    (c.title || '').toLowerCase().includes(_searchQuery.toLowerCase())
   );
 
   return (

@@ -1,5 +1,4 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Shield, Globe, Cpu } from 'lucide-react';
 
 const countryCoords = {
   'United States': { lat: 37.0902, lon: -95.7129, code: 'US' },
@@ -611,7 +610,6 @@ export default function HolographicGlobe({ attacks = [], onHover, onClickIp }) {
         animStateRef.current.markers.forEach((m, idx) => {
           // Add small longitude coordinate jitter offset to separate overlapping nodes
           const jitter = (idx * 1.5) % 8 - 4;
-          const rotatedVec = rotateX(rotateY({ x: m.x, y: m.y, z: m.z }, ry), rx);
           markersToDraw.push({
             x: m.x,
             y: m.y + jitter,
