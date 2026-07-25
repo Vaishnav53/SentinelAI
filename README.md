@@ -138,10 +138,6 @@ Logs and threat signatures captured from SSH, Telnet, HTTP, and FTP honey-pots.
 Malicious file upload nodes, MD5 signature correlation, and dynamic simulation environments.
 ![Sandbox Emulation](docs/assets/screenshots/reports.png)
 
-### 📊 Aggregated Threat Correlation Graph
-Visualizing attacker coordinate vectors, network connections, and intrusion graphs.
-![Correlation Graph](docs/assets/screenshots/correlation.png)
-
 ---
 
 ## ⚡ Quick Setup & Installation

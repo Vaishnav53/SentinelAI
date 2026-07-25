@@ -20,11 +20,11 @@ This document provides a comprehensive specification of every monitoring, visual
 
 ---
 
-## 🌿 3. Threat Correlation Engine (`/correlation`)
-* **Graph Visualization**: Renders an interactive threat correlation node graph linking source IPs, attack vectors, and targeted services.
-* **Incident Clustering**: Groups related micro-events (e.g. repeated SSH login attempts + HTTP path traversal) into aggregated **Correlated Incidents**.
+## 🌿 3. Threat Correlation Engine
+* **Automated Incident Correlation**: Continuously clusters related micro-events (e.g. repeated SSH login attempts + HTTP path traversal) into aggregated **Correlated Incidents** on the backend.
 * **Threat Score Weighting**: Computes dynamic 0–100 risk scores based on attack frequency, severity, and payload signatures.
 * **MITRE ATT&CK Mapping**: Cross-references correlated incidents to specific MITRE tactics and techniques (e.g., T1110, T1059, T1190).
+* **Cross-System Telemetry**: Correlated incident findings feed directly into the SOC Dashboard, AI Assistant Workspace (`/agent`), PDF Reports (`/reports`), and active incident response workflows.
 
 ---
 
@@ -65,7 +65,7 @@ This document provides a comprehensive specification of every monitoring, visual
   * **Investigator Tab (Phase 15B)**: Dedicated incident/attack selection panel with **7 Structured AI Investigation Actions**:
     1. `Analyze Incident`: Deep diagnostic breakdown of the selected threat event.
     2. `Explain Severity`: Contextual explanation of the assigned risk rating.
-    3. `Extract IOCs`: Automated extraction of IP addresses, domains, hashes, and payload patterns.
+    3. `Extract IOCs`: Automated extraction of Indicators of Compromise.
     4. `Recommend Containment`: Step-by-step mitigation and containment guidance.
     5. `Map to MITRE`: Automatic cross-referencing with MITRE ATT&CK tactics and techniques.
     6. `Generate Timeline`: Reconstruction of event sequences leading up to the incident.
@@ -82,10 +82,10 @@ This document provides a comprehensive specification of every monitoring, visual
 
 ---
 
-## ⚙️ 10. Settings & Thresholds (`/settings`)
-* **AI Settings**: View AI status and threshold settings.
-* **Severity Thresholds**: Adjust threat score multipliers and alert sensitivity limits.
-* **System Preferences**: Configure refresh intervals and theme options.
+## ⚙️ 10. System Configuration & Alert Thresholds
+* **Internal Platform Configuration**: Manages backend configuration, API bindings, data retention parameters, and integration endpoints.
+* **Alert Sensitivity Thresholds**: Maintains dynamic threat score multipliers and alert notification sensitivity levels (`/settings` API).
+* **Notification Channels**: Supports webhook integrations (Slack, Discord) and SMTP alert recipient settings.
 
 ---
 

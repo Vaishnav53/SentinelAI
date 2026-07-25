@@ -18,7 +18,8 @@ import {
   GitBranch,
   Folder,
   Skull,
-  Workflow
+  Workflow,
+  Globe
 } from 'lucide-react';
 import apiClient from '../api/client';
 import './DashboardLayout.css';
@@ -244,14 +245,12 @@ export default function DashboardLayout() {
 
   const menuItems = [
     { name: 'Dashboard', path: '/', icon: Activity },
-    { name: 'Incident Response', path: '/attacks', icon: Shield },
-    { name: 'Threat Correlation', path: '/correlation', icon: GitBranch },
-    { name: 'Sandbox Console', path: '/sandbox', icon: Folder },
-    { name: 'WAF Manager', path: '/waf', icon: ShieldAlert },
-    { name: 'Honeypot Lab', path: '/sensors', icon: Radio },
     { name: 'AI Assistant', path: '/agent', icon: Terminal },
-    { name: 'Reports', path: '/reports', icon: FileText },
-    { name: 'Settings', path: '/settings', icon: Settings },
+    { name: 'Threat Intelligence', path: '/attackers', icon: Globe },
+    { name: 'Live Attack Feed', path: '/attacks', icon: AlertTriangle },
+    { name: 'Honeypot Lab', path: '/sensors', icon: Radio },
+    { name: 'WAF Manager', path: '/waf', icon: ShieldAlert },
+    { name: 'Reports', path: '/reports', icon: FileText }
   ];
 
   return (

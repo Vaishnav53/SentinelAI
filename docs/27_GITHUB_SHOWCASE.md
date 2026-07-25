@@ -28,11 +28,10 @@ Include a 1200x400 SVG/PNG banner graphic at the top of `README.md`:
 
 ### B. Curated Screenshot Portfolio
 Ensure high-resolution 1080p screenshots exist in `docs/assets/screenshots/`:
-1. `dashboard.png`: SOC Command Center with system vitals, map, and telemetry ticker.
+1. `dashboard.png`: SOC Command Center with system vitals, map, and telemetry ticker displaying the 7-item sidebar navigation.
 2. `copilot.png`: AI Copilot & AI Investigator Workspace with threat context panel.
 3. `honeypot.png`: Honeypot Decoy Lab showing SSH, HTTP, FTP, Telnet hit counters.
 4. `reports.png`: Executive Reports & Decoy Sandbox file scanner view.
-5. `correlation.png`: Interactive Threat Correlation graph and node links.
 
 ### C. Recommended Animated Demonstration GIFs
 Convert short 10-second screen captures into optimized GIFs (`docs/assets/gifs/`):

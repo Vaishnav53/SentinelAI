@@ -34,18 +34,21 @@ SentinelAI is a local-first defensive cybersecurity platform that combines SOC v
 - Portfolio reviewers
 - Authorized blue-team environments
 
-## Major Domains
+## Major Navigation & Engine Domains
 
+### Core Navigation Views:
 - SOC Overview (`/`)
-- Incident Response (`/attacks`)
 - AI Assistant & Investigator (`/agent`)
-- Honeypot Operations (`/sensors`)
-- Sandbox Console (`/sandbox`)
-- WAF Manager (`/waf`)
 - Threat Intelligence (`/attackers`)
-- Threat Correlation (`/correlation`)
+- Incident Response (`/attacks`)
+- Honeypot Operations (`/sensors`)
+- WAF Manager (`/waf`)
 - Incident Reporting (`/reports`)
-- Platform Settings (`/settings`)
+
+### Subsystem & Backend Engines:
+- Sandbox Console (`/sandbox`)
+- Automated Threat Correlation Engine (`services/correlation_engine.py`)
+- System Configuration & Alert Thresholds (`api/settings.py`)
 
 ## Definition of Done
 

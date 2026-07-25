@@ -6,9 +6,7 @@ import AttackFeed from '../pages/attack-feed/AttackFeed';
 import HoneypotLab from '../pages/honeypot-lab/HoneypotLab';
 import Agent from '../pages/agent/Agent';
 import Reports from '../pages/reports/Reports';
-import SettingsPage from '../pages/settings/Settings';
 import WAFManager from '../pages/waf/WAFManager';
-import CorrelationDashboard from '../pages/correlation/CorrelationDashboard';
 import SandboxDashboard from '../pages/sandbox/SandboxDashboard';
 import AttackerProfiles from '../pages/attackers/AttackerProfiles';
 import PlaybooksConsole from '../pages/playbooks/PlaybooksConsole';
@@ -25,10 +23,6 @@ const router = createBrowserRouter([
       {
         path: 'attacks',
         element: <AttackFeed />
-      },
-      {
-        path: 'correlation',
-        element: <CorrelationDashboard />
       },
       {
         path: 'sandbox',
@@ -57,10 +51,6 @@ const router = createBrowserRouter([
       {
         path: 'reports',
         element: <Reports />
-      },
-      {
-        path: 'settings',
-        element: <SettingsPage />
       }
     ]
   }
