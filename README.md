@@ -87,24 +87,24 @@ SentinelAI is an advanced, local-first Security Operations Center (SOC) simulati
 
 ```mermaid
 graph TB
-    subgraph Client [Frontend UI — React / Vite (Port 5173)]
-        UI[SOC Command Center]
-        AI_WS[AI Copilot & Investigator Workspace]
+    subgraph Client ["Frontend UI — React / Vite (Port 5173)"]
+        UI["SOC Command Center"]
+        AI_WS["AI Copilot & Investigator Workspace"]
     end
 
-    subgraph Backend [Backend Service — FastAPI / Uvicorn (Port 8000)]
-        API[API Routers /api/*]
-        WS_Manager[WebSocket Alert Manager]
-        Corr_Engine[Threat Correlation Engine]
-        WAF_Engine[Active Defense WAF Engine]
-        Decoy_Sensors[Multi-Protocol Honeypots]
-        AI_Adapter[AI Provider & Fallback Engine]
+    subgraph Backend ["Backend Service — FastAPI / Uvicorn (Port 8000)"]
+        API["API Routers /api/*"]
+        WS_Manager["WebSocket Alert Manager"]
+        Corr_Engine["Threat Correlation Engine"]
+        WAF_Engine["Active Defense WAF Engine"]
+        Decoy_Sensors["Multi-Protocol Honeypots"]
+        AI_Adapter["AI Provider & Fallback Engine"]
     end
 
-    subgraph Storage_AI [Persistence & AI Infrastructure]
-        DB[(SQLite / PostgreSQL DB)]
-        Groq_Cloud[Groq Cloud AI]
-        Local_Fallback[Deterministic Local Fallback Engine]
+    subgraph Storage_AI ["Persistence & AI Infrastructure"]
+        DB[("SQLite / PostgreSQL DB")]
+        Groq_Cloud["Groq Cloud AI"]
+        Local_Fallback["Deterministic Local Fallback Engine"]
     end
 
     UI -->|REST API| API

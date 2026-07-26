@@ -8,32 +8,32 @@ This document provides a technical walkthrough of SentinelAI’s architecture, d
 
 ```mermaid
 graph TB
-    subgraph Client [Frontend UI Layer — React / Vite (Port 5173)]
-        UI[SOC Command Center]
-        AI_WS[AI Security Copilot & Investigator Workspace]
-        WS_Client[WebSocket Telemetry Listener]
+    subgraph Client ["Frontend UI Layer — React / Vite (Port 5173)"]
+        UI["SOC Command Center"]
+        AI_WS["AI Security Copilot & Investigator Workspace"]
+        WS_Client["WebSocket Telemetry Listener"]
     end
 
-    subgraph Reverse_Proxy [Reverse Proxy Layer (Phase 16 Support)]
-        Nginx[Nginx SSL / Reverse Proxy (Port 80/443)]
+    subgraph Reverse_Proxy ["Reverse Proxy Layer (Phase 16 Support)"]
+        Nginx["Nginx SSL / Reverse Proxy (Port 80/443)"]
     end
 
-    subgraph Backend [Backend Service Layer — FastAPI / Uvicorn (Port 8000)]
-        Uvicorn[FastAPI / Uvicorn Application]
-        Router[API Routers /api/*]
-        WS_Manager[WebSocket Alert Manager]
-        Corr_Engine[Threat Correlation Engine]
-        WAF_Engine[Active Defense WAF Engine]
-        Decoy_Sensors[Multi-Protocol Honeypot Listeners]
-        AI_Adapter[AI Provider & Fallback Engine]
-        Report_Engine[Executive Report Generator]
+    subgraph Backend ["Backend Service Layer — FastAPI / Uvicorn (Port 8000)"]
+        Uvicorn["FastAPI / Uvicorn Application"]
+        Router["API Routers /api/*"]
+        WS_Manager["WebSocket Alert Manager"]
+        Corr_Engine["Threat Correlation Engine"]
+        WAF_Engine["Active Defense WAF Engine"]
+        Decoy_Sensors["Multi-Protocol Honeypot Listeners"]
+        AI_Adapter["AI Provider & Fallback Engine"]
+        Report_Engine["Executive Report Generator"]
     end
 
-    subgraph Persistence [Data Persistence & AI Services]
-        DB[(SQLite / PostgreSQL Database)]
-        Groq_Cloud[Groq Cloud LLM Service]
-        Local_Fallback[Deterministic Local Fallback Engine]
-        GeoIP_API[External GeoIP Service]
+    subgraph Persistence ["Data Persistence & AI Services"]
+        DB[("SQLite / PostgreSQL Database")]
+        Groq_Cloud["Groq Cloud LLM Service"]
+        Local_Fallback["Deterministic Local Fallback Engine"]
+        GeoIP_API["External GeoIP Service"]
     end
 
     UI -->|HTTP / REST API| Router

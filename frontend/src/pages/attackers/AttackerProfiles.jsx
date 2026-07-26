@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Skull, AlertTriangle, ShieldAlert, Cpu, Network, MapPin, ChevronRight, Activity, Search, ShieldX, Play, CheckCircle } from 'lucide-react';
+import { Skull, Cpu, MapPin, Search, Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
 import './AttackerProfiles.css';
 
 export default function AttackerProfiles() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [attackers, setAttackers] = useState([]);
   const [selectedIp, setSelectedIp] = useState(null);
   const [profile, setProfile] = useState(null);

@@ -9,14 +9,14 @@
 
 ```mermaid
 flowchart LR
-    Sensors[Honeypots and WAF Engine] --> API[FastAPI Backend Layer]
-    API --> Services[Correlation & Services]
-    Services --> DB[(SQLite / PostgreSQL)]
-    Services --> WS[WebSocket Manager]
-    Services --> AI[Groq Cloud & Local Fallback Engine]
-    DB --> Reports[Report Engine]
-    DB --> Intelligence[MITRE & IOC Mapping]
-    WS --> UI[React Frontend UI]
+    Sensors["Honeypots and WAF Engine"] --> API["FastAPI Backend Layer"]
+    API --> Services["Correlation & Services"]
+    Services --> DB[("SQLite / PostgreSQL")]
+    Services --> WS["WebSocket Manager"]
+    Services --> AI["Groq Cloud & Local Fallback Engine"]
+    DB --> Reports["Report Engine"]
+    DB --> Intelligence["MITRE & IOC Mapping"]
+    WS --> UI["React Frontend UI"]
     API --> UI
 ```
 

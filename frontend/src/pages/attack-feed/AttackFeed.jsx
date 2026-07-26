@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Search, Filter, ShieldCheck, ChevronRight, RefreshCw, AlertOctagon, Cpu, User, Check, AlertTriangle, Play, MessageSquare, ClipboardList, ShieldAlert } from 'lucide-react';
+import { Shield, Search, ChevronRight, RefreshCw, AlertOctagon, Cpu, User, AlertTriangle, Play, MessageSquare, ShieldAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
 import './AttackFeed.css';

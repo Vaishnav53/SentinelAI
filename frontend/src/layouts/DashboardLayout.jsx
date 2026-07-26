@@ -6,19 +6,12 @@ import {
   Radio, 
   Terminal, 
   FileText, 
-  Settings, 
-  Cpu, 
   Server,
   AlertTriangle,
   Menu,
   X,
-  Database,
   Clock,
   ShieldAlert,
-  GitBranch,
-  Folder,
-  Skull,
-  Workflow,
   Globe
 } from 'lucide-react';
 import apiClient from '../api/client';

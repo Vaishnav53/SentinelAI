@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, ShieldAlert, Plus, ToggleLeft, ToggleRight, Trash2, Search, Filter, RefreshCw, Clock, Edit2, Play, Users, LayoutDashboard, Terminal, X } from 'lucide-react';
+import { Shield, ShieldAlert, Plus, ToggleLeft, ToggleRight, Trash2, Search, Filter, RefreshCw, Edit2, X } from 'lucide-react';
 import apiClient from '../../api/client';
 import './WAFManager.css';
 
 export default function WAFManager() {
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   
   // Status stats
