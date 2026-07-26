@@ -48,7 +48,7 @@ class PlaybookRunPayload(BaseModel):
     target_ip: str
 
 @router.get("", response_model=List[ThreatPlaybookRead])
-async def list_threat_playbooks(db: Session = Depends(get_db)):
+def list_threat_playbooks(db: Session = Depends(get_db)):
     """Retrieve all preconfigured and custom incident response playbooks."""
     # Seed default playbooks if none exist
     if db.query(ThreatPlaybook).count() == 0:
@@ -82,7 +82,7 @@ async def list_threat_playbooks(db: Session = Depends(get_db)):
     return db.query(ThreatPlaybook).all()
 
 @router.post("", response_model=ThreatPlaybookRead)
-async def create_custom_playbook(payload: PlaybookCreatePayload, db: Session = Depends(get_db)):
+def create_custom_playbook(payload: PlaybookCreatePayload, db: Session = Depends(get_db)):
     """Configure a custom threat response playbook workflow."""
     try:
         actions_list = [a.model_dump() for a in payload.actions]
@@ -112,7 +112,7 @@ async def create_custom_playbook(payload: PlaybookCreatePayload, db: Session = D
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/executions", response_model=List[PlaybookExecutionRead])
-async def list_playbook_executions(db: Session = Depends(get_db)):
+def list_playbook_executions(db: Session = Depends(get_db)):
     """Retrieve history of all automated playbook executions."""
     return db.query(PlaybookExecution).order_by(PlaybookExecution.created_at.desc()).all()
 

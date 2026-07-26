@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/attacker", tags=["Attacker Profiling"])
 
 @router.get("/profiles")
-async def get_attacker_profiles(db: Session = Depends(get_db)):
+def get_attacker_profiles(db: Session = Depends(get_db)):
     """Retrieve all unique attacking IPs with telemetry metrics aggregates."""
     try:
         service = AttackerProfilingService(db)
@@ -20,7 +20,7 @@ async def get_attacker_profiles(db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/profiles/{ip}")
-async def get_attacker_profile_detail(ip: str, db: Session = Depends(get_db)):
+def get_attacker_profile_detail(ip: str, db: Session = Depends(get_db)):
     """Retrieve details, timelines, playbooks execution, and MITRE maps for an attacker IP."""
     try:
         service = AttackerProfilingService(db)

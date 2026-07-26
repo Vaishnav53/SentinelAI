@@ -66,7 +66,7 @@ class WAFStatus(BaseModel):
     manual_rules_count: int
 
 @router.get("/rules", response_model=List[WAFRuleRead])
-async def get_waf_rules(
+def get_waf_rules(
     search: Optional[str] = None,
     action: Optional[str] = None,
     db: Session = Depends(get_db)
@@ -84,7 +84,7 @@ async def get_waf_rules(
     return query.order_by(WAFRule.created_at.desc()).all()
 
 @router.post("/rules", response_model=WAFRuleRead)
-async def create_waf_rule(payload: WAFRuleCreate, db: Session = Depends(get_db)):
+def create_waf_rule(payload: WAFRuleCreate, db: Session = Depends(get_db)):
     """Create a new manual security containment rule."""
     rule = WAFRule(
         ip_address=payload.ip_address,
@@ -110,7 +110,7 @@ async def create_waf_rule(payload: WAFRuleCreate, db: Session = Depends(get_db))
     return rule
 
 @router.put("/rules/{id}", response_model=WAFRuleRead)
-async def update_waf_rule(id: int, payload: WAFRuleUpdate, db: Session = Depends(get_db)):
+def update_waf_rule(id: int, payload: WAFRuleUpdate, db: Session = Depends(get_db)):
     """Edit details or enable/disable an existing WAF rule."""
     rule = db.query(WAFRule).filter(WAFRule.id == id).first()
     if not rule:
@@ -143,7 +143,7 @@ async def update_waf_rule(id: int, payload: WAFRuleUpdate, db: Session = Depends
     return rule
 
 @router.delete("/rules/{id}")
-async def delete_waf_rule(id: int, db: Session = Depends(get_db)):
+def delete_waf_rule(id: int, db: Session = Depends(get_db)):
     """Remove a security containment rule."""
     rule = db.query(WAFRule).filter(WAFRule.id == id).first()
     if not rule:
@@ -163,7 +163,7 @@ async def delete_waf_rule(id: int, db: Session = Depends(get_db)):
     return {"message": f"Rule {id} successfully deleted"}
 
 @router.get("/status", response_model=WAFStatus)
-async def get_waf_status(db: Session = Depends(get_db)):
+def get_waf_status(db: Session = Depends(get_db)):
     """Fetch aggregated defense metrics for WAF status dashboard widgets."""
     blocked_count = db.query(WAFHit).filter(WAFHit.action == "BLOCK").count()
     quarantined_count = db.query(WAFHit).filter(WAFHit.action == "QUARANTINE").count()
@@ -181,6 +181,6 @@ async def get_waf_status(db: Session = Depends(get_db)):
     )
 
 @router.get("/hits", response_model=List[WAFHitRead])
-async def get_waf_hits(db: Session = Depends(get_db)):
+def get_waf_hits(db: Session = Depends(get_db)):
     """Retrieve audit history logs of WAF rule matches."""
     return db.query(WAFHit).order_by(WAFHit.created_at.desc()).limit(100).all()

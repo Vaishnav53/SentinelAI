@@ -35,12 +35,12 @@ class GenerateReportPayload(BaseModel):
     target_id: str
 
 @router.get("/jobs", response_model=List[ReportJobRead])
-async def get_report_jobs(db: Session = Depends(get_db)):
+def get_report_jobs(db: Session = Depends(get_db)):
     """Retrieve list of all report jobs generated on the platform."""
     return db.query(ReportJob).order_by(ReportJob.created_at.desc()).all()
 
 @router.post("/jobs", response_model=Dict[str, Any])
-async def create_report_job(payload: Dict[str, Any], db: Session = Depends(get_db)):
+def create_report_job(payload: Dict[str, Any], db: Session = Depends(get_db)):
     """Standard report job creation entry."""
     job = ReportJob(
         job_type=payload.get("format", "PDF"),
@@ -62,7 +62,7 @@ async def create_report_job(payload: Dict[str, Any], db: Session = Depends(get_d
     }
 
 @router.delete("/jobs/{id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_report_job(id: int, db: Session = Depends(get_db)):
+def delete_report_job(id: int, db: Session = Depends(get_db)):
     """Delete a report job and its generated markdown artifact file."""
     job = db.query(ReportJob).filter(ReportJob.id == id).first()
     if not job:
@@ -82,7 +82,7 @@ async def delete_report_job(id: int, db: Session = Depends(get_db)):
     return None
 
 @router.get("/options")
-async def get_report_options(type: str, db: Session = Depends(get_db)):
+def get_report_options(type: str, db: Session = Depends(get_db)):
     """Fetch recent dynamic objects from DB to populate dropdown list based on report type."""
     options = []
     if type == "Threat Incident":

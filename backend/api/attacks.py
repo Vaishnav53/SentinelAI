@@ -160,7 +160,7 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 @router.get("", response_model=List[AttackEventRead])
-async def get_attacks(
+def get_attacks(
     db: Session = Depends(get_db),
     severity: Optional[str] = Query(None),
     attack_type: Optional[str] = Query(None),
@@ -202,7 +202,7 @@ async def get_attacks(
     return attacks
 
 @router.get("/stats", response_model=AttackStats)
-async def get_attack_stats(db: Session = Depends(get_db)):
+def get_attack_stats(db: Session = Depends(get_db)):
     """Calculate severity distribution, attack type distribution, and recent activity timeline."""
     total_count = db.query(AttackEvent).count()
     
@@ -250,7 +250,7 @@ async def get_attack_stats(db: Session = Depends(get_db)):
     )
 
 @router.get("/{id}", response_model=AttackEventRead)
-async def get_attack_details(id: int, db: Session = Depends(get_db)):
+def get_attack_details(id: int, db: Session = Depends(get_db)):
     """Get single attack event detail by database ID."""
     attack = db.query(AttackEvent).filter(AttackEvent.id == id).first()
     if not attack:

@@ -18,7 +18,7 @@ async def get_health():
     )
 
 @router.get("/services", response_model=ServiceHealthStatus)
-async def get_services_health(db: Session = Depends(get_db)):
+def get_services_health(db: Session = Depends(get_db)):
     """Detailed services health check. Verifies database connectivity dynamically."""
     
     # 1. Database Check

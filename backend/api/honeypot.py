@@ -14,12 +14,12 @@ class StartPayload(BaseModel):
 router = APIRouter(prefix="/honeypot", tags=["Honeypot Core"])
 
 @router.get("/status", response_model=Dict[str, Any])
-async def get_honeypot_status(db: Session = Depends(get_db), manager: HoneypotManager = Depends(get_honeypot_manager)):
+def get_honeypot_status(db: Session = Depends(get_db), manager: HoneypotManager = Depends(get_honeypot_manager)):
     """Retrieve the current online state and bind details of the HTTP Honeypot."""
     return manager.get_full_status()
 
 @router.post("/start", response_model=Dict[str, Any])
-async def start_honeypot_service(
+def start_honeypot_service(
     payload: StartPayload = None,
     db: Session = Depends(get_db), 
     manager: HoneypotManager = Depends(get_honeypot_manager)
@@ -30,13 +30,13 @@ async def start_honeypot_service(
     return manager.get_full_status()
 
 @router.post("/stop", response_model=Dict[str, Any])
-async def stop_honeypot_service(db: Session = Depends(get_db), manager: HoneypotManager = Depends(get_honeypot_manager)):
+def stop_honeypot_service(db: Session = Depends(get_db), manager: HoneypotManager = Depends(get_honeypot_manager)):
     """Deactivate the HTTP Honeypot background listener."""
     manager.stop()
     return manager.get_full_status()
 
 @router.post("/mode", response_model=Dict[str, Any])
-async def switch_honeypot_mode(
+def switch_honeypot_mode(
     payload: StartPayload,
     db: Session = Depends(get_db),
     manager: HoneypotManager = Depends(get_honeypot_manager)
@@ -45,7 +45,7 @@ async def switch_honeypot_mode(
     return manager.set_mode(lan_mode=payload.lan_mode)
 
 @router.get("/events", response_model=List[AttackEventRead])
-async def get_honeypot_captured_events(db: Session = Depends(get_db)):
+def get_honeypot_captured_events(db: Session = Depends(get_db)):
     """Fetch only attack events captured by the HTTP Honeypot."""
     return db.query(AttackEvent).filter(
         AttackEvent.destination_port == 8088
