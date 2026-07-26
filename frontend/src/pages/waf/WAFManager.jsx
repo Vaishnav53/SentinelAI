@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, ShieldAlert, Plus, ToggleLeft, ToggleRight, Trash2, Search, Filter, RefreshCw, Edit2, X } from 'lucide-react';
+import { Shield, ShieldAlert, Plus, ToggleLeft, ToggleRight, Trash2, Search, Filter, RefreshCw, Edit2, Users, X } from 'lucide-react';
 import apiClient from '../../api/client';
 import './WAFManager.css';
 
