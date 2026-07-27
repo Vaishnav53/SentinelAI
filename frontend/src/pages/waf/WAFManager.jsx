@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, ShieldAlert, Plus, ToggleLeft, ToggleRight, Trash2, Search, Filter, RefreshCw, Edit2, Users, X } from 'lucide-react';
 import apiClient from '../../api/client';
-import { useNotification } from '../../components/common/NotificationProvider';
 import './WAFManager.css';
 
 export default function WAFManager() {
-  const { notify, confirmAction } = useNotification();
   const [, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   
@@ -59,7 +57,6 @@ export default function WAFManager() {
       setStats(statsData);
     } catch (err) {
       console.error("Failed to load WAF telemetry:", err);
-      notify.error("WAF Load Error", "Failed to retrieve active firewall policies.");
     } finally {
       if (!isSilent) setLoading(false);
       setIsSyncing(false);
@@ -86,31 +83,20 @@ export default function WAFManager() {
       // Refresh status count
       const updatedStats = await apiClient.get('/waf/status');
       setStats(updatedStats);
-      notify.success("Rule Status Updated", `Defensive rule is now ${nextState ? 'enabled' : 'disabled'}.`);
     } catch (err) {
       console.error("Failed to toggle rule state:", err);
-      notify.error("Toggle Rule Failed", "Unable to update rule active status.");
     }
   };
 
   const handleDeleteRule = async (id) => {
-    const confirmed = await confirmAction({
-      title: "Delete WAF Rule",
-      message: "Are you sure you want to permanently delete this defensive rule?",
-      confirmLabel: "Delete Rule",
-      variant: "danger"
-    });
-    if (!confirmed) return;
-
+    if (!window.confirm("Are you sure you want to permanently delete this defensive rule?")) return;
     try {
       await apiClient.delete(`/waf/rules/${id}`);
       setRules(rules.filter(r => r.id !== id));
       const updatedStats = await apiClient.get('/waf/status');
       setStats(updatedStats);
-      notify.success("Rule Deleted", "The defensive rule was removed successfully.");
     } catch (err) {
       console.error("Failed to delete rule:", err);
-      notify.error("Delete Failed", "The system could not delete the rule.");
     }
   };
 

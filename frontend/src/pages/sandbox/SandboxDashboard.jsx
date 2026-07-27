@@ -2,11 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Layers, ShieldAlert, Cpu, HardDrive, Shield, Search, Copy, Check, Trash2, ShieldX, Clock, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
-import { useNotification } from '../../components/common/NotificationProvider';
 import './SandboxDashboard.css';
 
 export default function SandboxDashboard() {
-  const { notify, confirmAction } = useNotification();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [files, setFiles] = useState([]);
@@ -23,7 +21,7 @@ export default function SandboxDashboard() {
     malicious_count: 0,
     suspicious_count: 0,
     clean_count: 0,
-    quarantined_count: 0
+    storage_bytes: 0
   });
 
   const fetchData = async () => {
@@ -31,7 +29,7 @@ export default function SandboxDashboard() {
       setLoading(true);
       const [filesData, metricsData] = await Promise.all([
         apiClient.get('/sandbox/files'),
-        apiClient.get('/sandbox/metrics')
+        apiClient.get('/sandbox/status')
       ]);
       setFiles(filesData);
       setStatusMetrics(metricsData);
@@ -46,7 +44,6 @@ export default function SandboxDashboard() {
       }
     } catch (err) {
       console.error("Failed to fetch sandbox details:", err);
-      notify.error("Sandbox Telemetry Error", "Unable to retrieve sandbox analysis metrics.");
     } finally {
       setLoading(false);
     }
@@ -65,23 +62,12 @@ export default function SandboxDashboard() {
 
   // Contain file action
   const handleContain = async (fileId) => {
-    const confirmed = await confirmAction({
-      title: "Quarantine File and Block Source",
-      message: "The file will be quarantined and the detected source IP will be blocked.",
-      confirmLabel: "Quarantine & Block",
-      cancelLabel: "Cancel",
-      variant: "danger"
-    });
-
-    if (!confirmed) return;
-
+    if (!window.confirm("Are you sure you want to quarantine this file and block the uploader IP?")) return;
     try {
       await apiClient.post(`/sandbox/files/${fileId}/contain`);
       await fetchData();
-      notify.success("File Quarantined", "The file has been quarantined and the source IP blocked.");
     } catch (err) {
       console.error("Containment action failed:", err);
-      notify.error("Containment Failed", "Unable to quarantine file or block IP.");
     }
   };
 

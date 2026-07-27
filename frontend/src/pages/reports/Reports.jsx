@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Download, Play, Trash2, ShieldAlert, Cpu, FileSpreadsheet, CheckCircle, Clock } from 'lucide-react';
 import apiClient from '../../api/client';
-import { useNotification } from '../../components/common/NotificationProvider';
 import './Reports.css';
 
 export default function Reports() {
-  const { notify, confirmAction } = useNotification();
   const [loading, setLoading] = useState(true);
   const [jobs, setJobs] = useState([]);
   
@@ -28,7 +26,6 @@ export default function Reports() {
       setJobs(data);
     } catch (e) {
       console.error("Failed to fetch jobs:", e);
-      notify.error("Load Error", "Unable to retrieve report history.");
     } finally {
       setLoading(false);
     }
@@ -88,14 +85,7 @@ export default function Reports() {
   };
 
   const handleDeleteJob = async (jobId) => {
-    const confirmed = await confirmAction({
-      title: "Delete Report",
-      message: "This report artifact will be permanently deleted. This action cannot be undone.",
-      confirmLabel: "Delete Report",
-      cancelLabel: "Cancel",
-      variant: "danger"
-    });
-    if (!confirmed) return;
+    if (!window.confirm("Are you sure you want to permanently delete this report artifact?")) return;
     try {
       await apiClient.delete(`/reports/jobs/${jobId}`);
       setJobs(jobs.filter(j => j.id !== jobId));
@@ -104,10 +94,8 @@ export default function Reports() {
         setAiSummary('');
         setCurrentJobId(null);
       }
-      notify.success("Report Deleted", "The report artifact has been permanently deleted.");
     } catch (e) {
       console.error("Failed to delete report job:", e);
-      notify.error("Unable to Delete Report", "The backend did not accept the deletion request.");
     }
   };
 
