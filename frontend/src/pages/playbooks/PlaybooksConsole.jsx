@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Sliders, Plus, Terminal, Workflow, Trash2, CheckCircle, AlertTriangle, RefreshCw, Layers } from 'lucide-react';
 import apiClient from '../../api/client';
+import { useNotification } from '../../components/common/NotificationProvider';
 import './PlaybooksConsole.css';
 
 export default function PlaybooksConsole() {
+  const { notify } = useNotification();
   const [playbooks, setPlaybooks] = useState([]);
   const [executions, setExecutions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +36,7 @@ export default function PlaybooksConsole() {
       setExecutions(executionsData);
     } catch (err) {
       console.error("Failed to load playbooks console details:", err);
+      notify.error("Data Load Error", "Failed to retrieve playbooks and execution logs.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -58,7 +61,7 @@ export default function PlaybooksConsole() {
   const handleCreatePlaybook = async (e) => {
     e.preventDefault();
     if (!newName || actionsList.length === 0) {
-      alert("Please enter a playbook name and add at least one execution step.");
+      notify.warning("Invalid Input", "Please enter a playbook name and add at least one execution step.");
       return;
     }
 
@@ -78,8 +81,10 @@ export default function PlaybooksConsole() {
       
       // Reload details
       fetchData();
+      notify.success("Playbook Created", `Successfully deployed playbook: ${newName}`);
     } catch (err) {
       console.error("Failed to save custom playbook workflow:", err);
+      notify.error("Save Failed", "Could not save the custom playbook workflow.");
     }
   };
 

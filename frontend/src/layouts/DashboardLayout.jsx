@@ -15,9 +15,9 @@ import {
   Globe
 } from 'lucide-react';
 import apiClient from '../api/client';
-import './DashboardLayout.css';
+import { NotificationProvider } from '../components/common/NotificationProvider';
 
-export default function DashboardLayout() {
+function DashboardLayoutMain() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [backendStatus, setBackendStatus] = useState('CHECKING');
@@ -435,5 +435,13 @@ export default function DashboardLayout() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function DashboardLayout() {
+  return (
+    <NotificationProvider>
+      <DashboardLayoutMain />
+    </NotificationProvider>
   );
 }

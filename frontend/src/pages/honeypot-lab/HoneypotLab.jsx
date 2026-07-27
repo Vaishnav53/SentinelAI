@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Radio, Power, AlertTriangle, ShieldCheck, Terminal, Copy, Check, Activity, Eye, Cpu } from 'lucide-react';
 import apiClient from '../../api/client';
 import HoneypotEventDrawer from '../../components/honeypot/HoneypotEventDrawer';
+import { useNotification } from '../../components/common/NotificationProvider';
 import './HoneypotLab.css';
 
 export default function HoneypotLab() {
+  const { notify, confirmAction } = useNotification();
   const navigate = useNavigate();
   const [sensors, setSensors] = useState([]);
   const [honeypotStatus, setHoneypotStatus] = useState('OFFLINE');
@@ -45,22 +47,18 @@ export default function HoneypotLab() {
   const applyStatusData = (statusData) => {
     if (!statusData) return;
     setHoneypotStatus(statusData.status || 'OFFLINE');
-    setHoneypotUrl(statusData.url || 'http://127.0.0.1:8088');
-    setIsReady(!!statusData.ready);
-    setLanMode(!!statusData.lan_mode);
+    setHoneypotUrl(statusData.url || (statusData.lan_mode ? `http://${statusData.lan_ip}:8088` : 'http://127.0.0.1:8088'));
+    setLanMode(Boolean(statusData.lan_mode));
+    setIsReady(Boolean(statusData.ready));
     setLanIp(statusData.lan_ip || "127.0.0.1");
-    setErrorMessage(statusData.error || null);
+    if (statusData.error) {
+      setErrorMessage(statusData.error);
+    }
   };
 
-  const fetchStatusAndSensors = async () => {
+  const fetchHoneypotStatus = async () => {
     try {
-      setLoading(true);
-      const [sensorsData, statusData, eventsData] = await Promise.all([
-        apiClient.get('/sensors'),
-        apiClient.get('/honeypot/status'),
-        apiClient.get('/honeypot/events')
-      ]);
-      setSensors(sensorsData);
+      const statusData = await apiClient.get('/honeypot/status');
       applyStatusData(statusData);
       setLiveActivity(eventsData);
     } catch (e) {
@@ -162,10 +160,14 @@ export default function HoneypotLab() {
     if (isTransitioning) return;
 
     if (targetLanMode) {
-      const confirmLan = window.confirm(
-        "WARNING: Enabling LAN Mode will bind the vulnerable sandbox decoy server to 0.0.0.0, allowing inbound connections from your local network subnet.\n\nEnsure your network is trusted. Proceed?"
-      );
-      if (!confirmLan) return;
+      const confirmed = await confirmAction({
+        title: "Enable LAN Lab Mode",
+        message: "Aetheris will listen on 0.0.0.0 and accept connections from devices on the local network. Enable this only on a trusted network.",
+        confirmLabel: "Enable LAN Mode",
+        cancelLabel: "Cancel",
+        variant: "warning"
+      });
+      if (!confirmed) return;
     }
 
     try {
