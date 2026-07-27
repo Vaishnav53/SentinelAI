@@ -1423,24 +1423,44 @@ class HoneypotManager:
         self.last_error: Optional[str] = None
 
     def get_local_lan_ip(self) -> str:
-        """Resolve primary LAN IPv4 address non-blocking without external network hangs."""
+        """Resolve primary LAN IPv4 address non-blocking without external network hangs or virtual adapter selection."""
         import socket
+
+        def is_valid_lan_ip(ip: str) -> bool:
+            if not ip or not isinstance(ip, str):
+                return False
+            if ip.startswith("127.") or ip.startswith("169.254.") or ip.startswith("192.168.56."):
+                return False
+            parts = ip.split('.')
+            if len(parts) != 4:
+                return False
+            try:
+                if parts[0] == "172" and 17 <= int(parts[1]) <= 31:
+                    return False
+            except ValueError:
+                return False
+            return True
+
+        # Strategy 1: UDP routing socket test to standard gateway/internet targets (short 0.2s timeout)
+        for target in [("8.8.8.8", 80), ("1.1.1.1", 80), ("10.255.255.255", 1)]:
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.settimeout(0.2)
+                s.connect(target)
+                ip = s.getsockname()[0]
+                s.close()
+                if is_valid_lan_ip(ip):
+                    return ip
+            except Exception:
+                pass
+
+        # Strategy 2: Inspect host by name IP list
         try:
             hostname = socket.gethostname()
-            local_ip = socket.gethostbyname(hostname)
-            if local_ip and not local_ip.startswith("127.") and not local_ip.startswith("169.254."):
-                return local_ip
-        except Exception:
-            pass
-
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.settimeout(0.2)
-            s.connect(("10.255.255.255", 1))
-            ip = s.getsockname()[0]
-            s.close()
-            if ip and not ip.startswith("127."):
-                return ip
+            host_ips = socket.gethostbyname_ex(hostname)[2]
+            for ip in host_ips:
+                if is_valid_lan_ip(ip):
+                    return ip
         except Exception:
             pass
 

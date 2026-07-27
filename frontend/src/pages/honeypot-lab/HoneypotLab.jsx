@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Radio, Power, AlertTriangle, ShieldCheck, Terminal, Copy, Check, Activity } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Radio, Power, AlertTriangle, ShieldCheck, Terminal, Copy, Check, Activity, Eye, Cpu } from 'lucide-react';
 import apiClient from '../../api/client';
+import HoneypotEventDrawer from '../../components/honeypot/HoneypotEventDrawer';
 import './HoneypotLab.css';
 
 export default function HoneypotLab() {
+  const navigate = useNavigate();
   const [sensors, setSensors] = useState([]);
   const [honeypotStatus, setHoneypotStatus] = useState('OFFLINE');
   const [honeypotUrl, setHoneypotUrl] = useState('http://127.0.0.1:8088');
@@ -18,6 +21,7 @@ export default function HoneypotLab() {
   const [errorMessage, setErrorMessage] = useState(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [statusNotice, setStatusNotice] = useState(null);
+  const [selectedDrawerEvent, setSelectedDrawerEvent] = useState(null);
 
   const formatLocalTime = (utcString) => {
     if (!utcString) return "";
@@ -257,26 +261,53 @@ export default function HoneypotLab() {
       <div className="main-honeypot-controller card-cyber">
         <div className="hp-control-header">
           <div className="hp-meta-desc">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span className={`badge badge-${honeypotStatus.toLowerCase()}`}>{honeypotStatus}</span>
-              {statusNotice && <span className="text-purple font-mono text-xxs animate-pulse">{statusNotice}</span>}
+              <span className="badge font-mono" style={{ background: 'rgba(88, 166, 255, 0.1)', border: '1px solid rgba(88, 166, 255, 0.2)', color: '#58a6ff' }}>
+                {lanMode ? 'LAN MODE' : 'LOCAL MODE'}
+              </span>
+              {isReady && <span className="badge font-mono" style={{ background: 'rgba(0, 255, 136, 0.1)', border: '1px solid rgba(0, 255, 136, 0.2)', color: '#00ff88' }}>READY</span>}
+              {statusNotice && <span className="text-purple font-mono text-xxs animate-pulse" style={{ fontSize: '10px', color: '#a855f7' }}>{statusNotice}</span>}
             </div>
-            <h3 className="sensor-name">Local HTTP Decoy Service</h3>
-            <p className="text-muted font-mono">
-              {honeypotStatus === 'ONLINE' ? `Active Binding: ${lanMode ? '0.0.0.0:8088 (LAN)' : '127.0.0.1:8088 (Local Only)'}` : `Target Binding IP: ${lanMode ? '0.0.0.0 (LAN)' : '127.0.0.1 (Local Only)'}`}
+            <h3 className="sensor-name">Aetheris HTTP Decoy Service</h3>
+            <p className="text-muted font-mono" style={{ fontSize: '11px', color: '#8b949e' }}>
+              Bind Address: <strong className="text-white" style={{ color: '#ffffff' }}>{lanMode ? '0.0.0.0:8088' : '127.0.0.1:8088'}</strong> | LAN IP: <strong className="text-cyan" style={{ color: 'var(--cyan-primary)' }}>{lanIp}</strong> | Port: <strong className="text-white" style={{ color: '#ffffff' }}>8088</strong>
             </p>
+
+            {/* Dynamic Shareable URL Display & Actions */}
             {honeypotStatus === 'ONLINE' && isReady && (
-              <p className="text-cyan font-mono text-xs mt-1">
-                Access Lab Portal: <a href={honeypotUrl} target="_blank" rel="noopener noreferrer" className="underline text-cyan font-bold" style={{ textDecoration: 'underline' }}>{honeypotUrl}</a>
-              </p>
+              <div className="flex items-center gap-3 mt-2" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px', flexWrap: 'wrap' }}>
+                <span className="font-mono text-xs text-muted" style={{ fontSize: '11px' }}>
+                  Decoy Access URL: <a href={honeypotUrl} target="_blank" rel="noopener noreferrer" className="font-bold text-cyan" style={{ textDecoration: 'underline', color: 'var(--cyan-primary)' }}>{honeypotUrl}</a>
+                </span>
+
+                <button
+                  onClick={() => window.open(honeypotUrl, '_blank')}
+                  className="font-mono btn-action-cyber"
+                  style={{ padding: '4px 12px', fontSize: '10px', background: 'rgba(0, 229, 255, 0.15)', border: '1px solid var(--cyan-primary)', color: '#ffffff', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  Open Aetheris
+                </button>
+
+                <button
+                  onClick={() => copyToClipboard(honeypotUrl, 'main-url')}
+                  className="font-mono btn-action-cyber flex items-center gap-1"
+                  style={{ padding: '4px 12px', fontSize: '10px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)', color: '#c9d1d9', borderRadius: '4px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                >
+                  {copiedIndex === 'main-url' ? <Check size={11} className="text-green" /> : <Copy size={11} />}
+                  <span>{copiedIndex === 'main-url' ? 'Copied URL!' : 'Copy URL'}</span>
+                </button>
+              </div>
             )}
+
             {honeypotStatus === 'STARTING' && (
-              <p className="text-purple font-mono text-xs mt-1">
-                Starting listener on port 8088...
+              <p className="text-purple font-mono text-xs mt-1" style={{ fontSize: '11px', color: '#a855f7' }}>
+                Starting listener on port 8088 and verifying readiness...
               </p>
             )}
+
             {errorMessage && (
-              <p className="text-red font-mono text-xs mt-1">
+              <p className="text-red font-mono text-xs mt-1" style={{ fontSize: '11px', color: '#ff3366' }}>
                 ⚠️ {errorMessage}
               </p>
             )}
@@ -294,12 +325,12 @@ export default function HoneypotLab() {
         {honeypotStatus === 'ONLINE' && isReady ? (
           <div className="sensor-status-msg text-green font-mono">
             <ShieldCheck size={16} />
-            <span>DECOY ACTIVE: Listening on {lanMode ? `all interfaces (0.0.0.0) — LAN IP: ${lanIp}` : "loopback interface (127.0.0.1)"} port 8088. Capturing raw payloads.</span>
+            <span>DECOY ACTIVE: Listening on {lanMode ? `all interfaces (0.0.0.0) — Shareable LAN URL: ${honeypotUrl}` : `loopback interface (127.0.0.1) — Shareable URL: ${honeypotUrl}`}. Capturing raw payloads.</span>
           </div>
         ) : honeypotStatus === 'STARTING' ? (
           <div className="sensor-status-msg text-purple font-mono">
             <Activity size={16} className="animate-spin" />
-            <span>DECOY INITIALIZING: Binding to port 8088 and verifying socket readiness...</span>
+            <span>DECOY INITIALIZING: Rebinding listener interface and restarting HTTP Decoy…</span>
           </div>
         ) : (
           <div className="sensor-status-msg text-muted font-mono">
@@ -311,11 +342,11 @@ export default function HoneypotLab() {
         {/* Toggle switch for Local Only / LAN Mode */}
         <div className="binding-mode-selector mt-3 pt-3 border-top border-dark flex items-center justify-between" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '12px', marginTop: '12px' }}>
           <div className="flex flex-col">
-            <span className="font-mono text-xs text-white" style={{ fontSize: '11px' }}>BINDING INTERFACE MODE</span>
+            <span className="font-mono text-xs text-white" style={{ fontSize: '11px', fontWeight: 'bold' }}>BINDING INTERFACE MODE</span>
             <span className="text-muted text-xxs mt-0.5" style={{ fontSize: '10px', color: '#8b949e' }}>
               {lanMode
-                ? `LAN Lab Mode: Honeypot binds to 0.0.0.0 (LAN IPv4: ${lanIp}). Accepts connections from local subnet.`
-                : "Local Only Mode: Honeypot binds strictly to 127.0.0.1 (Loopback sandbox isolation)."}
+                ? `LAN Mode: Honeypot binds to 0.0.0.0:8088 (Accessible from other devices on your Wi-Fi/LAN at ${honeypotUrl}).`
+                : "Local Mode: Honeypot binds strictly to 127.0.0.1:8088 (Only accessible from this computer)."}
             </span>
             {lanMode && (
               <span className="text-yellow text-xxs font-mono mt-1" style={{ fontSize: '9px', color: '#ffd32a' }}>
@@ -325,7 +356,7 @@ export default function HoneypotLab() {
           </div>
 
           <div className="flex items-center gap-2" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="font-mono" style={{ fontSize: '10px', color: !lanMode ? 'var(--cyan-primary)' : '#8b949e' }}>LOCAL ONLY</span>
+            <span className="font-mono" style={{ fontSize: '10px', color: !lanMode ? 'var(--cyan-primary)' : '#8b949e', fontWeight: !lanMode ? 'bold' : 'normal' }}>LOCAL MODE</span>
             <label className="cyber-switch">
               <input
                 type="checkbox"
@@ -335,36 +366,48 @@ export default function HoneypotLab() {
               />
               <span className="slider round"></span>
             </label>
-            <span className="font-mono" style={{ fontSize: '10px', color: lanMode ? 'var(--yellow)' : '#8b949e' }}>LAN LAB</span>
+            <span className="font-mono" style={{ fontSize: '10px', color: lanMode ? 'var(--yellow)' : '#8b949e', fontWeight: lanMode ? 'bold' : 'normal' }}>LAN MODE</span>
           </div>
         </div>
       </div>
 
       {/* Access Modes HUD Clarification */}
       <div className="access-modes-clarification card-cyber font-mono" style={{ padding: '16px', fontSize: '10px' }}>
-        <div className="hud-title text-cyan mb-3 pb-1" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', fontWeight: 'bold', fontSize: '11px', letterSpacing: '0.05em' }}>HONEYPOT ACCESS MODES</div>
+        <div className="hud-title text-cyan mb-3 pb-1" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', fontWeight: 'bold', fontSize: '11px', letterSpacing: '0.05em' }}>HONEYPOT ACCESS MODES & FIREWALL DIRECTIVES</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
           <div>
-            <span className="text-white font-bold" style={{ fontSize: '11px' }}>1. LOCAL ONLY MODE</span>
+            <span className="text-white font-bold" style={{ fontSize: '11px' }}>1. LOCAL MODE</span>
             <p className="text-muted mt-1" style={{ color: '#8b949e', marginTop: '4px' }}>
-              Binds strictly to <strong>127.0.0.1</strong>. Works exclusively on this local machine. Recommended for safe local testing.
-              <br/><span className="text-cyan">URL: http://127.0.0.1:8088</span>
+              Binds strictly to <strong>127.0.0.1:8088</strong>. Local Mode is only accessible from this computer.
+              <br/><span className="text-cyan font-bold" style={{ color: 'var(--cyan-primary)' }}>URL: http://127.0.0.1:8088</span>
             </p>
           </div>
           <div>
-            <span className="text-white font-bold" style={{ fontSize: '11px' }}>2. LAN LAB MODE</span>
+            <span className="text-white font-bold" style={{ fontSize: '11px' }}>2. LAN MODE</span>
             <p className="text-muted mt-1" style={{ color: '#8b949e', marginTop: '4px' }}>
-              Binds to <strong>0.0.0.0</strong>. Exposes sandbox endpoints to other devices connected to the same Wi-Fi/LAN. 
-              <br/><span className="text-yellow">URL: {lanMode ? honeypotUrl : 'http://<your-laptop-lan-ip>:8088'}</span>
-              <br/><span className="text-red-alert font-bold" style={{ color: 'var(--yellow)' }}>* Windows Firewall must allow port 8088.</span>
+              Binds to <strong>0.0.0.0:8088</strong>. LAN Mode is accessible from other devices on the same network.
+              <br/><span className="text-yellow font-bold" style={{ color: '#ffd32a' }}>URL: {lanMode ? honeypotUrl : `http://${lanIp}:8088`}</span>
             </p>
           </div>
           <div>
-            <span className="text-white font-bold" style={{ fontSize: '11px', color: '#5f748d' }}>3. PUBLIC CLOUD MODE (FUTURE PHASE)</span>
-            <p className="text-muted mt-1" style={{ color: '#5f748d', marginTop: '4px' }}>
-              Exposes target decoy endpoints to the public internet (e.g. AWS/GCP static IPv4). Blocked in local sandbox mode.
-              <br/><span>URL: http://3.111.198.128:8088 (Unavailable)</span>
+            <span className="text-white font-bold" style={{ fontSize: '11px', color: 'var(--cyan-primary)' }}>3. WINDOWS FIREWALL DIRECTIVE</span>
+            <p className="text-muted mt-1" style={{ color: '#8b949e', marginTop: '4px' }}>
+              To allow inbound connections from another laptop, run Administrator PowerShell:
             </p>
+            <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+              <button
+                onClick={() => copyToClipboard('New-NetFirewallRule -DisplayName "SentinelAI Aetheris HTTP Decoy" -Direction Inbound -Protocol TCP -LocalPort 8088 -Action Allow -Profile Private', 'fw-add')}
+                style={{ padding: '3px 8px', fontSize: '9px', background: 'rgba(0, 229, 255, 0.1)', border: '1px solid var(--cyan-primary)', color: '#ffffff', cursor: 'pointer', borderRadius: '3px', fontFamily: 'var(--font-mono)' }}
+              >
+                {copiedIndex === 'fw-add' ? 'Copied Allow Rule!' : 'Copy Allow Firewall Command'}
+              </button>
+              <button
+                onClick={() => copyToClipboard('Remove-NetFirewallRule -DisplayName "SentinelAI Aetheris HTTP Decoy"', 'fw-del')}
+                style={{ padding: '3px 8px', fontSize: '9px', background: 'rgba(255, 51, 102, 0.1)', border: '1px solid rgba(255, 51, 102, 0.3)', color: '#ff3366', cursor: 'pointer', borderRadius: '3px', fontFamily: 'var(--font-mono)' }}
+              >
+                {copiedIndex === 'fw-del' ? 'Copied Remove Rule!' : 'Copy Remove Rule'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -513,49 +556,103 @@ export default function HoneypotLab() {
                 <th style={{ padding: '8px', color: 'var(--cyan-primary)' }}>SEVERITY</th>
                 <th style={{ padding: '8px', color: 'var(--cyan-primary)' }}>PAYLOAD PREVIEW</th>
                 <th style={{ padding: '8px', color: 'var(--cyan-primary)' }}>USER-AGENT</th>
+                <th style={{ padding: '8px', color: 'var(--cyan-primary)', textAlign: 'right' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
               {filteredActivity.length === 0 ? (
                 <tr>
-                  <td colSpan="8" style={{ padding: '20px', textAlign: 'center', color: '#8b949e' }}>
+                  <td colSpan="9" style={{ padding: '20px', textAlign: 'center', color: '#8b949e' }}>
                     No honeypot activity detected matching the filters. Send a test probe to port 8088 to verify telemetry.
                   </td>
                 </tr>
               ) : (
-                filteredActivity.map((activity, idx) => (
-                  <tr key={activity.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#c9d1d9' }}>
-                    <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>
-                      {formatLocalTime(activity.created_at)}
-                    </td>
-                    <td style={{ padding: '8px', color: '#ffffff' }}>{activity.source_ip}</td>
-                    <td style={{ padding: '8px' }}>
-                      <span style={{ color: activity.payload?.includes('Method: POST') || activity.attack_type?.includes('Login') || activity.attack_type?.includes('Upload') || activity.attack_type?.includes('Submission') ? '#ff9f43' : '#58a6ff' }}>
-                        {activity.payload?.includes('Method: POST') || activity.attack_type?.includes('Login') || activity.attack_type?.includes('Upload') || activity.attack_type?.includes('Submission') ? 'POST' : 'GET'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '8px', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {activity.payload?.split('\n')[1]?.replace('Path: ', '') || (activity.attack_type?.includes('Login') ? '/login' : (activity.attack_type?.includes('Upload') ? '/upload' : (activity.attack_type?.includes('Feedback') ? '/feedback' : '/')))}
-                    </td>
-                    <td style={{ padding: '8px', fontWeight: 'bold' }}>{activity.attack_type}</td>
-                    <td style={{ padding: '8px' }}>
-                      <span className={`badge badge-${activity.severity.toLowerCase()}`}>
-                        {activity.severity}
-                      </span>
-                    </td>
-                    <td style={{ padding: '8px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#8b949e' }}>
-                      {activity.payload}
-                    </td>
-                    <td style={{ padding: '8px', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#8b949e' }}>
-                      {activity.user_agent}
-                    </td>
-                  </tr>
-                ))
+                filteredActivity.map((activity, idx) => {
+                  const payloadPreview = activity.payload
+                    ? (activity.payload.length > 80 ? activity.payload.slice(0, 80) + '...' : activity.payload)
+                    : '';
+
+                  return (
+                    <tr key={activity.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#c9d1d9' }}>
+                      <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>
+                        {formatLocalTime(activity.created_at)}
+                      </td>
+                      <td style={{ padding: '8px', color: '#ffffff' }}>{activity.source_ip}</td>
+                      <td style={{ padding: '8px' }}>
+                        <span style={{ color: activity.payload?.includes('Method: POST') || activity.attack_type?.includes('Login') || activity.attack_type?.includes('Upload') || activity.attack_type?.includes('Submission') ? '#ff9f43' : '#58a6ff' }}>
+                          {activity.payload?.includes('Method: POST') || activity.attack_type?.includes('Login') || activity.attack_type?.includes('Upload') || activity.attack_type?.includes('Submission') ? 'POST' : 'GET'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '8px', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {activity.payload?.split('\n')[1]?.replace('Path: ', '') || (activity.attack_type?.includes('Login') ? '/login' : (activity.attack_type?.includes('Upload') ? '/upload' : (activity.attack_type?.includes('Feedback') ? '/feedback' : '/')))}
+                      </td>
+                      <td style={{ padding: '8px', fontWeight: 'bold' }}>{activity.attack_type}</td>
+                      <td style={{ padding: '8px' }}>
+                        <span className={`badge badge-${activity.severity?.toLowerCase()}`}>
+                          {activity.severity}
+                        </span>
+                      </td>
+                      <td style={{ padding: '8px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#8b949e' }}>
+                        {payloadPreview}
+                      </td>
+                      <td style={{ padding: '8px', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#8b949e' }}>
+                        {activity.user_agent}
+                      </td>
+                      <td style={{ padding: '8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <button
+                          onClick={() => setSelectedDrawerEvent(activity)}
+                          style={{
+                            padding: '3px 8px',
+                            fontSize: '10px',
+                            background: 'rgba(0, 229, 255, 0.1)',
+                            border: '1px solid rgba(0, 229, 255, 0.3)',
+                            color: 'var(--cyan-primary)',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            marginRight: '6px'
+                          }}
+                          title="View complete request evidence"
+                        >
+                          <Eye size={11} /> View Details
+                        </button>
+                        <button
+                          onClick={() => navigate(`/agent?analyze_attack=${activity.id}`)}
+                          style={{
+                            padding: '3px 8px',
+                            fontSize: '10px',
+                            background: 'rgba(139, 92, 246, 0.1)',
+                            border: '1px solid rgba(139, 92, 246, 0.4)',
+                            color: '#a78bfa',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                          title="Analyze event with AI Copilot"
+                        >
+                          <Cpu size={11} /> Analyze with AI
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Render Event Details Drawer when an event is selected */}
+      {selectedDrawerEvent && (
+        <HoneypotEventDrawer
+          event={selectedDrawerEvent}
+          onClose={() => setSelectedDrawerEvent(null)}
+        />
+      )}
     </div>
   );
 }

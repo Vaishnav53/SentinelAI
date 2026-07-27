@@ -455,14 +455,26 @@ export default function Agent() {
     }
   };
 
+  const analyzedAttackIdRef = useRef(null);
+
   // Trigger Automatic Attack Analysis (from URL or Context click)
   const triggerAttackAnalysis = async (attackId) => {
+    if (!attackId) return;
+    const parsedId = parseInt(attackId, 10);
+    if (isNaN(parsedId)) {
+      setMessages([{ role: 'assistant', content: `⚠️ Invalid attack event ID '${attackId}'. Must be a valid integer.` }]);
+      return;
+    }
+
+    if (analyzedAttackIdRef.current === parsedId) return; // Prevent duplicate trigger
+    analyzedAttackIdRef.current = parsedId;
+
     try {
       setLoading(true);
-      const attackDetails = await apiClient.get(`/attacks/${attackId}`);
+      const attackDetails = await apiClient.get(`/attacks/${parsedId}`);
       setSelectedAttack(attackDetails);
 
-      const analysis = await apiClient.post(`/agent/analyze/${attackId}`);
+      const analysis = await apiClient.post(`/agent/analyze/${parsedId}`);
 
       // Load newly created analysis conversation key
       const updatedConvs = await apiClient.get('/agent/conversations');
@@ -476,10 +488,13 @@ export default function Agent() {
       }
     } catch (e) {
       console.error("Attack analysis failed:", e);
+      const isNotFound = e.response?.status === 404 || e.status === 404;
       const isTimeout = (e.message || '').toLowerCase().includes('timeout') || e.code === 'ECONNABORTED';
-      const fallbackMsg = isTimeout
-        ? "The local AI model is online but took too long to respond. Try a smaller model, reduce max tokens, or retry."
-        : `Analysis failed: ${e.message || 'Server connection error.'}`;
+      const fallbackMsg = isNotFound
+        ? `⚠️ Honeypot attack event ID #${parsedId} could not be found or has been removed from database logs.`
+        : (isTimeout
+          ? "⚠️ The local AI model is online but took too long to respond. Try a smaller model, reduce max tokens, or retry."
+          : `⚠️ Security Analysis failed: ${e.message || 'Server connection error.'}`);
       setMessages([
         { role: 'assistant', content: fallbackMsg }
       ]);
