@@ -41,6 +41,105 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+def _generate_simulated_attack_event() -> Optional[dict]:
+    """Synchronous worker that creates, enriches, persists, and returns a simulated attack event."""
+    db = SessionLocal()
+    try:
+        # Random source country coordinates mapper list
+        countries = [
+            "United States", "China", "Germany", "India", "Russia",
+            "Netherlands", "Singapore", "Brazil", "Canada", "Australia",
+            "United Kingdom", "France", "Japan", "South Africa"
+        ]
+        src_country = random.choice(countries)
+
+        # Random severities and types
+        severities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+        sev = random.choices(severities, weights=[40, 30, 20, 10])[0]
+
+        attack_types = {
+            "LOW": ["Port Scan", "Ping Sweep", "Reconnaissance Probe"],
+            "MEDIUM": ["Config File Access", "SSH Probe", "Unauthorized Login Access"],
+            "HIGH": ["Brute Force Login", "XSS Attempt", "Directory Traversal"],
+            "CRITICAL": ["SQL Injection", "Remote Code Execution", "Buffer Overflow"]
+        }
+        attack_type = random.choice(attack_types[sev])
+
+        src_ip = f"{random.randint(1, 254)}.{random.randint(1, 254)}.{random.randint(1, 254)}.{random.randint(1, 254)}"
+        dest_port = random.choice([80, 22, 21, 23, 8088])
+
+        from backend.services.threat_intel import ThreatIntelService
+        service = ThreatIntelService(db)
+        intel = service.enrich_ip(src_ip)
+
+        new_event = AttackEvent(
+            external_id=f"SIM-{int(datetime.utcnow().timestamp())}",
+            attack_type=attack_type,
+            severity=sev,
+            status="NEW",
+            source_ip=src_ip,
+            source_port=random.randint(1024, 65535),
+            destination_port=dest_port,
+            protocol="TCP",
+            target_service="HTTP Honeypot" if dest_port == 8088 else ("SSH" if dest_port == 22 else "HTTP"),
+            country=intel["country"],
+            city=intel["city"],
+            payload="Simulated threat intelligence arc trace",
+            user_agent="SentinelAISimulator/1.0",
+            sensor_id="Simulated Sensor Node",
+            threat_score=intel["threat_score"],
+            confidence=intel["confidence"],
+            raw_metadata=json.dumps({
+                "latitude": intel.get("latitude", 0.0),
+                "longitude": intel.get("longitude", 0.0)
+            }),
+            created_at=datetime.utcnow()
+        )
+        db.add(new_event)
+
+        # Update http sensor heartbeat
+        sensor = db.query(HoneypotSensor).filter(HoneypotSensor.name == "HTTP Honeypot").first()
+        if sensor:
+            sensor.last_heartbeat = datetime.utcnow()
+            sensor.state = "ONLINE"
+
+        db.commit()
+        db.refresh(new_event)
+
+        event_data = {
+            "id": new_event.id,
+            "external_id": new_event.external_id,
+            "attack_type": new_event.attack_type,
+            "severity": new_event.severity,
+            "status": new_event.status,
+            "source_ip": new_event.source_ip,
+            "source_port": new_event.source_port,
+            "destination_port": new_event.destination_port,
+            "protocol": new_event.protocol,
+            "target_service": new_event.target_service,
+            "country": new_event.country,
+            "city": new_event.city,
+            "payload": new_event.payload,
+            "threat_score": new_event.threat_score,
+            "confidence": new_event.confidence,
+            "raw_metadata": new_event.raw_metadata,
+            "created_at": new_event.created_at.isoformat()
+        }
+
+        try:
+            from backend.services.notification import NotificationService
+            NotificationService(db).trigger_notifications(event_data)
+        except Exception as e:
+            logging.warning(f"Failed to trigger alerts: {e}")
+
+        return event_data
+    except Exception as ex:
+        db.rollback()
+        logging.error(f"Simulator error during attack generation: {ex}", exc_info=True)
+        return None
+    finally:
+        db.close()
+
 async def start_attack_simulator():
     """Background simulator feeding random live attack events to WebSocket subscribers."""
     logging.info("Threat attack simulator loop started.")
@@ -48,103 +147,15 @@ async def start_attack_simulator():
         while True:
             # We check if there are active WebSocket connections to run simulation
             if manager.active_connections:
-                db = SessionLocal()
-                try:
-                    # Random source country coordinates mapper list
-                    countries = [
-                        "United States", "China", "Germany", "India", "Russia", 
-                        "Netherlands", "Singapore", "Brazil", "Canada", "Australia", 
-                        "United Kingdom", "France", "Japan", "South Africa"
-                    ]
-                    src_country = random.choice(countries)
-                    
-                    # Random severities and types
-                    severities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
-                    sev = random.choices(severities, weights=[40, 30, 20, 10])[0]
-                    
-                    attack_types = {
-                        "LOW": ["Port Scan", "Ping Sweep", "Reconnaissance Probe"],
-                        "MEDIUM": ["Config File Access", "SSH Probe", "Unauthorized Login Access"],
-                        "HIGH": ["Brute Force Login", "XSS Attempt", "Directory Traversal"],
-                        "CRITICAL": ["SQL Injection", "Remote Code Execution", "Buffer Overflow"]
-                    }
-                    attack_type = random.choice(attack_types[sev])
-                    
-                    src_ip = f"{random.randint(1, 254)}.{random.randint(1, 254)}.{random.randint(1, 254)}.{random.randint(1, 254)}"
-                    dest_port = random.choice([80, 22, 21, 23, 8088])
-                    
-                    from backend.services.threat_intel import ThreatIntelService
-                    service = ThreatIntelService(db)
-                    intel = service.enrich_ip(src_ip)
-
-                    new_event = AttackEvent(
-                        external_id=f"SIM-{int(datetime.utcnow().timestamp())}",
-                        attack_type=attack_type,
-                        severity=sev,
-                        status="NEW",
-                        source_ip=src_ip,
-                        source_port=random.randint(1024, 65535),
-                        destination_port=dest_port,
-                        protocol="TCP",
-                        target_service="HTTP Honeypot" if dest_port == 8088 else ("SSH" if dest_port == 22 else "HTTP"),
-                        country=intel["country"],
-                        city=intel["city"],
-                        payload="Simulated threat intelligence arc trace",
-                        user_agent="SentinelAISimulator/1.0",
-                        sensor_id="Simulated Sensor Node",
-                        threat_score=intel["threat_score"],
-                        confidence=intel["confidence"],
-                        raw_metadata=json.dumps({
-                            "latitude": intel.get("latitude", 0.0),
-                            "longitude": intel.get("longitude", 0.0)
-                        }),
-                        created_at=datetime.utcnow()
-                    )
-                    db.add(new_event)
-                    
-                    # Update http sensor heartbeat
-                    sensor = db.query(HoneypotSensor).filter(HoneypotSensor.name == "HTTP Honeypot").first()
-                    if sensor:
-                        sensor.last_heartbeat = datetime.utcnow()
-                        sensor.state = "ONLINE"
-                        
-                    db.commit()
-                    db.refresh(new_event)
-                    
-                    event_data = {
-                        "id": new_event.id,
-                        "external_id": new_event.external_id,
-                        "attack_type": new_event.attack_type,
-                        "severity": new_event.severity,
-                        "status": new_event.status,
-                        "source_ip": new_event.source_ip,
-                        "source_port": new_event.source_port,
-                        "destination_port": new_event.destination_port,
-                        "protocol": new_event.protocol,
-                        "target_service": new_event.target_service,
-                        "country": new_event.country,
-                        "city": new_event.city,
-                        "payload": new_event.payload,
-                        "threat_score": new_event.threat_score,
-                        "confidence": new_event.confidence,
-                        "raw_metadata": new_event.raw_metadata,
-                        "created_at": new_event.created_at.isoformat()
-                    }
-                    
+                event_data = await asyncio.to_thread(_generate_simulated_attack_event)
+                if event_data:
                     try:
-                        from backend.services.notification import NotificationService
-                        NotificationService(db).trigger_notifications(event_data)
-                    except Exception as e:
-                        logging.warning(f"Failed to trigger alerts: {e}")
-
-                    await manager.broadcast({
-                        "type": "new_attack",
-                        "data": event_data
-                    })
-                except Exception as ex:
-                    logging.error(f"Simulator error: {ex}", exc_info=True)
-                finally:
-                    db.close()
+                        await manager.broadcast({
+                            "type": "new_attack",
+                            "data": event_data
+                        })
+                    except Exception as broadcast_ex:
+                        logging.error(f"Simulator broadcast error: {broadcast_ex}", exc_info=True)
             await asyncio.sleep(4.0)
     except asyncio.CancelledError:
         logging.info("Simulator background loop cancelled.")
