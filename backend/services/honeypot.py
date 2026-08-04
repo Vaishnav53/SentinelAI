@@ -1,3 +1,5 @@
+import hashlib
+import html
 import threading
 import logging
 import http.server
@@ -9,7 +11,48 @@ import asyncio
 from datetime import datetime
 from typing import Dict, Any, Optional
 from backend.database.session import SessionLocal
-from backend.models.models import AttackEvent, HoneypotSensor
+from backend.models.models import (
+    AttackEvent,
+    HoneypotSensor,
+    HoneypotPortalUser,
+    HoneypotFeedback,
+    HoneypotActivityLog
+)
+
+def hash_decoy_password(password: str) -> str:
+    salt = "aetheris_decoy_salt_v1"
+    return hashlib.sha256(f"{salt}:{password}".encode("utf-8")).hexdigest()
+
+def record_honeypot_activity(
+    db,
+    ip: str,
+    action_type: str,
+    username_or_email: Optional[str],
+    result: str,
+    severity: str,
+    path: str,
+    user_agent: Optional[str],
+    attack_event_id: Optional[int] = None
+) -> Optional[HoneypotActivityLog]:
+    try:
+        act = HoneypotActivityLog(
+            timestamp=datetime.utcnow(),
+            source_ip=ip or "127.0.0.1",
+            action_type=action_type,
+            username_or_email=username_or_email[:100] if username_or_email else None,
+            result=result,
+            severity=severity,
+            request_path=path[:255] if path else "/",
+            user_agent=user_agent[:255] if user_agent else "Unknown",
+            attack_event_id=attack_event_id
+        )
+        db.add(act)
+        db.commit()
+        return act
+    except Exception as e:
+        db.rollback()
+        logging.getLogger(__name__).error(f"Failed to record honeypot activity log: {e}")
+        return None
 
 logger = logging.getLogger(__name__)
 
@@ -478,6 +521,20 @@ class HoneypotRequestHandler(http.server.BaseHTTPRequestHandler):
             )
             db.add(attack_event)
             db.commit()
+
+            # Record linked activity log entry
+            act_path = getattr(self, 'path', '/')
+            record_honeypot_activity(
+                db,
+                self.client_address[0],
+                attack_type,
+                None,
+                "DETECTED",
+                severity,
+                act_path,
+                self.headers.get('User-Agent', 'Unknown'),
+                attack_event_id=attack_event.id
+            )
             
             # Broadcast the event to any active WebSocket listeners live
             from backend.api.attacks import manager
@@ -721,6 +778,16 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                     token = match.group(1)
                     self.lab_sessions.pop(token, None)
             
+            db = SessionLocal()
+            try:
+                record_honeypot_activity(
+                    db, self.client_address[0], "LOGOUT",
+                    username if is_logged_in else "Guest", "SUCCESS", "LOW",
+                    path, self.headers.get('User-Agent', 'Unknown')
+                )
+            finally:
+                db.close()
+
             self.send_response(302)
             self.send_header("Set-Cookie", "session_id=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT")
             self.send_header("Location", "/login")
@@ -731,12 +798,15 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
         if path == "/" or path == "/login":
             if self.command == "POST":
                 params = urllib.parse.parse_qs(body)
-                post_user = params.get('username', [''])[0]
-                post_pass = params.get('password', [''])[0]
+                post_user = params.get('username', [''])[0].strip()
+                post_pass = params.get('password', [''])[0].strip()
 
                 # SQL Injection vulnerability check
                 sqli_pattern = re.compile(r"'.*or.*'.*=.*'|union\s+select|'\s*or\s*1\s*=\s*1|--", re.IGNORECASE)
-                if sqli_pattern.search(post_user) or sqli_pattern.search(post_pass):
+                user_has_sqli = bool(sqli_pattern.search(post_user))
+                pass_has_sqli = bool(sqli_pattern.search(post_pass))
+
+                if user_has_sqli or pass_has_sqli:
                     self.log_attack(
                         "SQL Injection", 
                         "CRITICAL", 
@@ -746,85 +816,143 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                         f"Login Username: {post_user} | Password: {post_pass}"
                     )
                     
-                    # SIMULATE SQL INJECTION BYPASS: Log user in as admin!
-                    session_token = f"sess_{random.randint(100000, 999999)}"
-                    self.lab_sessions[session_token] = self.lab_users["admin"]
-                    self.send_response(302)
-                    self.send_header("Set-Cookie", f"session_id={session_token}; Path=/")
-                    self.send_header("Location", "/dashboard")
-                    self.end_headers()
-                    return
+                    if user_has_sqli and pass_has_sqli:
+                        # SIMULATE SQL INJECTION BYPASS: Log user in as admin!
+                        db = SessionLocal()
+                        try:
+                            admin_obj = db.query(HoneypotPortalUser).filter(HoneypotPortalUser.role == "admin").first()
+                            admin_name = admin_obj.username if admin_obj else "admin"
+                            admin_email = admin_obj.email if admin_obj else "admin@sentinelai.local"
+                            
+                            session_token = f"sess_{random.randint(100000, 999999)}"
+                            self.lab_sessions[session_token] = {
+                                "username": admin_name,
+                                "role": "admin",
+                                "email": admin_email
+                            }
+                            
+                            record_honeypot_activity(
+                                db, self.client_address[0], "SQLI_ATTEMPT",
+                                post_user, "INTERCEPTED", "CRITICAL",
+                                path, self.headers.get('User-Agent', 'Unknown')
+                            )
+                        finally:
+                            db.close()
 
-                # Normal Credential Check
-                matched_user = self.lab_users.get(post_user)
-                if matched_user and matched_user["password"] == post_pass:
-                    # Successful login
-                    session_token = f"sess_{random.randint(100000, 999999)}"
-                    self.lab_sessions[session_token] = matched_user
-                    
-                    # Log successful attempt
-                    self.lab_login_attempts.append({"username": post_user, "ip": self.client_address[0], "status": "SUCCESS", "time": datetime.now().strftime("%H:%M:%S")})
-                    
-                    self.log_attack(
-                        "User Login (Success)", 
-                        "LOW", 
-                        0.50, 
-                        "T1078", 
-                        "Monitor for anomalous user logins and verify clearance levels.", 
-                        f"Login successful for user: {post_user}"
-                    )
-                    
-                    self.send_response(302)
-                    self.send_header("Set-Cookie", f"session_id={session_token}; Path=/")
-                    self.send_header("Location", "/dashboard")
-                    self.end_headers()
-                    return
-                else:
-                    # Failed attempt tracking
-                    self.lab_login_attempts.append({"username": post_user, "ip": self.client_address[0], "status": "FAILED", "time": datetime.now().strftime("%H:%M:%S")})
-                    
-                    self.log_attack(
-                        "User Login (Failed)", 
-                        "MEDIUM", 
-                        0.70, 
-                        "T1110", 
-                        "Monitor credential stuffing attempts and lock accounts temporarily.", 
-                        f"Failed login attempt for username: {post_user}"
-                    )
-                    
-                    # Detect Brute Force / Credential Stuffing
-                    recent_failures = [a for a in self.lab_login_attempts if a["status"] == "FAILED" and a["ip"] == self.client_address[0]]
-                    if len(recent_failures) >= 5:
-                        self.log_attack(
-                            "Brute Force", 
-                            "HIGH", 
-                            0.94, 
-                            "T1110", 
-                            "Enable lockout mechanics after consecutive login failures, and enforce multi-factor authentication (MFA).",
-                            f"Failed attempts count: {len(recent_failures)} from IP: {self.client_address[0]}"
-                        )
-                        # Clear old history to prevent duplicate loops
-                        self.lab_login_attempts = []
+                        self.send_response(302)
+                        self.send_header("Set-Cookie", f"session_id={session_token}; Path=/")
+                        self.send_header("Location", "/dashboard")
+                        self.end_headers()
+                        return
+
+                # Normal Credential Check against HoneypotPortalUser table or default lab_users
+                db = SessionLocal()
+                try:
+                    user_obj = db.query(HoneypotPortalUser).filter(
+                        (HoneypotPortalUser.username == post_user) | (HoneypotPortalUser.email == post_user)
+                    ).first()
+
+                    lab_match = self.lab_users.get(post_user)
+                    is_valid_lab = lab_match and lab_match.get("password") == post_pass
+                    hashed_input = hash_decoy_password(post_pass)
+                    is_valid_db = bool(user_obj and user_obj.password_hash == hashed_input and user_obj.status == "ACTIVE")
+
+                    if is_valid_db or is_valid_lab:
+                        succ_username = user_obj.username if user_obj else lab_match["username"]
+                        succ_role = user_obj.role if user_obj else lab_match.get("role", "user")
+                        succ_email = user_obj.email if user_obj else lab_match.get("email", "")
+
+                        if user_obj:
+                            user_obj.last_login_at = datetime.utcnow()
+                            user_obj.login_count += 1
+                            db.commit()
+
+                        session_token = f"sess_{random.randint(100000, 999999)}"
+                        self.lab_sessions[session_token] = {
+                            "username": succ_username,
+                            "role": succ_role,
+                            "email": succ_email
+                        }
                         
-                    content = f"""<p class="text-danger">Invalid credentials.</p>
-                    <form action="/login" method="POST">
-                        <div class="form-group">
-                            <label>Username</label>
-                            <input type="text" name="username" placeholder="e.g. employee.username" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Password</label>
-                            <input type="password" name="password" placeholder="••••••••" required>
-                        </div>
-                        <input type="submit" value="Authenticate Session">
-                    </form>"""
-                    self.send_response(200)
-                    self.send_header("Content-Type", "text/html")
-                    self.end_headers()
-                    self.wfile.write(get_lab_html("Login", content).encode('utf-8'))
-                    return
+                        record_honeypot_activity(
+                            db, self.client_address[0], "LOGIN_SUCCESS",
+                            succ_username, "SUCCESS", "LOW",
+                            path, self.headers.get('User-Agent', 'Unknown')
+                        )
+                        
+                        self.send_response(302)
+                        self.send_header("Set-Cookie", f"session_id={session_token}; Path=/")
+                        self.send_header("Location", "/dashboard")
+                        self.end_headers()
+                        return
+                    else:
+                        # Failed attempt tracking
+                        if user_obj:
+                            user_obj.failed_login_count += 1
+                            db.commit()
+
+                        record_honeypot_activity(
+                            db, self.client_address[0], "LOGIN_FAILURE",
+                            post_user or "Unknown", "FAILED", "MEDIUM",
+                            path, self.headers.get('User-Agent', 'Unknown')
+                        )
+                        
+                        self.log_attack(
+                            "User Login (Failed)", 
+                            "MEDIUM", 
+                            0.70, 
+                            "T1110", 
+                            "Monitor credential stuffing attempts and lock accounts temporarily.", 
+                            f"Failed login attempt for username: {post_user}"
+                        )
+                        
+                        # Detect Brute Force / Credential Stuffing
+                        recent_failures = db.query(HoneypotActivityLog).filter(
+                            HoneypotActivityLog.source_ip == self.client_address[0],
+                            HoneypotActivityLog.action_type == "LOGIN_FAILURE"
+                        ).count()
+                        
+                        if recent_failures >= 5:
+                            self.log_attack(
+                                "Brute Force", 
+                                "HIGH", 
+                                0.94, 
+                                "T1110", 
+                                "Enable lockout mechanics after consecutive login failures, and enforce multi-factor authentication (MFA).",
+                                f"Failed attempts count: {recent_failures} from IP: {self.client_address[0]}"
+                            )
+                            
+                        content = f"""<p class="text-danger">Invalid credentials.</p>
+                        <form action="/login" method="POST">
+                            <div class="form-group">
+                                <label>Username</label>
+                                <input type="text" name="username" placeholder="e.g. employee.username" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Password</label>
+                                <input type="password" name="password" placeholder="••••••••" required>
+                            </div>
+                            <input type="submit" value="Authenticate Session">
+                        </form>"""
+                        self.send_response(200)
+                        self.send_header("Content-Type", "text/html")
+                        self.end_headers()
+                        self.wfile.write(get_lab_html("Login", content).encode('utf-8'))
+                        return
+                finally:
+                    db.close()
             
             # GET /login
+            db = SessionLocal()
+            try:
+                record_honeypot_activity(
+                    db, self.client_address[0], "PAGE_VISIT",
+                    user.get('username') if user else "Guest", "SUCCESS", "LOW",
+                    path, self.headers.get('User-Agent', 'Unknown')
+                )
+            finally:
+                db.close()
+
             content = """<form action="/login" method="POST">
                 <div class="form-group">
                     <label>Username</label>
@@ -846,21 +974,67 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
         if path == "/register":
             if self.command == "POST":
                 params = urllib.parse.parse_qs(body)
-                reg_user = params.get('username', [''])[0]
-                reg_pass = params.get('password', [''])[0]
-                reg_email = params.get('email', [''])[0]
+                reg_user = params.get('username', [''])[0].strip()
+                reg_pass = params.get('password', [''])[0].strip()
+                reg_email = params.get('email', [''])[0].strip()
 
-                if reg_user and reg_pass:
-                    self.lab_users[reg_user] = {
-                        "username": reg_user,
-                        "password": reg_pass,
-                        "role": "user",
-                        "email": reg_email
-                    }
-                    content = f"<p class='text-success'>Registration successful for user '{reg_user}'! You can now <a href='/login'>login here</a>.</p>"
-                else:
-                    content = "<p class='text-danger'>Error: All registration fields are required.</p>"
-                
+                # Basic validation & maximum length constraints
+                if not reg_user or not reg_pass or not reg_email or len(reg_user) < 3 or len(reg_user) > 50 or len(reg_email) > 100 or "@" not in reg_email or len(reg_pass) > 100:
+                    db = SessionLocal()
+                    try:
+                        record_honeypot_activity(
+                            db, self.client_address[0], "REGISTER_FAILURE",
+                            reg_user or reg_email or "Unknown", "FAILED", "LOW",
+                            path, self.headers.get('User-Agent', 'Unknown')
+                        )
+                    finally:
+                        db.close()
+
+                    content = "<p class='text-danger'>Error: Invalid registration input parameters. User (3-50 chars), valid Email, and Password required.</p>"
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html")
+                    self.end_headers()
+                    self.wfile.write(get_lab_html("Register", content).encode('utf-8'))
+                    return
+
+                db = SessionLocal()
+                try:
+                    existing = db.query(HoneypotPortalUser).filter(
+                        (HoneypotPortalUser.username == reg_user) | (HoneypotPortalUser.email == reg_email)
+                    ).first()
+
+                    if existing:
+                        record_honeypot_activity(
+                            db, self.client_address[0], "REGISTER_FAILURE",
+                            reg_user, "FAILED", "LOW",
+                            path, self.headers.get('User-Agent', 'Unknown')
+                        )
+                        content = f"<p class='text-danger'>Error: Username or email already registered in portal database.</p>"
+                    else:
+                        new_user = HoneypotPortalUser(
+                            username=reg_user,
+                            email=reg_email,
+                            password_hash=hash_decoy_password(reg_pass),
+                            role="user",
+                            status="ACTIVE",
+                            source_ip=self.client_address[0]
+                        )
+                        db.add(new_user)
+                        db.commit()
+
+                        record_honeypot_activity(
+                            db, self.client_address[0], "REGISTER_SUCCESS",
+                            reg_user, "SUCCESS", "LOW",
+                            path, self.headers.get('User-Agent', 'Unknown')
+                        )
+                        content = f"<p class='text-success'>Registration successful for user '{html.escape(reg_user)}'! You can now <a href='/login'>login here</a>.</p>"
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"Registration transaction failure: {e}")
+                    content = "<p class='text-danger'>Error: Database transaction failed during registration.</p>"
+                finally:
+                    db.close()
+
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html")
                 self.end_headers()
@@ -868,6 +1042,16 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                 return
             
             # GET /register
+            db = SessionLocal()
+            try:
+                record_honeypot_activity(
+                    db, self.client_address[0], "PAGE_VISIT",
+                    user.get('username') if user else "Guest", "SUCCESS", "LOW",
+                    path, self.headers.get('User-Agent', 'Unknown')
+                )
+            finally:
+                db.close()
+
             content = """<form action="/register" method="POST">
                 <div class="form-group">
                     <label>Username</label>
@@ -893,8 +1077,8 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
         if path == "/forgot-password":
             if self.command == "POST":
                 params = urllib.parse.parse_qs(body)
-                forgot_user = params.get('username', [''])[0]
-                content = f"<p class='text-success'>If user '{forgot_user}' exists, a password reset link has been dispatched to their recorded email address.</p>"
+                forgot_user = params.get('username', [''])[0].strip()
+                content = f"<p class='text-success'>If user '{html.escape(forgot_user)}' exists, a password reset link has been dispatched to their recorded email address.</p>"
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html")
                 self.end_headers()
@@ -923,12 +1107,22 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
 
         # 5. USER DASHBOARD
         if path == "/dashboard":
+            db = SessionLocal()
+            try:
+                record_honeypot_activity(
+                    db, self.client_address[0], "PAGE_VISIT",
+                    username, "SUCCESS", "LOW",
+                    path, self.headers.get('User-Agent', 'Unknown')
+                )
+            finally:
+                db.close()
+
             content = f"""
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
                 <div class="card" style="margin: 0;">
                     <h4 style="margin: 0 0 10px 0; color: #ffffff;">Console Status</h4>
-                    <p class="text-muted" style="margin: 0;">Account Clearance: <span class="badge badge-user">{role}</span></p>
-                    <p class="text-muted" style="margin: 5px 0 0 0;">Last Login Trace: {datetime.now().strftime("%Y-%m-%d %H:%M")}</p>
+                    <p class="text-muted" style="margin: 0;">Account Clearance: <span class="badge badge-user">{html.escape(role)}</span></p>
+                    <p class="text-muted" style="margin: 5px 0 0 0;">Last Login Trace: {datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")}</p>
                 </div>
                 <div class="card" style="margin: 0;">
                     <h4 style="margin: 0 0 10px 0; color: #ffffff;">Intranet Assets</h4>
@@ -944,14 +1138,14 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.end_headers()
-            self.wfile.write(get_lab_html("User Dashboard", content, True, username, role).encode('utf-8'))
+            self.wfile.write(get_lab_html("User Dashboard", content, True, html.escape(username), html.escape(role)).encode('utf-8'))
             return
 
         # 6. PROFILE (GET/POST)
         if path == "/profile":
             if self.command == "POST":
                 params = urllib.parse.parse_qs(body)
-                new_email = params.get('email', [''])[0]
+                new_email = params.get('email', [''])[0].strip()
                 
                 # XSS vulnerability check
                 xss_pattern = re.compile(r"<script.*?>|<\/script>|javascript:|onerror\s*=|onload\s*=", re.IGNORECASE)
@@ -965,31 +1159,53 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                         f"Profile Email Update: {new_email}"
                     )
                 
-                # Update user info
-                self.lab_users[username]["email"] = new_email
-                content = f"<p class='text-success'>Profile updated successfully!</p><p>Email: {new_email}</p>"
+                db = SessionLocal()
+                try:
+                    u_obj = db.query(HoneypotPortalUser).filter(HoneypotPortalUser.username == username).first()
+                    if u_obj:
+                        u_obj.email = new_email
+                        db.commit()
+
+                    record_honeypot_activity(
+                        db, self.client_address[0], "PROFILE_UPDATE",
+                        username, "SUCCESS", "LOW",
+                        path, self.headers.get('User-Agent', 'Unknown')
+                    )
+                finally:
+                    db.close()
+
+                content = f"<p class='text-success'>Profile updated successfully!</p><p>Email: {html.escape(new_email)}</p>"
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html")
                 self.end_headers()
-                self.wfile.write(get_lab_html("Profile Settings", content, True, username, role).encode('utf-8'))
+                self.wfile.write(get_lab_html("Profile Settings", content, True, html.escape(username), html.escape(role)).encode('utf-8'))
                 return
 
             # GET /profile
+            db = SessionLocal()
+            curr_email = ""
+            try:
+                u_obj = db.query(HoneypotPortalUser).filter(HoneypotPortalUser.username == username).first()
+                if u_obj:
+                    curr_email = u_obj.email
+            finally:
+                db.close()
+
             content = f"""
             <div class="card" style="max-width: 500px; margin: 0 auto;">
                 <h4 style="margin: 0 0 20px 0; color: #ffffff;">Profile Configuration</h4>
                 <form action="/profile" method="POST">
                     <div class="form-group">
                         <label>System Username</label>
-                        <input type="text" value="{username}" disabled style="opacity: 0.6;">
+                        <input type="text" value="{html.escape(username)}" disabled style="opacity: 0.6;">
                     </div>
                     <div class="form-group">
                         <label>Security Clearance Group</label>
-                        <input type="text" value="{role}" disabled style="opacity: 0.6;">
+                        <input type="text" value="{html.escape(role)}" disabled style="opacity: 0.6;">
                     </div>
                     <div class="form-group">
                         <label>Profile Contact Email</label>
-                        <input type="text" name="email" value="{self.lab_users[username].get('email', '')}">
+                        <input type="text" name="email" value="{html.escape(curr_email)}">
                     </div>
                     <input type="submit" value="Update Profile Details">
                 </form>
@@ -998,19 +1214,17 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.end_headers()
-            self.wfile.write(get_lab_html("Profile Settings", content, True, username, role).encode('utf-8'))
+            self.wfile.write(get_lab_html("Profile Settings", content, True, html.escape(username), html.escape(role)).encode('utf-8'))
             return
 
         # 7. FILE UPLOAD (GET/POST)
         if path == "/upload":
             if self.command == "POST":
-                # Detect uploaded filename from the post payload boundary
                 uploaded_filename = "avatar.png"
                 fn_match = re.search(r'filename="([^"]+)"', body)
                 if fn_match:
                     uploaded_filename = fn_match.group(1)
                 
-                # Slicing out the multipart file body content
                 file_content = body.encode('utf-8')
                 header_boundary = re.search(rb'\r\n\r\n', file_content)
                 if header_boundary:
@@ -1023,7 +1237,6 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                 else:
                     file_content = body.encode('utf-8')
 
-                # Check for malicious script files
                 extension = uploaded_filename.split(".")[-1].lower() if "." in uploaded_filename else ""
                 if extension in ["php", "jsp", "asp", "aspx", "sh", "exe", "py", "pl", "js"]:
                     self.log_attack(
@@ -1035,7 +1248,6 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                         f"Attempted upload of executable extension script: {uploaded_filename}"
                     )
                 
-                # Perform Sandbox Scan & Hash persistence
                 from backend.services.decoy_sandbox import DecoySandboxService
                 import asyncio
 
@@ -1051,20 +1263,17 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                         )
                     )
                     loop.close()
+
+                    record_honeypot_activity(
+                        db, self.client_address[0], "FILE_UPLOAD",
+                        username, "SUCCESS", "LOW",
+                        path, self.headers.get('User-Agent', 'Unknown')
+                    )
                 except Exception as ex:
                     logger.error(f"Sandbox scan failed: {ex}")
                 finally:
                     db.close()
 
-                # Mock record save
-                self.lab_uploads.append({
-                    "id": len(self.lab_uploads) + 1,
-                    "username": username,
-                    "filename": uploaded_filename,
-                    "size": f"{round(len(file_content) / 1024, 1)} KB",
-                    "created_at": datetime.now().strftime("%Y-%m-%d %H:%M")
-                })
-                
                 if extension not in ["php", "jsp", "asp", "aspx", "sh", "exe", "py", "pl", "js"]:
                     self.log_attack(
                         "File Upload", 
@@ -1075,11 +1284,11 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                         f"File '{uploaded_filename}' ({round(len(file_content) / 1024, 1)} KB) uploaded by user '{username}'."
                     )
                 
-                content = f"<p class='text-success'>File '{uploaded_filename}' uploaded successfully (Simulated sandbox storage)!</p>"
+                content = f"<p class='text-success'>File '{html.escape(uploaded_filename)}' uploaded successfully (Simulated sandbox storage)!</p>"
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html")
                 self.end_headers()
-                self.wfile.write(get_lab_html("File Uploaded", content, True, username, role).encode('utf-8'))
+                self.wfile.write(get_lab_html("File Uploaded", content, True, html.escape(username), html.escape(role)).encode('utf-8'))
                 return
 
             # GET /upload
@@ -1102,14 +1311,22 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.end_headers()
-            self.wfile.write(get_lab_html("File Upload", content, True, username, role).encode('utf-8'))
+            self.wfile.write(get_lab_html("File Upload", content, True, html.escape(username), html.escape(role)).encode('utf-8'))
             return
 
         # 8. FEEDBACK (GET/POST)
         if path == "/feedback":
             if self.command == "POST":
                 params = urllib.parse.parse_qs(body)
-                feedback_text = params.get('comment', [''])[0]
+                feedback_text = params.get('comment', [''])[0].strip()
+
+                if not feedback_text or len(feedback_text) > 1000:
+                    content = "<p class='text-danger'>Error: Feedback comment required (max 1000 characters).</p>"
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html")
+                    self.end_headers()
+                    self.wfile.write(get_lab_html("Feedback Feed", content, True, html.escape(username), html.escape(role)).encode('utf-8'))
+                    return
 
                 # XSS vulnerability check
                 xss_pattern = re.compile(r"<script.*?>|<\/script>|javascript:|onerror\s*=|onload\s*=", re.IGNORECASE)
@@ -1122,41 +1339,64 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                         "HTML-escape all dynamically loaded database variables before rendering them in client views.",
                         f"Submitted feedback payload: {feedback_text}"
                     )
-                
-                self.lab_feedback.append({
-                    "id": len(self.lab_feedback) + 1,
-                    "username": username,
-                    "text": feedback_text,
-                    "created_at": datetime.now().strftime("%Y-%m-%d %H:%M")
-                })
-                
-                if not xss_pattern.search(feedback_text):
-                    self.log_attack(
-                        "Feedback Submission", 
-                        "LOW", 
-                        0.50, 
-                        "T1592", 
-                        "Sanitize form comments inputs and review logs periodically.", 
-                        f"Feedback ticket submitted by user '{username}': {feedback_text}"
+
+                db = SessionLocal()
+                try:
+                    fb_user = username if is_logged_in else "Guest"
+                    fb_email = user.get('email') if is_logged_in else None
+                    if is_logged_in:
+                        u_obj = db.query(HoneypotPortalUser).filter(HoneypotPortalUser.username == username).first()
+                        if u_obj:
+                            fb_email = u_obj.email
+
+                    fb = HoneypotFeedback(
+                        username=fb_user,
+                        email=fb_email,
+                        message=feedback_text,
+                        source_ip=self.client_address[0],
+                        status="NEW"
                     )
-                
-                content = "<p class='text-success'>Feedback recorded! Thank you.</p><a href='/feedback'>Back to Feed</a>"
+                    db.add(fb)
+                    db.commit()
+
+                    record_honeypot_activity(
+                        db, self.client_address[0], "FEEDBACK_SUBMISSION",
+                        fb_user, "SUCCESS", "LOW",
+                        path, self.headers.get('User-Agent', 'Unknown')
+                    )
+
+                    content = "<p class='text-success'>Feedback recorded! Thank you.</p><a href='/feedback'>Back to Feed</a>"
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"Feedback submission failed: {e}")
+                    content = "<p class='text-danger'>Error saving feedback ticket.</p>"
+                finally:
+                    db.close()
+
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html")
                 self.end_headers()
-                self.wfile.write(get_lab_html("Feedback Saved", content, True, username, role).encode('utf-8'))
+                self.wfile.write(get_lab_html("Feedback Saved", content, True, html.escape(username), html.escape(role)).encode('utf-8'))
                 return
 
             # GET /feedback
+            db = SessionLocal()
             rows = ""
-            for item in self.lab_feedback:
-                rows += f"""
-                <tr style="border-bottom: 1px solid var(--border-primary);">
-                    <td style="font-weight: 600; color: #ffffff;">{item['username']}</td>
-                    <td style="color: var(--text-primary);">{item['text']}</td>
-                    <td class="text-muted">{item['created_at']}</td>
-                </tr>
-                """
+            try:
+                feedbacks = db.query(HoneypotFeedback).order_by(HoneypotFeedback.created_at.desc()).limit(50).all()
+                for item in feedbacks:
+                    safe_user = html.escape(item.username or "Guest")
+                    safe_msg = html.escape(item.message or "")
+                    safe_time = item.created_at.strftime("%Y-%m-%d %H:%M") if item.created_at else ""
+                    rows += f"""
+                    <tr style="border-bottom: 1px solid var(--border-primary);">
+                        <td style="font-weight: 600; color: #ffffff;">{safe_user}</td>
+                        <td style="color: var(--text-primary);">{safe_msg}</td>
+                        <td class="text-muted">{safe_time}</td>
+                    </tr>
+                    """
+            finally:
+                db.close()
 
             content = f"""
             <div class="card" style="margin-bottom: 25px;">
@@ -1181,7 +1421,7 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                         </tr>
                     </thead>
                     <tbody>
-                        {rows}
+                        {rows if rows else '<tr><td colspan="3" class="text-muted" style="text-align: center;">No feedback submissions yet.</td></tr>'}
                     </tbody>
                 </table>
             </div>
@@ -1189,194 +1429,383 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.end_headers()
-            self.wfile.write(get_lab_html("Feedback Feed", content, True, username, role).encode('utf-8'))
+            self.wfile.write(get_lab_html("Feedback Feed", content, True, html.escape(username), html.escape(role)).encode('utf-8'))
             return
 
-        # 9. ADMIN DASHBOARD
-        if path == "/admin/dashboard":
-            # Count details for visual charts
-            total_users = len(self.lab_users)
-            success_logins = [a for a in self.lab_login_attempts if a["status"] == "SUCCESS"]
-            failed_logins = [a for a in self.lab_login_attempts if a["status"] == "FAILED"]
-            
-            success_logins_count = len(success_logins)
-            failed_logins_count = len(failed_logins)
-            files_count = len(self.lab_uploads)
-            suspicious_count = len(self.lab_suspicious_payloads)
-            
-            success_attempts_rows = ""
-            for a in success_logins[::-1]:
-                success_attempts_rows += f"""
-                <tr style="border-bottom: 1px solid var(--border-primary);">
-                    <td style="font-weight:600; color:#ffffff;">{a['username']}</td>
-                    <td>{a['ip']}</td>
-                    <td><span style="color: var(--green-primary); font-weight:600;">{a['status']}</span></td>
-                    <td class="text-muted">{a['time']}</td>
-                </tr>
-                """
-                
-            failed_attempts_rows = ""
-            for a in failed_logins[::-1]:
-                failed_attempts_rows += f"""
-                <tr style="border-bottom: 1px solid var(--border-primary);">
-                    <td style="font-weight:600; color:#ffffff;">{a['username']}</td>
-                    <td>{a['ip']}</td>
-                    <td><span style="color: var(--red-primary); font-weight:600;">{a['status']}</span></td>
-                    <td class="text-muted">{a['time']}</td>
-                </tr>
-                """
-                
-            upload_rows = ""
-            for u in self.lab_uploads[::-1]:
-                upload_rows += f"""
-                <tr style="border-bottom: 1px solid var(--border-primary);">
-                    <td style="font-weight:600; color:#ffffff;">{u['username']}</td>
-                    <td><code>{u['filename']}</code></td>
-                    <td>{u['size']}</td>
-                    <td class="text-muted">{u['created_at']}</td>
-                </tr>
-                """
-                
-            suspicious_rows = ""
-            for s in self.lab_suspicious_payloads[::-1]:
-                sev_color = "var(--red-primary)" if s['severity'] in ["CRITICAL", "HIGH"] else ("var(--yellow-primary)" if s['severity'] == "MEDIUM" else "var(--blue-primary)")
-                suspicious_rows += f"""
-                <tr style="border-bottom: 1px solid var(--border-primary);">
-                    <td class="text-muted">{s['time']}</td>
-                    <td style="color:#ffffff;">{s['ip']}</td>
-                    <td style="font-weight:600;">{s['type']}</td>
-                    <td><span style="color: {sev_color}; font-weight:600;">{s['severity']}</span></td>
-                    <td class="text-muted" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{s['payload']}</td>
-                </tr>
-                """
+        # 9. ADMIN DASHBOARD & DYNAMIC JSON API
+        if path == "/admin/dashboard" or path == "/admin/api/data":
+            db = SessionLocal()
+            try:
+                total_users = db.query(HoneypotPortalUser).count()
+                total_feedback = db.query(HoneypotFeedback).count()
+                failed_logins_count = db.query(HoneypotActivityLog).filter(HoneypotActivityLog.action_type == "LOGIN_FAILURE").count()
+                success_logins_count = db.query(HoneypotActivityLog).filter(HoneypotActivityLog.action_type == "LOGIN_SUCCESS").count()
+                detected_attacks_count = db.query(AttackEvent).count()
+                recent_activity_count = db.query(HoneypotActivityLog).count()
 
-            feedback_rows = ""
-            for f in self.lab_feedback[::-1]:
-                feedback_rows += f"""
-                <tr style="border-bottom: 1px solid var(--border-primary);">
-                    <td style="font-weight:600; color:#ffffff; width: 150px;">{f['username']}</td>
-                    <td>{f['text']}</td>
-                    <td class="text-muted">{f['created_at']}</td>
-                </tr>
-                """
+                activities = db.query(HoneypotActivityLog).order_by(HoneypotActivityLog.timestamp.desc()).limit(50).all()
+                users = db.query(HoneypotPortalUser).order_by(HoneypotPortalUser.created_at.desc()).limit(50).all()
+                feedbacks = db.query(HoneypotFeedback).order_by(HoneypotFeedback.created_at.desc()).limit(50).all()
+                attacks = db.query(AttackEvent).order_by(AttackEvent.created_at.desc()).limit(50).all()
+
+                if query == "json=1" or path == "/admin/api/data" or "application/json" in self.headers.get("Accept", ""):
+                    data = {
+                        "counters": {
+                            "total_users": total_users,
+                            "total_feedback": total_feedback,
+                            "failed_logins": failed_logins_count,
+                            "success_logins": success_logins_count,
+                            "detected_attacks": detected_attacks_count,
+                            "recent_activity": recent_activity_count
+                        },
+                        "activities": [
+                            {
+                                "id": a.id,
+                                "timestamp": a.timestamp.strftime("%Y-%m-%d %H:%M:%S") if a.timestamp else "",
+                                "source_ip": a.source_ip,
+                                "action_type": a.action_type,
+                                "username_or_email": a.username_or_email or "N/A",
+                                "result": a.result,
+                                "severity": a.severity,
+                                "request_path": a.request_path,
+                                "user_agent": a.user_agent or "N/A",
+                                "attack_event_id": a.attack_event_id
+                            } for a in activities
+                        ],
+                        "users": [
+                            {
+                                "id": u.id,
+                                "username": u.username,
+                                "email": u.email,
+                                "role": u.role,
+                                "status": u.status,
+                                "source_ip": u.source_ip or "127.0.0.1",
+                                "login_count": u.login_count,
+                                "failed_login_count": u.failed_login_count,
+                                "created_at": u.created_at.strftime("%Y-%m-%d %H:%M:%S") if u.created_at else ""
+                            } for u in users
+                        ],
+                        "feedbacks": [
+                            {
+                                "id": f.id,
+                                "username": f.username or "Guest",
+                                "email": f.email or "N/A",
+                                "message": f.message,
+                                "source_ip": f.source_ip or "127.0.0.1",
+                                "status": f.status,
+                                "created_at": f.created_at.strftime("%Y-%m-%d %H:%M:%S") if f.created_at else ""
+                            } for f in feedbacks
+                        ],
+                        "attacks": [
+                            {
+                                "id": at.id,
+                                "time": at.created_at.strftime("%Y-%m-%d %H:%M:%S") if at.created_at else "",
+                                "ip": at.source_ip,
+                                "type": at.attack_type,
+                                "severity": at.severity,
+                                "payload": at.payload or "N/A"
+                            } for at in attacks
+                        ]
+                    }
+                    resp_bytes = json.dumps(data).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(resp_bytes)))
+                    self.end_headers()
+                    self.wfile.write(resp_bytes)
+                    return
+
+                # Render HTML Dashboard
+                activity_rows = ""
+                for a in activities:
+                    sev_color = "var(--red-primary)" if a.severity in ["CRITICAL", "HIGH"] else ("var(--yellow-primary)" if a.severity == "MEDIUM" else "var(--green-primary)")
+                    activity_rows += f"""
+                    <tr style="border-bottom: 1px solid var(--border-primary);">
+                        <td class="text-muted" style="white-space: nowrap;">{a.timestamp.strftime("%Y-%m-%d %H:%M:%S") if a.timestamp else ""}</td>
+                        <td style="color:#ffffff;">{html.escape(a.source_ip or "")}</td>
+                        <td style="font-weight:600;">{html.escape(a.action_type or "")}</td>
+                        <td>{html.escape(a.username_or_email or "N/A")}</td>
+                        <td><span style="color:{sev_color}; font-weight:600;">{html.escape(a.result or "")}</span></td>
+                        <td><code>{html.escape(a.request_path or "")}</code></td>
+                        <td class="text-muted" style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{html.escape(a.user_agent or "N/A")}</td>
+                    </tr>
+                    """
+
+                user_rows = ""
+                for u in users:
+                    user_rows += f"""
+                    <tr style="border-bottom: 1px solid var(--border-primary);">
+                        <td style="font-weight:600; color:#ffffff;">{html.escape(u.username)}</td>
+                        <td>{html.escape(u.email)}</td>
+                        <td><span class="badge badge-{u.role}">{html.escape(u.role)}</span></td>
+                        <td>{html.escape(u.source_ip or "127.0.0.1")}</td>
+                        <td>{u.login_count} / {u.failed_login_count}</td>
+                        <td class="text-muted">{u.created_at.strftime("%Y-%m-%d %H:%M") if u.created_at else ""}</td>
+                    </tr>
+                    """
+
+                feedback_rows = ""
+                for f in feedbacks:
+                    feedback_rows += f"""
+                    <tr style="border-bottom: 1px solid var(--border-primary);">
+                        <td style="font-weight:600; color:#ffffff; width: 120px;">{html.escape(f.username or "Guest")}</td>
+                        <td style="color: var(--text-primary);">{html.escape(f.message or "")}</td>
+                        <td style="width: 110px;"><span class="badge badge-user">{html.escape(f.status)}</span></td>
+                        <td class="text-muted" style="width: 140px;">{f.created_at.strftime("%Y-%m-%d %H:%M") if f.created_at else ""}</td>
+                    </tr>
+                    """
+
+                attack_rows = ""
+                for s in attacks:
+                    sev_color = "var(--red-primary)" if s.severity in ["CRITICAL", "HIGH"] else ("var(--yellow-primary)" if s.severity == "MEDIUM" else "var(--blue-primary)")
+                    attack_rows += f"""
+                    <tr style="border-bottom: 1px solid var(--border-primary);">
+                        <td class="text-muted">{s.created_at.strftime("%Y-%m-%d %H:%M:%S") if s.created_at else ""}</td>
+                        <td style="color:#ffffff;">{html.escape(s.source_ip or "")}</td>
+                        <td style="font-weight:600;">{html.escape(s.attack_type or "")}</td>
+                        <td><span style="color: {sev_color}; font-weight:600;">{html.escape(s.severity or "")}</span></td>
+                        <td class="text-muted" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{html.escape(s.payload or "")}</td>
+                    </tr>
+                    """
+            finally:
+                db.close()
 
             content = f"""
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap: 15px; margin-bottom: 25px;">
-                <div class="card" style="margin:0; text-align: center;">
-                    <span class="text-muted" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Total Users</span>
-                    <h2 style="color: var(--blue-primary); margin: 10px 0 0 0; font-size: 24px;">{total_users}</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0; color: #ffffff; font-size: 18px;">Aetheris Decoy Telemetry &amp; Operations Control</h3>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span id="poll-status" class="text-muted" style="font-size: 11px;">Polling active (5s)</span>
+                    <button type="button" onclick="refreshAdminData()" style="padding: 6px 14px; font-size: 11px; width: auto; background: var(--blue-primary); color: #000; font-weight: 600; border-radius: 4px; border: none; cursor: pointer;">Refresh Data</button>
                 </div>
-                <div class="card" style="margin:0; text-align: center;">
-                    <span class="text-muted" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Logins Logged</span>
-                    <h2 style="color: var(--green-primary); margin: 10px 0 0 0; font-size: 24px;">{success_logins_count}</h2>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr; gap: 12px; margin-bottom: 25px;">
+                <div class="card" style="margin:0; text-align: center; padding: 16px;">
+                    <span class="text-muted" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Decoy Users</span>
+                    <h2 id="cnt-users" style="color: var(--blue-primary); margin: 8px 0 0 0; font-size: 22px;">{total_users}</h2>
                 </div>
-                <div class="card" style="margin:0; text-align: center;">
+                <div class="card" style="margin:0; text-align: center; padding: 16px;">
+                    <span class="text-muted" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Feedback Tickets</span>
+                    <h2 id="cnt-feedback" style="color: var(--blue-primary); margin: 8px 0 0 0; font-size: 22px;">{total_feedback}</h2>
+                </div>
+                <div class="card" style="margin:0; text-align: center; padding: 16px;">
+                    <span class="text-muted" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Successful Logins</span>
+                    <h2 id="cnt-success" style="color: var(--green-primary); margin: 8px 0 0 0; font-size: 22px;">{success_logins_count}</h2>
+                </div>
+                <div class="card" style="margin:0; text-align: center; padding: 16px;">
                     <span class="text-muted" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Failed Logins</span>
-                    <h2 style="color: var(--red-primary); margin: 10px 0 0 0; font-size: 24px;">{failed_logins_count}</h2>
+                    <h2 id="cnt-failed" style="color: var(--red-primary); margin: 8px 0 0 0; font-size: 22px;">{failed_logins_count}</h2>
                 </div>
-                <div class="card" style="margin:0; text-align: center;">
-                    <span class="text-muted" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Uploaded Files</span>
-                    <h2 style="color: var(--blue-primary); margin: 10px 0 0 0; font-size: 24px;">{files_count}</h2>
+                <div class="card" style="margin:0; text-align: center; padding: 16px;">
+                    <span class="text-muted" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Attacks Detected</span>
+                    <h2 id="cnt-attacks" style="color: var(--yellow-primary); margin: 8px 0 0 0; font-size: 22px;">{detected_attacks_count}</h2>
                 </div>
-                <div class="card" style="margin:0; text-align: center;">
-                    <span class="text-muted" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Intrusion Attempts</span>
-                    <h2 style="color: var(--yellow-primary); margin: 10px 0 0 0; font-size: 24px;">{suspicious_count}</h2>
+                <div class="card" style="margin:0; text-align: center; padding: 16px;">
+                    <span class="text-muted" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Recent Activity</span>
+                    <h2 id="cnt-activity" style="color: var(--blue-primary); margin: 8px 0 0 0; font-size: 22px;">{recent_activity_count}</h2>
                 </div>
             </div>
-            
+
             <div class="card" style="margin-bottom: 25px;">
-                <h4 style="margin: 0 0 15px 0; color: #ffffff;">Portal Session Log (Successful Login History)</h4>
+                <h4 style="margin: 0 0 15px 0; color: #ffffff;">Decoy Activity Stream Audit Log (Recent 50)</h4>
                 <table>
                     <thead>
-                        <tr><th>User ID</th><th>Source Address</th><th>Resolution Status</th><th>Timestamp</th></tr>
+                        <tr>
+                            <th style="width: 140px;">Timestamp</th>
+                            <th>Source IP</th>
+                            <th>Action Type</th>
+                            <th>Principal / Subject</th>
+                            <th>Result</th>
+                            <th>Path</th>
+                            <th>User-Agent</th>
+                        </tr>
                     </thead>
-                    <tbody>
-                        {success_attempts_rows if success_attempts_rows else '<tr><td colspan="4" class="text-muted" style="text-align: center;">No successful sessions logged.</td></tr>'}
+                    <tbody id="tbl-activities">
+                        {activity_rows if activity_rows else '<tr><td colspan="7" class="text-muted" style="text-align: center;">No activity recorded yet.</td></tr>'}
                     </tbody>
                 </table>
             </div>
 
             <div class="card" style="margin-bottom: 25px;">
-                <h4 style="margin: 0 0 15px 0; color: #ffffff;">Authentication Failures Audit Log</h4>
+                <h4 style="margin: 0 0 15px 0; color: #ffffff;">Decoy Account Registrations</h4>
                 <table>
                     <thead>
-                        <tr><th>Attempted Account</th><th>Source Address</th><th>Resolution Status</th><th>Timestamp</th></tr>
+                        <tr><th>Username</th><th>Email</th><th>Role</th><th>Source IP</th><th>Logins (Ok/Fail)</th><th>Created</th></tr>
                     </thead>
-                    <tbody>
-                        {failed_attempts_rows if failed_attempts_rows else '<tr><td colspan="4" class="text-muted" style="text-align: center;">No authentication failures logged.</td></tr>'}
+                    <tbody id="tbl-users">
+                        {user_rows if user_rows else '<tr><td colspan="6" class="text-muted" style="text-align: center;">No decoy registrations logged.</td></tr>'}
                     </tbody>
                 </table>
             </div>
 
             <div class="card" style="margin-bottom: 25px;">
-                <h4 style="margin: 0 0 15px 0; color: #ffffff;">Asset Repository Uploads</h4>
+                <h4 style="margin: 0 0 15px 0; color: #ffffff;">Feedback Tickets Feed</h4>
                 <table>
                     <thead>
-                        <tr><th>Account</th><th>Filename</th><th>Size</th><th>Timestamp</th></tr>
+                        <tr><th>Operator</th><th>Message</th><th>Status</th><th>Timestamp</th></tr>
                     </thead>
-                    <tbody>
-                        {upload_rows if upload_rows else '<tr><td colspan="4" class="text-muted" style="text-align: center;">No uploads recorded.</td></tr>'}
+                    <tbody id="tbl-feedback">
+                        {feedback_rows if feedback_rows else '<tr><td colspan="4" class="text-muted" style="text-align: center;">No feedback submissions yet.</td></tr>'}
                     </tbody>
                 </table>
             </div>
 
-            <div class="card" style="margin-bottom: 25px;">
-                <h4 style="margin: 0 0 15px 0; color: #ffffff;">Suspicious Payload Intrusion Attempts</h4>
+            <div class="card">
+                <h4 style="margin: 0 0 15px 0; color: #ffffff;">Security Attack Detections (AttackEvents)</h4>
                 <table>
                     <thead>
                         <tr><th>Timestamp</th><th>Source IP</th><th>Attack Type</th><th>Severity</th><th>Payload Details</th></tr>
                     </thead>
-                    <tbody>
-                        {suspicious_rows if suspicious_rows else '<tr><td colspan="5" class="text-muted" style="text-align: center;">No security intrusion probes logged.</td></tr>'}
+                    <tbody id="tbl-attacks">
+                        {attack_rows if attack_rows else '<tr><td colspan="5" class="text-muted" style="text-align: center;">No security intrusion probes logged.</td></tr>'}
                     </tbody>
                 </table>
             </div>
 
-            <div class="card">
-                <h4 style="margin: 0 0 15px 0; color: #ffffff;">System Tickets Feed (Feedback)</h4>
-                <table>
-                    <thead>
-                        <tr><th>User ID</th><th>Ticket Details</th><th>Timestamp</th></tr>
-                    </thead>
-                    <tbody>
-                        {feedback_rows if feedback_rows else '<tr><td colspan="3" class="text-muted" style="text-align: center;">No feedback tickets.</td></tr>'}
-                    </tbody>
-                </table>
-            </div>
+            <script>
+            let isFetchingAdminData = false;
+            function escapeHtml(str) {{
+                if (!str) return '';
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }}
+
+            async function refreshAdminData() {{
+                if (isFetchingAdminData) return;
+                isFetchingAdminData = true;
+                const statusEl = document.getElementById('poll-status');
+                if (statusEl) statusEl.textContent = 'Updating...';
+                
+                try {{
+                    const res = await fetch('/admin/dashboard?json=1');
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    const data = await res.json();
+                    
+                    document.getElementById('cnt-users').textContent = data.counters.total_users;
+                    document.getElementById('cnt-feedback').textContent = data.counters.total_feedback;
+                    document.getElementById('cnt-success').textContent = data.counters.success_logins;
+                    document.getElementById('cnt-failed').textContent = data.counters.failed_logins;
+                    document.getElementById('cnt-attacks').textContent = data.counters.detected_attacks;
+                    document.getElementById('cnt-activity').textContent = data.counters.recent_activity;
+
+                    const actTbody = document.getElementById('tbl-activities');
+                    if (data.activities.length === 0) {{
+                        actTbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align: center;">No activity recorded yet.</td></tr>';
+                    }} else {{
+                        actTbody.innerHTML = data.activities.map(a => {{
+                            const sevColor = (a.severity === 'CRITICAL' || a.severity === 'HIGH') ? 'var(--red-primary)' : (a.severity === 'MEDIUM' ? 'var(--yellow-primary)' : 'var(--green-primary)');
+                            return `<tr style="border-bottom: 1px solid var(--border-primary);">
+                                <td class="text-muted" style="white-space: nowrap;">${escapeHtml(a.timestamp)}</td>
+                                <td style="color:#ffffff;">${escapeHtml(a.source_ip)}</td>
+                                <td style="font-weight:600;">${escapeHtml(a.action_type)}</td>
+                                <td>${escapeHtml(a.username_or_email)}</td>
+                                <td><span style="color:${sevColor}; font-weight:600;">${escapeHtml(a.result)}</span></td>
+                                <td><code>${escapeHtml(a.request_path)}</code></td>
+                                <td class="text-muted" style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(a.user_agent)}</td>
+                            </tr>`;
+                        }}).join('');
+                    }}
+
+                    const usrTbody = document.getElementById('tbl-users');
+                    if (data.users.length === 0) {{
+                        usrTbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align: center;">No decoy registrations logged.</td></tr>';
+                    }} else {{
+                        usrTbody.innerHTML = data.users.map(u => `
+                            <tr style="border-bottom: 1px solid var(--border-primary);">
+                                <td style="font-weight:600; color:#ffffff;">${escapeHtml(u.username)}</td>
+                                <td>${escapeHtml(u.email)}</td>
+                                <td><span class="badge badge-${escapeHtml(u.role)}">${escapeHtml(u.role)}</span></td>
+                                <td>${escapeHtml(u.source_ip)}</td>
+                                <td>${u.login_count} / ${u.failed_login_count}</td>
+                                <td class="text-muted">${escapeHtml(u.created_at)}</td>
+                            </tr>
+                        `).join('');
+                    }}
+
+                    const fbTbody = document.getElementById('tbl-feedback');
+                    if (data.feedbacks.length === 0) {{
+                        fbTbody.innerHTML = '<tr><td colspan="4" class="text-muted" style="text-align: center;">No feedback submissions yet.</td></tr>';
+                    }} else {{
+                        fbTbody.innerHTML = data.feedbacks.map(f => `
+                            <tr style="border-bottom: 1px solid var(--border-primary);">
+                                <td style="font-weight:600; color:#ffffff; width: 120px;">${escapeHtml(f.username)}</td>
+                                <td style="color: var(--text-primary);">${escapeHtml(f.message)}</td>
+                                <td style="width: 110px;"><span class="badge badge-user">${escapeHtml(f.status)}</span></td>
+                                <td class="text-muted" style="width: 140px;">${escapeHtml(f.created_at)}</td>
+                            </tr>
+                        `).join('');
+                    }}
+
+                    const atkTbody = document.getElementById('tbl-attacks');
+                    if (data.attacks.length === 0) {{
+                        atkTbody.innerHTML = '<tr><td colspan="5" class="text-muted" style="text-align: center;">No security intrusion probes logged.</td></tr>';
+                    }} else {{
+                        atkTbody.innerHTML = data.attacks.map(s => {{
+                            const sevColor = (s.severity === 'CRITICAL' || s.severity === 'HIGH') ? 'var(--red-primary)' : (s.severity === 'MEDIUM' ? 'var(--yellow-primary)' : 'var(--blue-primary)');
+                            return `<tr style="border-bottom: 1px solid var(--border-primary);">
+                                <td class="text-muted">${escapeHtml(s.time)}</td>
+                                <td style="color:#ffffff;">${escapeHtml(s.ip)}</td>
+                                <td style="font-weight:600;">${escapeHtml(s.type)}</td>
+                                <td><span style="color:${sevColor}; font-weight:600;">${escapeHtml(s.severity)}</span></td>
+                                <td class="text-muted" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(s.payload)}</td>
+                            </tr>`;
+                        }}).join('');
+                    }}
+
+                    if (statusEl) statusEl.textContent = 'Polling active (5s)';
+                }} catch (err) {{
+                    if (statusEl) statusEl.textContent = 'Refresh error: ' + err.message;
+                }} finally {{
+                    isFetchingAdminData = false;
+                }}
+            }}
+
+            const adminPollTimer = setInterval(refreshAdminData, 5000);
+            window.addEventListener('beforeunload', () => clearInterval(adminPollTimer));
+            </script>
             """
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.end_headers()
-            self.wfile.write(get_lab_html("Admin Panel", content, True, username, role).encode('utf-8'))
+            self.wfile.write(get_lab_html("Admin Panel", content, True, html.escape(username), html.escape(role)).encode('utf-8'))
             return
 
         # 10. ADMIN LOGS
         if path == "/admin/logs":
+            db = SessionLocal()
             rows = ""
-            for log in self.lab_request_logs[::-1]:
-                rows += f"""
-                <tr style="border-bottom: 1px solid var(--border-primary);">
-                    <td style="white-space: nowrap;">{log['time']}</td>
-                    <td style="color: #ffffff; font-weight: 600;">{log['ip']}</td>
-                    <td><span style="color: var(--blue-primary); font-weight: 600;">{log['method']}</span></td>
-                    <td><code>{log['path']}</code></td>
-                    <td>{log['user']}</td>
-                    <td class="text-muted" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{log['agent']}</td>
-                </tr>
-                """
+            try:
+                logs = db.query(HoneypotActivityLog).order_by(HoneypotActivityLog.timestamp.desc()).limit(50).all()
+                for log in logs:
+                    rows += f"""
+                    <tr style="border-bottom: 1px solid var(--border-primary);">
+                        <td style="white-space: nowrap;">{log.timestamp.strftime("%Y-%m-%d %H:%M:%S") if log.timestamp else ""}</td>
+                        <td style="color: #ffffff; font-weight: 600;">{html.escape(log.source_ip or "")}</td>
+                        <td><span style="color: var(--blue-primary); font-weight: 600;">{html.escape(log.action_type or "")}</span></td>
+                        <td><code>{html.escape(log.request_path or "")}</code></td>
+                        <td>{html.escape(log.username_or_email or "N/A")}</td>
+                        <td class="text-muted" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{html.escape(log.user_agent or "N/A")}</td>
+                    </tr>
+                    """
+            finally:
+                db.close()
 
             content = f"""
             <div class="card">
                 <h4 style="margin: 0 0 15px 0; color: #ffffff;">Sandbox Traffic Audit Log</h4>
-                <p class="text-muted" style="margin-bottom: 20px;">Dynamic in-memory server access records for vulnerability assessment logs:</p>
+                <p class="text-muted" style="margin-bottom: 20px;">Database-backed access records for vulnerability assessment logs:</p>
                 <table>
                     <thead>
                         <tr>
                             <th style="width: 150px;">Time</th>
                             <th>Source IP</th>
-                            <th>Method</th>
+                            <th>Action Type</th>
                             <th>URI Path</th>
-                            <th>Principal</th>
+                            <th>Principal / Subject</th>
                             <th>User-Agent</th>
                         </tr>
                     </thead>
@@ -1389,7 +1818,7 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.end_headers()
-            self.wfile.write(get_lab_html("Request Logs", content, True, username, role).encode('utf-8'))
+            self.wfile.write(get_lab_html("Request Logs", content, True, html.escape(username), html.escape(role)).encode('utf-8'))
             return
 
         # Fallback 404

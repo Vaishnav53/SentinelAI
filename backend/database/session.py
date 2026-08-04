@@ -76,6 +76,30 @@ def populate_demo_data(db: Session):
         db.add_all(default_sensors)
         db.commit()
 
+    # Seed Decoy Honeypot Portal Users
+    from backend.models.models import HoneypotPortalUser, HoneypotFeedback
+    import hashlib
+
+    def hash_decoy_pwd(p: str) -> str:
+        return hashlib.sha256(f"aetheris_decoy_salt_v1:{p}".encode("utf-8")).hexdigest()
+
+    if db.query(HoneypotPortalUser).count() == 0:
+        default_decoy_users = [
+            HoneypotPortalUser(username="admin", email="admin@sentinelai.local", password_hash=hash_decoy_pwd("admin@123"), role="admin", status="ACTIVE", source_ip="127.0.0.1"),
+            HoneypotPortalUser(username="user1", email="user1@sentinelai.local", password_hash=hash_decoy_pwd("user1@123"), role="user", status="ACTIVE", source_ip="127.0.0.1"),
+            HoneypotPortalUser(username="user2", email="user2@sentinelai.local", password_hash=hash_decoy_pwd("user2@123"), role="user", status="ACTIVE", source_ip="127.0.0.1"),
+        ]
+        db.add_all(default_decoy_users)
+        db.commit()
+
+    if db.query(HoneypotFeedback).count() == 0:
+        default_feedback = [
+            HoneypotFeedback(username="user1", email="user1@sentinelai.local", message="The SOC network is highly stable. Excellent decoy interfaces!", source_ip="127.0.0.1", status="NEW"),
+            HoneypotFeedback(username="user2", email="user2@sentinelai.local", message="Vulnerable test environment is running smoothly.", source_ip="127.0.0.1", status="NEW"),
+        ]
+        db.add_all(default_feedback)
+        db.commit()
+
     # 3. Seed Sample Attack Events
     if db.query(AttackEvent).count() == 0:
         now = datetime.utcnow()

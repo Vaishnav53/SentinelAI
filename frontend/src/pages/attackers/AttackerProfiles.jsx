@@ -60,6 +60,19 @@ export default function AttackerProfiles() {
   useEffect(() => {
     fetchList();
     fetchPlaybooks();
+
+    let isFetching = false;
+    const interval = setInterval(async () => {
+      if (isFetching) return;
+      isFetching = true;
+      try {
+        await fetchList();
+      } finally {
+        isFetching = false;
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {

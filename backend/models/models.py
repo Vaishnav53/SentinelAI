@@ -227,3 +227,44 @@ class PlaybookExecution(Base, DBBaseModel):
     logs_data = Column(Text, nullable=True)  # JSON serialized execution log steps
 
 Index("ix_playbook_executions_created_at", PlaybookExecution.created_at)
+
+class HoneypotPortalUser(Base, DBBaseModel):
+    __tablename__ = "honeypot_portal_users"
+
+    username = Column(String(50), unique=True, index=True, nullable=False)
+    email = Column(String(100), unique=True, index=True, nullable=False)
+    password_hash = Column(String(128), nullable=False)
+    role = Column(String(20), default="user", nullable=False)  # user, admin
+    status = Column(String(20), default="ACTIVE", nullable=False)  # ACTIVE, LOCKED, SUSPENDED
+    source_ip = Column(String(45), nullable=True)
+    login_count = Column(Integer, default=0, nullable=False)
+    failed_login_count = Column(Integer, default=0, nullable=False)
+    last_login_at = Column(DateTime, nullable=True)
+
+Index("ix_honeypot_portal_users_created_at", HoneypotPortalUser.created_at)
+
+class HoneypotFeedback(Base, DBBaseModel):
+    __tablename__ = "honeypot_feedback"
+
+    username = Column(String(50), nullable=True)
+    email = Column(String(100), nullable=True)
+    message = Column(Text, nullable=False)
+    source_ip = Column(String(45), nullable=True)
+    status = Column(String(20), default="NEW", nullable=False)  # NEW, REVIEWED, ARCHIVED
+
+Index("ix_honeypot_feedback_created_at", HoneypotFeedback.created_at)
+
+class HoneypotActivityLog(Base, DBBaseModel):
+    __tablename__ = "honeypot_activity_logs"
+
+    timestamp = Column(DateTime, index=True, nullable=False)
+    source_ip = Column(String(45), index=True, nullable=False)
+    action_type = Column(String(50), index=True, nullable=False)  # PAGE_VISIT, LOGIN_SUCCESS, LOGIN_FAILURE, SQLI_ATTEMPT, REGISTER_ATTEMPT, REGISTER_SUCCESS, REGISTER_FAILURE, FEEDBACK_SUBMISSION, LOGOUT
+    username_or_email = Column(String(100), nullable=True)
+    result = Column(String(20), nullable=False)  # SUCCESS, FAILED, INTERCEPTED, DETECTED
+    severity = Column(String(20), default="LOW", nullable=False)  # LOW, MEDIUM, HIGH, CRITICAL
+    request_path = Column(String(255), nullable=False)
+    user_agent = Column(String(255), nullable=True)
+    attack_event_id = Column(Integer, ForeignKey("attack_events.id"), nullable=True)
+
+
