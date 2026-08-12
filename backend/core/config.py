@@ -30,6 +30,8 @@ class Settings(BaseModel):
     AUTH_SESSION_COOKIE_NAME: str = Field(default_factory=lambda: os.getenv("AUTH_SESSION_COOKIE_NAME", "sentinel_session"))
     AUTH_SESSION_TTL_HOURS: int = Field(default_factory=lambda: int(os.getenv("AUTH_SESSION_TTL_HOURS", "24")))
     AUTH_COOKIE_SECURE: bool = Field(default_factory=lambda: os.getenv("AUTH_COOKIE_SECURE", "false").lower() in ("true", "1", "yes"))
+    AUTH_COOKIE_SAMESITE: str = Field(default_factory=lambda: os.getenv("AUTH_COOKIE_SAMESITE", "lax").lower())
+
 
     # Local AI Settings
     OLLAMA_BASE_URL: str = Field(default_factory=lambda: os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"))

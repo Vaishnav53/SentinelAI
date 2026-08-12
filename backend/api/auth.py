@@ -38,7 +38,7 @@ def register(
         value=raw_token,
         max_age=settings.AUTH_SESSION_TTL_HOURS * 3600,
         httponly=True,
-        samesite="lax",
+        samesite=settings.AUTH_COOKIE_SAMESITE,
         secure=settings.AUTH_COOKIE_SECURE,
         path="/"
     )
@@ -69,7 +69,7 @@ def login(
         value=raw_token,
         max_age=max_age_seconds,
         httponly=True,
-        samesite="lax",
+        samesite=settings.AUTH_COOKIE_SAMESITE,
         path="/",
         secure=settings.AUTH_COOKIE_SECURE
     )
@@ -99,8 +99,9 @@ def logout(
         key=settings.AUTH_SESSION_COOKIE_NAME,
         path="/",
         httponly=True,
-        samesite="lax",
+        samesite=settings.AUTH_COOKIE_SAMESITE,
         secure=settings.AUTH_COOKIE_SECURE
     )
+
     
     return {"message": "Logged out successfully"}

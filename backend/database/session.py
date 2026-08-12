@@ -3,8 +3,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from backend.core.config import settings
 
-# Parse the database URL. For SQLite, make sure parent directories exist.
+# Parse the database URL. Normalize postgres:// to postgresql:// for SQLAlchemy compatibility.
 db_url = settings.DATABASE_URL
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
 if db_url.startswith("sqlite:///"):
     db_path = db_url.replace("sqlite:///", "")
     # Handle absolute vs relative paths
@@ -21,6 +24,7 @@ if "postgresql" in db_url or "postgres" in db_url:
         pool_recycle=1800,
         pool_pre_ping=True
     )
+
 else:
     # Fallback/Default to SQLite
     connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}

@@ -307,9 +307,11 @@ High risk breach indicators. Probes, invalid authentications, or payload executi
     db.commit()
     db.refresh(report_job)
     
+    os.makedirs(settings.REPORT_STORAGE, exist_ok=True)
     file_path = os.path.join(settings.REPORT_STORAGE, f"report_{report_job.id}.md")
     try:
         with open(file_path, "w", encoding="utf-8") as f:
+
             f.write(markdown_content)
     except Exception as err:
         logger.error(f"Failed to write report file to disk: {err}")

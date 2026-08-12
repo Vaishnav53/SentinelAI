@@ -25,10 +25,20 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Production Deployment Security Guards
+    if settings.APP_ENV.lower() in ("production", "prod"):
+        if not settings.SECRET_KEY or settings.SECRET_KEY == "placeholder_secret_key":
+            raise RuntimeError("CRITICAL SECURITY ERROR: Production deployment requires a custom SECRET_KEY environment variable.")
+        if settings.DATABASE_URL.startswith("sqlite"):
+            raise RuntimeError("CRITICAL SECURITY ERROR: Production deployment requires a PostgreSQL DATABASE_URL environment variable.")
+        if settings.AUTH_COOKIE_SAMESITE == "none" and not settings.AUTH_COOKIE_SECURE:
+            raise RuntimeError("CRITICAL SECURITY ERROR: AUTH_COOKIE_SAMESITE='none' requires AUTH_COOKIE_SECURE=true.")
+
     # Idempotent Database Initialization on Startup
     logging.info("Initializing database tables...")
     try:
         Base.metadata.create_all(bind=engine)
+
         logging.info("Database tables initialized successfully.")
         
         # Add new columns to existing SQLite files if they do not exist
