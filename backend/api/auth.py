@@ -21,12 +21,29 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.post("/register", response_model=UserResponse, status_code=201)
 def register(
     payload: RegisterRequest,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db)
 ):
-    """Register a new SentinelAI user account."""
+    """Register a new SentinelAI user account and establish authenticated session."""
     user = AuthService.register_user(db, payload)
     logger.info(f"SentinelAI user registered successfully: {user.username} ({user.email})")
+
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    raw_token, _ = AuthService.create_user_session(db, user.id, ip_address, user_agent)
+
+    response.set_cookie(
+        key=settings.AUTH_SESSION_COOKIE_NAME,
+        value=raw_token,
+        max_age=settings.AUTH_SESSION_TTL_HOURS * 3600,
+        httponly=True,
+        samesite="lax",
+        secure=settings.AUTH_COOKIE_SECURE,
+        path="/"
+    )
     return user
+
 
 @router.post("/login", response_model=UserResponse)
 def login(
