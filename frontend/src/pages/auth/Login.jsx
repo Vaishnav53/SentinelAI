@@ -111,9 +111,10 @@ export const Login = () => {
         <div className="auth-footer">
           Don't have a SentinelAI account?{' '}
           <Link to="/register" className="auth-link">
-            Request Analyst Account
+            Register Analyst Account
           </Link>
         </div>
+
       </div>
     </div>
   );
