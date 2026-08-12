@@ -1,11 +1,10 @@
 import pytest
-from fastapi.testclient import TestClient
-from backend.main import app
 from backend.database.session import SessionLocal
 from backend.models.models import WAFRule, WAFHit, AuditLog
+from backend.tests.conftest import create_test_auth_client
 
 def test_waf_rules_crud():
-    with TestClient(app) as client:
+    with create_test_auth_client() as client:
         # 1. Create rule
         res = client.post("/api/waf/rules", json={
             "ip_address": "10.0.0.99",

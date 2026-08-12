@@ -12,14 +12,20 @@ import {
   X,
   Clock,
   ShieldAlert,
-  Globe
+  Globe,
+  LogOut,
+  User
 } from 'lucide-react';
 import apiClient from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import './DashboardLayout.css';
+
 
 export default function DashboardLayout() {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
   const [backendStatus, setBackendStatus] = useState('CHECKING');
   const [ollamaStatus, setOllamaStatus] = useState('CHECKING');
   const [honeypotStatus, setHoneypotStatus] = useState('CHECKING');
@@ -391,7 +397,36 @@ export default function DashboardLayout() {
               <div className="clock-date">{formatDate(currentTime)}</div>
             </div>
           </div>
+
+          {/* User Profile & Logout */}
+          <div className="flex items-center gap-3 ml-3 pl-3 border-l border-slate-800">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-emerald-500/20">
+              <div className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-400 font-mono text-xs font-bold">
+                {user?.username ? user.username.substring(0, 2).toUpperCase() : 'SO'}
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-xs font-semibold text-slate-200 font-mono leading-tight">
+                  {user?.username || 'Analyst'}
+                </span>
+                <span className="text-[10px] uppercase font-mono text-emerald-400 tracking-wider leading-none">
+                  {user?.role || 'User'}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                logout();
+                navigate('/login');
+              }}
+              className="p-2 rounded-lg bg-slate-900/80 border border-red-500/20 text-slate-400 hover:text-red-400 hover:border-red-500/40 transition-colors"
+              title="Logout from SentinelAI SOC"
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
         </header>
+
 
         <main className="viewport-content">
           <Outlet />

@@ -106,12 +106,11 @@ def test_honeypot_api_router_endpoints(client):
     assert stop_resp.status_code == 200
 
 def test_honeypot_event_detail_by_id_and_missing_event():
-    from fastapi.testclient import TestClient
-    from backend.main import app
-    from backend.database.session import SessionLocal
     from datetime import datetime
+    from backend.database.session import SessionLocal
+    from backend.tests.conftest import create_test_auth_client
 
-    with TestClient(app) as client:
+    with create_test_auth_client() as client:
         db = SessionLocal()
         try:
             test_event = AttackEvent(

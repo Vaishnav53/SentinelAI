@@ -162,7 +162,25 @@ async def start_attack_simulator():
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    from backend.core.config import settings
+    from backend.services.auth import AuthService
+    cookie_name = settings.AUTH_SESSION_COOKIE_NAME
+    token = websocket.cookies.get(cookie_name)
+    if not token:
+        await websocket.close(code=4001, reason="Unauthorized session")
+        return
+
+    db = SessionLocal()
+    try:
+        AuthService.get_user_from_session(db, token)
+    except Exception:
+        await websocket.close(code=4001, reason="Unauthorized session")
+        return
+    finally:
+        db.close()
+
     await manager.connect(websocket)
+
     try:
         while True:
             # Receive message to keep socket open

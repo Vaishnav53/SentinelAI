@@ -267,4 +267,30 @@ class HoneypotActivityLog(Base, DBBaseModel):
     user_agent = Column(String(255), nullable=True)
     attack_event_id = Column(Integer, ForeignKey("attack_events.id"), nullable=True)
 
+class SentinelUser(Base, DBBaseModel):
+    __tablename__ = "sentinel_users"
 
+    username = Column(String(50), unique=True, index=True, nullable=False)
+    email = Column(String(100), unique=True, index=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    role = Column(String(20), default="user", nullable=False)  # user, admin
+    is_active = Column(Integer, default=1, nullable=False)  # 1 = active, 0 = inactive
+    last_login_at = Column(DateTime, nullable=True)
+
+    sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
+
+Index("ix_sentinel_users_created_at", SentinelUser.created_at)
+
+class UserSession(Base, DBBaseModel):
+    __tablename__ = "user_sessions"
+
+    user_id = Column(Integer, ForeignKey("sentinel_users.id", ondelete="CASCADE"), nullable=False)
+    token_hash = Column(String(64), unique=True, index=True, nullable=False)
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(255), nullable=True)
+    expires_at = Column(DateTime, index=True, nullable=False)
+    last_seen_at = Column(DateTime, nullable=False)
+
+    user = relationship("SentinelUser", back_populates="sessions")
+
+Index("ix_user_sessions_created_at", UserSession.created_at)

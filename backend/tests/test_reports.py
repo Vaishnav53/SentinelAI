@@ -7,8 +7,10 @@ from backend.database.session import SessionLocal
 from backend.models.models import AttackEvent, CorrelatedIncident, DecoySandboxFile, ReportJob, Report
 from datetime import datetime
 
+from backend.tests.conftest import create_test_auth_client
+
 def test_reports_workflow():
-    with TestClient(app) as client:
+    with create_test_auth_client() as client:
         db = SessionLocal()
         try:
             # Seed mock data

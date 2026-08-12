@@ -4,8 +4,10 @@ from backend.main import app
 from backend.database.session import SessionLocal
 from backend.models.models import NormalizedLog, CorrelatedIncident
 
+from backend.tests.conftest import create_test_auth_client
+
 def test_logs_ingestion_and_brute_force_correlation():
-    with TestClient(app) as client:
+    with create_test_auth_client() as client:
         # 1. Ingest first failed logon
         res = client.post("/api/logs/ingest/windows", json={
             "event_id": 4625,

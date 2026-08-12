@@ -4,8 +4,10 @@ from backend.main import app
 from backend.database.session import SessionLocal
 from backend.models.models import DecoySandboxFile, WAFRule, AttackEvent
 
+from backend.tests.conftest import create_test_auth_client
+
 def test_sandbox_ingestion_and_threat_detection():
-    with TestClient(app) as client:
+    with create_test_auth_client() as client:
         # 1. Ingest a clean avatar file
         from backend.services.decoy_sandbox import DecoySandboxService
         db = SessionLocal()

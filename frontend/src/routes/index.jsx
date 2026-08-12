@@ -11,10 +11,26 @@ import SandboxDashboard from '../pages/sandbox/SandboxDashboard';
 import AttackerProfiles from '../pages/attackers/AttackerProfiles';
 import PlaybooksConsole from '../pages/playbooks/PlaybooksConsole';
 
+import ProtectedRoute from '../components/auth/ProtectedRoute';
+import Login from '../pages/auth/Login';
+import Register from '../pages/auth/Register';
+
 const router = createBrowserRouter([
   {
+    path: '/login',
+    element: <Login />,
+  },
+  {
+    path: '/register',
+    element: <Register />,
+  },
+  {
     path: '/',
-    element: <DashboardLayout />,
+    element: (
+      <ProtectedRoute>
+        <DashboardLayout />
+      </ProtectedRoute>
+    ),
     children: [
       {
         path: '',

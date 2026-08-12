@@ -4,8 +4,10 @@ from backend.main import app
 from backend.database.session import SessionLocal
 from backend.models.models import ThreatPlaybook, PlaybookExecution, WAFRule, AttackEvent, CorrelatedIncident
 
+from backend.tests.conftest import create_test_auth_client
+
 def test_playbook_workflows_crud_and_execution():
-    with TestClient(app) as client:
+    with create_test_auth_client() as client:
         db = SessionLocal()
         
         # 1. Clean previous rules and playbooks
@@ -72,7 +74,7 @@ def test_playbook_workflows_crud_and_execution():
         db.close()
 
 def test_attacker_profiling_aggregation():
-    with TestClient(app) as client:
+    with create_test_auth_client() as client:
         db = SessionLocal()
         
         # Ingest mock AttackEvent

@@ -17,6 +17,7 @@ from backend.core.errors import (
 )
 from backend.database.session import engine, SessionLocal, populate_demo_data
 from backend.models.base import Base
+import backend.models.models
 from backend.api.router import api_router
 
 # Initialize Logging
