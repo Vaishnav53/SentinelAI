@@ -56,8 +56,9 @@ export const Register = () => {
       <div className="auth-card">
         <div className="auth-header">
           <div className="auth-logo-badge">
-            <Shield className="w-7 h-7 text-emerald-400" />
+            <Shield className="w-7 h-7 text-blue-400" />
           </div>
+
           <h1 className="auth-title">Register SOC Account</h1>
           <p className="auth-subtitle">SentinelAI Cybersecurity Operations</p>
         </div>

@@ -41,8 +41,9 @@ export const Login = () => {
       <div className="auth-card">
         <div className="auth-header">
           <div className="auth-logo-badge">
-            <Shield className="w-7 h-7 text-emerald-400" />
+            <Shield className="w-7 h-7 text-blue-400" />
           </div>
+
           <h1 className="auth-title">SentinelAI SOC Portal</h1>
           <p className="auth-subtitle">Autonomous Security Operations Platform</p>
         </div>
