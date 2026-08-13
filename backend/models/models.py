@@ -273,7 +273,8 @@ class SentinelUser(Base, DBBaseModel):
     username = Column(String(50), unique=True, index=True, nullable=False)
     email = Column(String(100), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
-    role = Column(String(20), default="user", nullable=False)  # user, admin
+    role = Column(String(20), default="analyst", nullable=False)  # analyst, admin
+
     is_active = Column(Integer, default=1, nullable=False)  # 1 = active, 0 = inactive
     last_login_at = Column(DateTime, nullable=True)
 

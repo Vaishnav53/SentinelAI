@@ -408,9 +408,10 @@ export default function DashboardLayout() {
                 <span className="text-xs font-semibold text-slate-200 font-mono leading-tight">
                   {user?.username || 'Analyst'}
                 </span>
-                <span className="text-[10px] uppercase font-mono text-emerald-400 tracking-wider leading-none">
-                  {user?.role || 'User'}
+                <span className={`text-[10px] uppercase font-mono tracking-wider leading-none font-bold ${user?.role === 'admin' ? 'text-amber-400' : 'text-emerald-400'}`}>
+                  {user?.role === 'admin' ? 'Administrator' : 'Analyst'}
                 </span>
+
               </div>
             </div>
 

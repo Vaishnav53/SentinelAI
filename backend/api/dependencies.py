@@ -20,7 +20,17 @@ def get_current_user(
             code="UNAUTHORIZED",
             status_code=401
         )
-        
     return AuthService.get_user_from_session(db, token)
 
 
+def require_admin(
+    current_user: SentinelUser = Depends(get_current_user)
+) -> SentinelUser:
+    """Dependency enforcing that the authenticated user possesses administrator role ('admin')."""
+    if current_user.role != "admin":
+        raise SentinelException(
+            message="Administrator privileges required for this operation.",
+            code="FORBIDDEN",
+            status_code=403
+        )
+    return current_user

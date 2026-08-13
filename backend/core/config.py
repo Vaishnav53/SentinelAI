@@ -26,11 +26,16 @@ class Settings(BaseModel):
     TRUSTED_HOSTS: str = Field(default_factory=lambda: os.getenv("TRUSTED_HOSTS", "127.0.0.1,localhost,testserver"))
 
     # Auth Settings
-
     AUTH_SESSION_COOKIE_NAME: str = Field(default_factory=lambda: os.getenv("AUTH_SESSION_COOKIE_NAME", "sentinel_session"))
     AUTH_SESSION_TTL_HOURS: int = Field(default_factory=lambda: int(os.getenv("AUTH_SESSION_TTL_HOURS", "24")))
     AUTH_COOKIE_SECURE: bool = Field(default_factory=lambda: os.getenv("AUTH_COOKIE_SECURE", "false").lower() in ("true", "1", "yes"))
     AUTH_COOKIE_SAMESITE: str = Field(default_factory=lambda: os.getenv("AUTH_COOKIE_SAMESITE", "lax").lower())
+
+    # Administrator Bootstrap Settings
+    SENTINEL_ADMIN_USERNAME: str = Field(default_factory=lambda: os.getenv("SENTINEL_ADMIN_USERNAME", "dyn4m1t3"))
+    SENTINEL_ADMIN_PASSWORD: Optional[str] = Field(default_factory=lambda: os.getenv("SENTINEL_ADMIN_PASSWORD"))
+    SENTINEL_ADMIN_EMAIL: str = Field(default_factory=lambda: os.getenv("SENTINEL_ADMIN_EMAIL", "admin@sentinel.ai"))
+
 
 
     # Local AI Settings

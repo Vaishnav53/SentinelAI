@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, ShieldAlert, Plus, ToggleLeft, ToggleRight, Trash2, Search, Filter, RefreshCw, Edit2, Users, X } from 'lucide-react';
 import apiClient from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
 import './WAFManager.css';
 
 export default function WAFManager() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+
   
   // Status stats
   const [stats, setStats] = useState({
@@ -218,8 +222,9 @@ export default function WAFManager() {
           </select>
 
           <button 
-            className="btn-action-soc btn-create-rule"
+            className={`btn-action-soc btn-create-rule ${!isAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
             onClick={() => {
+              if (!isAdmin) return;
               setEditingRule(null);
               setFormIp('');
               setFormAction('BLOCK');
@@ -227,10 +232,13 @@ export default function WAFManager() {
               setFormExpiry('24');
               setShowAddModal(true);
             }}
+            disabled={!isAdmin}
+            title={isAdmin ? "Create manual security containment rule" : "Administrator privileges required to create WAF rules"}
           >
             <Plus size={14} style={{ marginRight: '6px' }} />
             New Rule
           </button>
+
 
           <button 
             className={`sync-btn ${isSyncing ? 'syncing' : ''}`}

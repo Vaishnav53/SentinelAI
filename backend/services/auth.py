@@ -43,13 +43,13 @@ class AuthService:
                 status_code=400
             )
 
-        # Hash password and store user
+        # Hash password and store user with analyst role
         hashed_pwd = hash_password(payload.password)
         new_user = SentinelUser(
             username=username,
             email=email,
             password_hash=hashed_pwd,
-            role="user",
+            role="analyst",
             is_active=1
         )
         
@@ -66,6 +66,47 @@ class AuthService:
                 status_code=400,
                 details={"error": str(e)}
             )
+
+    @staticmethod
+    def bootstrap_admin_user(db: Session) -> Optional[SentinelUser]:
+        """Safely bootstrap environment-configured administrator account if credentials are present."""
+        admin_username = (settings.SENTINEL_ADMIN_USERNAME or "dyn4m1t3").strip()
+        admin_password = settings.SENTINEL_ADMIN_PASSWORD
+        admin_email = (settings.SENTINEL_ADMIN_EMAIL or "admin@sentinel.ai").strip().lower()
+
+        if not admin_password:
+            return None
+
+        # Check existing admin account by username or email
+        existing_user = db.query(SentinelUser).filter(
+            (func.lower(SentinelUser.username) == admin_username.lower()) |
+            (func.lower(SentinelUser.email) == admin_email)
+        ).first()
+
+        if existing_user:
+            # Ensure existing account maintains administrator role
+            if existing_user.role != "admin":
+                existing_user.role = "admin"
+                db.commit()
+                db.refresh(existing_user)
+            return existing_user
+
+        # Create fresh admin user with Argon2id password hashing
+        hashed_pwd = hash_password(admin_password)
+        admin_user = SentinelUser(
+            username=admin_username,
+            email=admin_email,
+            password_hash=hashed_pwd,
+            role="admin",
+            is_active=1
+        )
+        db.add(admin_user)
+        db.commit()
+        db.refresh(admin_user)
+        import logging
+        logging.info(f"Administrator account '{admin_username}' bootstrapped successfully.")
+        return admin_user
+
 
     @staticmethod
     def authenticate_user(db: Session, identity: str, password: str) -> SentinelUser:

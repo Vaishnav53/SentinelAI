@@ -24,7 +24,8 @@ def test_auth_full_lifecycle(db):
             user_data = res.json()
             assert user_data["username"] == "analyst_john"
             assert user_data["email"] == "john.analyst@sentinel.ai"
-            assert user_data["role"] == "user"
+            assert user_data["role"] == "analyst"
+
             assert "password_hash" not in user_data
             assert "password" not in user_data
 

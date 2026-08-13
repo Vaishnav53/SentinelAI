@@ -49,6 +49,11 @@ def create_test_auth_client(db_session=None):
                 email="operator_test@sentinel.ai",
                 password="TestPassword123!"
             ))
+            user.role = "admin"
+            db.commit()
+        elif user.role != "admin":
+            user.role = "admin"
+            db.commit()
         raw_token, _ = AuthService.create_user_session(db, user.id)
         test_client = TestClient(app)
         test_client.cookies.set(settings.AUTH_SESSION_COOKIE_NAME, raw_token)
@@ -80,6 +85,12 @@ def client(db):
             email="operator_test@sentinel.ai",
             password="TestPassword123!"
         ))
+        user.role = "admin"
+        db.commit()
+    elif user.role != "admin":
+        user.role = "admin"
+        db.commit()
+
     raw_token, _ = AuthService.create_user_session(db, user.id)
 
     with TestClient(app) as test_client:

@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from backend.database.session import get_db
 from backend.models.models import WAFRule, WAFHit, AuditLog
+from backend.api.dependencies import require_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/waf", tags=["waf"])
@@ -83,7 +84,7 @@ def get_waf_rules(
         query = query.filter(WAFRule.action == action.upper())
     return query.order_by(WAFRule.created_at.desc()).all()
 
-@router.post("/rules", response_model=WAFRuleRead)
+@router.post("/rules", response_model=WAFRuleRead, dependencies=[Depends(require_admin)])
 def create_waf_rule(payload: WAFRuleCreate, db: Session = Depends(get_db)):
     """Create a new manual security containment rule."""
     rule = WAFRule(
@@ -109,7 +110,7 @@ def create_waf_rule(payload: WAFRuleCreate, db: Session = Depends(get_db)):
     db.commit()
     return rule
 
-@router.put("/rules/{id}", response_model=WAFRuleRead)
+@router.put("/rules/{id}", response_model=WAFRuleRead, dependencies=[Depends(require_admin)])
 def update_waf_rule(id: int, payload: WAFRuleUpdate, db: Session = Depends(get_db)):
     """Edit details or enable/disable an existing WAF rule."""
     rule = db.query(WAFRule).filter(WAFRule.id == id).first()
@@ -142,8 +143,9 @@ def update_waf_rule(id: int, payload: WAFRuleUpdate, db: Session = Depends(get_d
     db.commit()
     return rule
 
-@router.delete("/rules/{id}")
+@router.delete("/rules/{id}", dependencies=[Depends(require_admin)])
 def delete_waf_rule(id: int, db: Session = Depends(get_db)):
+
     """Remove a security containment rule."""
     rule = db.query(WAFRule).filter(WAFRule.id == id).first()
     if not rule:

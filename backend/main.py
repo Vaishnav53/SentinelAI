@@ -54,14 +54,22 @@ async def lifespan(app: FastAPI):
                 conn.commit()
             except Exception:
                 pass
+            try:
+                conn.execute(text("ALTER TABLE sentinel_users ADD COLUMN role VARCHAR(20) DEFAULT 'analyst';"))
+                conn.commit()
+            except Exception:
+                pass
 
-        # Populate initial/demo data
+        # Populate initial/demo data and bootstrap admin user
         db = SessionLocal()
         try:
             populate_demo_data(db)
             logging.info("Demo data populated successfully.")
+            from backend.services.auth import AuthService
+            AuthService.bootstrap_admin_user(db)
         finally:
             db.close()
+
             
         # Start background threat simulator task
         import asyncio
