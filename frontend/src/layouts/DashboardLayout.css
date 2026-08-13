@@ -722,3 +722,107 @@
     box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
   }
 }
+
+/* User Profile Header Badge */
+.user-profile-header-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(30, 41, 59, 0.8);
+  flex-shrink: 0;
+}
+
+.user-badge-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  background-color: rgba(15, 23, 42, 0.9);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.user-badge-container.admin {
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background-color: rgba(69, 26, 3, 0.25);
+}
+
+.user-badge-container.analyst {
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  background-color: rgba(6, 78, 59, 0.25);
+}
+
+.user-avatar-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.user-avatar-circle.admin {
+  background-color: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  color: #fbbf24;
+}
+
+.user-avatar-circle.analyst {
+  background-color: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  color: #34d399;
+}
+
+.user-identity-block {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  min-width: 0;
+  text-align: left;
+}
+
+.user-identity-name {
+  display: block;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: #cbd5e1;
+  line-height: 1.2;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.user-identity-role {
+  display: inline-block;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.user-identity-role.admin {
+  background-color: rgba(245, 158, 11, 0.25);
+  color: #fef08a;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.15);
+}
+
+.user-identity-role.analyst {
+  background-color: rgba(16, 185, 129, 0.25);
+  color: #a7f3d0;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.15);
+}

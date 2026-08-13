@@ -399,26 +399,17 @@ export default function DashboardLayout() {
           </div>
 
           {/* User Profile & Logout */}
-          <div className="flex items-center gap-3 ml-3 pl-3 border-l border-slate-800 shrink-0">
-            <div className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-slate-900/90 border whitespace-nowrap ${
-              user?.role === 'admin' ? 'border-amber-500/30' : 'border-emerald-500/30'
-            }`}>
-              <div className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center font-mono text-xs font-bold ${
-                user?.role === 'admin'
-                  ? 'bg-amber-500/20 border border-amber-400/40 text-amber-400'
-                  : 'bg-emerald-500/20 border border-emerald-400/40 text-emerald-400'
-              }`}>
-
+          <div className="user-profile-header-card">
+            <div className={`user-badge-container ${user?.role === 'admin' ? 'admin' : 'analyst'}`}>
+              <div className={`user-avatar-circle ${user?.role === 'admin' ? 'admin' : 'analyst'}`}>
                 {user?.username ? user.username.substring(0, 2).toUpperCase() : 'SO'}
               </div>
-              <div className="flex flex-col text-left justify-center min-w-0">
-                <span className="text-xs font-semibold text-slate-200 font-mono leading-tight truncate">
+              <div className="user-identity-block">
+                <span className="user-identity-name">
                   {user?.username || 'Analyst'}
                 </span>
-                <span className={`text-[10px] uppercase font-mono tracking-wider leading-tight font-bold ${
-                  user?.role === 'admin' ? 'text-amber-400' : 'text-emerald-400'
-                }`}>
-                  {user?.role === 'admin' ? 'Administrator' : 'Analyst'}
+                <span className={`user-identity-role ${user?.role === 'admin' ? 'admin' : 'analyst'}`}>
+                  {user?.role === 'admin' ? 'ADMINISTRATOR' : 'ANALYST'}
                 </span>
               </div>
             </div>
@@ -434,6 +425,7 @@ export default function DashboardLayout() {
               <LogOut size={16} />
             </button>
           </div>
+
 
         </header>
 
