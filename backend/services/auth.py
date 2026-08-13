@@ -84,12 +84,19 @@ class AuthService:
         ).first()
 
         if existing_user:
-            # Ensure existing account maintains administrator role
+            # Ensure existing account maintains administrator role and matching password hash
+            updated = False
             if existing_user.role != "admin":
                 existing_user.role = "admin"
+                updated = True
+            if not verify_password(admin_password, existing_user.password_hash):
+                existing_user.password_hash = hash_password(admin_password)
+                updated = True
+            if updated:
                 db.commit()
                 db.refresh(existing_user)
             return existing_user
+
 
         # Create fresh admin user with Argon2id password hashing
         hashed_pwd = hash_password(admin_password)
