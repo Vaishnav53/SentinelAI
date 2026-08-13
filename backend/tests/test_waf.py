@@ -82,3 +82,59 @@ def test_active_defense_evaluation():
         db.commit()
     finally:
         db.close()
+
+def test_waf_observed_sources_and_honeypot_enforcement():
+    with create_test_auth_client() as client:
+        db = SessionLocal()
+        try:
+            from datetime import datetime
+            from backend.models.models import HoneypotActivityLog
+            log_entry = HoneypotActivityLog(
+                timestamp=datetime.utcnow(),
+                source_ip="192.168.22.33",
+                action_type="LOGIN_PROBE",
+                result="DETECTED",
+                severity="HIGH",
+                request_path="/login.php"
+            )
+
+
+            db.add(log_entry)
+            db.commit()
+
+            # 1. Fetch observed sources endpoint
+            res = client.get("/api/waf/observed-sources")
+            assert res.status_code == 200
+            sources = res.json()
+            target_source = next((s for s in sources if s["ip_address"] == "192.168.22.33"), None)
+            assert target_source is not None
+            assert target_source["is_blocked"] is False
+            assert target_source["event_count"] >= 1
+
+            # 2. Block the observed source
+            res = client.post("/api/waf/rules", json={
+                "ip_address": "192.168.22.33",
+                "action": "BLOCK",
+                "reason": "Observed Honeypot Source containment"
+            })
+            assert res.status_code == 200
+            rule_id = res.json()["id"]
+
+            # 3. Verify ActiveDefenseEngine evaluates blocked state for target IP
+            from backend.services.active_defense import ActiveDefenseEngine
+            engine = ActiveDefenseEngine(db)
+            is_blocked, action, reason = engine.evaluate_request(
+                "192.168.22.33", "/", "GET", {}, ""
+            )
+            assert is_blocked is True
+            assert action == "BLOCK"
+
+            # 4. Unblock observed source
+            res = client.delete(f"/api/waf/rules/{rule_id}")
+            assert res.status_code == 200
+
+            # 5. Clean up test log
+            db.delete(log_entry)
+            db.commit()
+        finally:
+            db.close()

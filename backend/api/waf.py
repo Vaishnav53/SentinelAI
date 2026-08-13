@@ -7,13 +7,22 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from backend.database.session import get_db
-from backend.models.models import WAFRule, WAFHit, AuditLog
+from backend.models.models import WAFRule, WAFHit, AuditLog, AttackEvent, HoneypotActivityLog, DecoySandboxFile
 from backend.api.dependencies import require_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/waf", tags=["waf"])
 
+class ObservedSourceRead(BaseModel):
+    ip_address: str
+    last_seen: str
+    event_count: int
+    threat_types: List[str]
+    is_blocked: bool
+    rule_id: Optional[int] = None
+
 class WAFRuleRead(BaseModel):
+
     id: int
     ip_address: Optional[str] = None
     action: str
@@ -186,3 +195,62 @@ def get_waf_status(db: Session = Depends(get_db)):
 def get_waf_hits(db: Session = Depends(get_db)):
     """Retrieve audit history logs of WAF rule matches."""
     return db.query(WAFHit).order_by(WAFHit.created_at.desc()).limit(100).all()
+
+@router.get("/observed-sources", response_model=List[ObservedSourceRead])
+def get_observed_sources(db: Session = Depends(get_db)):
+    """Retrieve all real source IPs observed across honeypot and telemetry logs."""
+    ips = set()
+    for ip in db.query(AttackEvent.source_ip).distinct().all():
+        if ip[0]: ips.add(ip[0])
+    for ip in db.query(HoneypotActivityLog.source_ip).distinct().all():
+        if ip[0]: ips.add(ip[0])
+    for ip in db.query(WAFHit.ip_address).distinct().all():
+        if ip[0]: ips.add(ip[0])
+    for ip in db.query(DecoySandboxFile.ip_address).distinct().all():
+        if ip[0]: ips.add(ip[0])
+
+    observed_sources = []
+    for ip in ips:
+        timestamps = []
+        threat_types = set()
+
+        a_events = db.query(AttackEvent).filter(AttackEvent.source_ip == ip).all()
+        for ae in a_events:
+            if ae.created_at: timestamps.append(ae.created_at)
+            if ae.attack_type: threat_types.add(ae.attack_type)
+
+        h_logs = db.query(HoneypotActivityLog).filter(HoneypotActivityLog.source_ip == ip).all()
+        for hl in h_logs:
+            if hl.timestamp: timestamps.append(hl.timestamp)
+            if hl.action_type: threat_types.add(hl.action_type)
+
+        w_hits = db.query(WAFHit).filter(WAFHit.ip_address == ip).all()
+        for wh in w_hits:
+            if wh.created_at: timestamps.append(wh.created_at)
+            if wh.action: threat_types.add(f"WAF {wh.action}")
+
+        s_files = db.query(DecoySandboxFile).filter(DecoySandboxFile.ip_address == ip).all()
+        for sf in s_files:
+            if sf.created_at: timestamps.append(sf.created_at)
+            if sf.status: threat_types.add(f"Sandbox {sf.status}")
+
+        event_count = len(a_events) + len(h_logs) + len(w_hits) + len(s_files)
+        latest_time = max(timestamps) if timestamps else datetime.utcnow()
+        last_seen_str = latest_time.strftime("%Y-%m-%d %H:%M:%S UTC")
+
+        active_rule = db.query(WAFRule).filter(
+            WAFRule.ip_address == ip,
+            WAFRule.is_enabled == 1,
+            WAFRule.action == "BLOCK"
+        ).first()
+
+        observed_sources.append(ObservedSourceRead(
+            ip_address=ip,
+            last_seen=last_seen_str,
+            event_count=event_count,
+            threat_types=sorted(list(threat_types)),
+            is_blocked=active_rule is not None,
+            rule_id=active_rule.id if active_rule else None
+        ))
+
+    return sorted(observed_sources, key=lambda x: x.last_seen, reverse=True)

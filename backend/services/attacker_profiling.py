@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
-from backend.models.models import AttackEvent, WAFHit, DecoySandboxFile, WAFRule, PlaybookExecution, ThreatPlaybook, CorrelatedIncident
+from backend.models.models import AttackEvent, WAFHit, DecoySandboxFile, WAFRule, PlaybookExecution, ThreatPlaybook, CorrelatedIncident, HoneypotActivityLog
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +16,11 @@ MITRE_MAPPINGS = {
     "T1548": {"tactic": "Privilege Escalation", "name": "Abuse Elevation Control Mechanism"},
     "T1105": {"tactic": "Command and Control", "name": "Ingress Tool Transfer"}
 }
+
+def is_local_ip(ip: str) -> bool:
+    if not ip:
+        return True
+    return ip in ("127.0.0.1", "::1", "localhost") or ip.startswith(("192.168.", "10.", "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31."))
 
 class AttackerProfilingService:
     def __init__(self, db: Session):
@@ -31,19 +36,27 @@ class AttackerProfilingService:
             if ip[0]: ips.add(ip[0])
         for ip in self.db.query(DecoySandboxFile.ip_address).distinct().all():
             if ip[0]: ips.add(ip[0])
+        for ip in self.db.query(HoneypotActivityLog.source_ip).distinct().all():
+            if ip[0]: ips.add(ip[0])
 
         results = []
         for ip in ips:
-            # Skip localhost local loop checking for cleaner lists if needed (optional)
             attack_count = self.db.query(AttackEvent).filter(AttackEvent.source_ip == ip).count()
             waf_count = self.db.query(WAFHit).filter(WAFHit.ip_address == ip).count()
             sandbox_count = self.db.query(DecoySandboxFile).filter(DecoySandboxFile.ip_address == ip).count()
+            activity_count = self.db.query(HoneypotActivityLog).filter(HoneypotActivityLog.source_ip == ip).count()
             
             # Highest severity calculation
             max_severity = "LOW"
             severities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
             for a in self.db.query(AttackEvent.severity).filter(AttackEvent.source_ip == ip).all():
                 sev_val = a[0].upper() if a[0] else "LOW"
+                if sev_val in severities:
+                    if severities.index(sev_val) > severities.index(max_severity):
+                        max_severity = sev_val
+
+            for hl in self.db.query(HoneypotActivityLog.severity).filter(HoneypotActivityLog.source_ip == ip).all():
+                sev_val = hl[0].upper() if hl[0] else "LOW"
                 if sev_val in severities:
                     if severities.index(sev_val) > severities.index(max_severity):
                         max_severity = sev_val
@@ -63,9 +76,13 @@ class AttackerProfilingService:
                 country = a_event.country or "Unknown"
                 city = a_event.city or "Unknown"
 
+            if country == "Unknown" and is_local_ip(ip):
+                country = "Local Network"
+                city = "Local Infrastructure"
+
             results.append({
                 "ip_address": ip,
-                "attack_count": attack_count,
+                "attack_count": attack_count + activity_count,
                 "waf_count": waf_count,
                 "sandbox_count": sandbox_count,
                 "highest_severity": max_severity,
@@ -75,7 +92,8 @@ class AttackerProfilingService:
             })
 
         # Sort results by threat severity/count
-        return sorted(results, key=lambda x: x["attack_count"] + x["waf_count"], reverse=True)
+        return sorted(results, key=lambda x: x["attack_count"] + x["waf_count"] + x["sandbox_count"], reverse=True)
+
 
     def get_attacker_profile(self, ip: str) -> Optional[Dict[str, Any]]:
         """Build detailed threat profile timeline and MITRE mappings for an IP."""
@@ -99,6 +117,13 @@ class AttackerProfilingService:
                     except:
                         pass
                 break
+
+        if country == "Unknown" and is_local_ip(ip):
+            country = "Local Network"
+            city = "Local Infrastructure"
+
+        # Fetch honeypot activity logs
+        h_logs = self.db.query(HoneypotActivityLog).filter(HoneypotActivityLog.source_ip == ip).all()
 
         # 2. MITRE Techniques matched
         matched_techniques = {}
@@ -126,6 +151,29 @@ class AttackerProfilingService:
                 else:
                     matched_techniques[tech_id]["count"] += 1
 
+        for hl in h_logs:
+            tech_id = None
+            action_lower = (hl.action_type or "").lower()
+            if "login" in action_lower or "auth" in action_lower:
+                tech_id = "T1110"
+            elif "sql" in action_lower or "inject" in action_lower:
+                tech_id = "T1190"
+            elif "admin" in action_lower or "privilege" in action_lower:
+                tech_id = "T1548"
+
+            if tech_id and tech_id in MITRE_MAPPINGS:
+
+                t_info = MITRE_MAPPINGS[tech_id]
+                if tech_id not in matched_techniques:
+                    matched_techniques[tech_id] = {
+                        "id": tech_id,
+                        "name": t_info["name"],
+                        "tactic": t_info["tactic"],
+                        "count": 1
+                    }
+                else:
+                    matched_techniques[tech_id]["count"] += 1
+
         # 3. Dynamic Chronological Timeline
         timeline = []
         
@@ -136,6 +184,17 @@ class AttackerProfilingService:
                 "type": "ATTACK",
                 "severity": ae.severity,
                 "description": f"Honeypot Sensor matched pattern: {ae.attack_type} - {ae.payload}"
+            })
+
+        # Add HoneypotActivityLog entries
+        for hl in h_logs:
+            time_str = hl.timestamp.isoformat() if hl.timestamp else datetime.utcnow().isoformat()
+            user_str = f" (User: {hl.username_or_email})" if hl.username_or_email else ""
+            timeline.append({
+                "time": time_str,
+                "type": "HONEYPOT_ACTIVITY",
+                "severity": hl.severity or "MEDIUM",
+                "description": f"Aetheris Telemetry: {hl.action_type} - {hl.result} on path {hl.request_path}{user_str}"
             })
 
         # Add WAF Hits
@@ -187,7 +246,7 @@ class AttackerProfilingService:
             "city": city,
             "latitude": lat,
             "longitude": lon,
-            "attack_count": len(a_events),
+            "attack_count": len(a_events) + len(h_logs),
             "waf_count": len(waf_hits),
             "sandbox_count": len(sandbox_files),
             "is_blocked": is_blocked,
@@ -195,4 +254,3 @@ class AttackerProfilingService:
             "timeline": timeline,
             "playbook_executions": executions
         }
-

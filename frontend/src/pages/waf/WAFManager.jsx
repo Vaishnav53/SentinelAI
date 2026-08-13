@@ -23,6 +23,7 @@ export default function WAFManager() {
   // Lists
   const [rules, setRules] = useState([]);
   const [hits, setHits] = useState([]);
+  const [observedSources, setObservedSources] = useState([]);
   
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -45,7 +46,7 @@ export default function WAFManager() {
       if (!isSilent) setLoading(true);
       setIsSyncing(true);
       
-      const [rulesData, hitsData, statsData] = await Promise.all([
+      const [rulesData, hitsData, statsData, observedData] = await Promise.all([
         apiClient.get('/waf/rules', {
           params: {
             search: searchQuery || undefined,
@@ -53,12 +54,14 @@ export default function WAFManager() {
           }
         }),
         apiClient.get('/waf/hits'),
-        apiClient.get('/waf/status')
+        apiClient.get('/waf/status'),
+        apiClient.get('/waf/observed-sources')
       ]);
 
       setRules(rulesData);
       setHits(hitsData);
       setStats(statsData);
+      setObservedSources(observedData);
     } catch (err) {
       console.error("Failed to load WAF telemetry:", err);
     } finally {
@@ -66,6 +69,39 @@ export default function WAFManager() {
       setIsSyncing(false);
     }
   };
+
+  const handleBlockObservedSource = async (ip) => {
+    if (!isAdmin) return;
+    try {
+      await apiClient.post('/waf/rules', {
+        ip_address: ip,
+        action: 'BLOCK',
+        reason: 'Administrative block from WAF Observed Sources console',
+        is_enabled: 1
+      });
+      await fetchData(true);
+    } catch (err) {
+      console.error("Failed to block source:", err);
+    }
+  };
+
+  const handleUnblockObservedSource = async (ruleId, ip) => {
+    if (!isAdmin) return;
+    try {
+      if (ruleId) {
+        await apiClient.delete(`/waf/rules/${ruleId}`);
+      } else {
+        const existingRule = rules.find(r => r.ip_address === ip && r.action === 'BLOCK' && r.is_enabled === 1);
+        if (existingRule) {
+          await apiClient.delete(`/waf/rules/${existingRule.id}`);
+        }
+      }
+      await fetchData(true);
+    } catch (err) {
+      console.error("Failed to unblock source:", err);
+    }
+  };
+
 
   useEffect(() => {
     fetchData();
@@ -250,8 +286,121 @@ export default function WAFManager() {
         </div>
       </div>
 
+      {/* 2.5 Observed Honeypot Attacker Sources */}
+      <div className="waf-panel card-cyber rules-panel" style={{ marginBottom: '20px' }}>
+        <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h5 className="panel-title font-mono" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShieldAlert size={16} className="text-amber" />
+            Observed Honeypot Attacker Sources
+          </h5>
+          <span className="font-mono text-xs text-muted">
+            {observedSources.length} Active Observed Sources
+          </span>
+        </div>
+        <div className="panel-body">
+          <div className="waf-table-container">
+            <table className="waf-table">
+              <thead>
+                <tr>
+                  <th>Source IP</th>
+                  <th>Last Seen</th>
+                  <th>Event Count</th>
+                  <th>Threat Types</th>
+                  <th>WAF Status</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {observedSources.map((source) => (
+                  <tr key={source.ip_address}>
+                    <td className="font-mono" style={{ fontWeight: 'bold', color: '#ffffff' }}>
+                      {source.ip_address}
+                    </td>
+                    <td className="font-mono" style={{ fontSize: '11px' }}>
+                      {source.last_seen}
+                    </td>
+                    <td className="font-mono" style={{ fontWeight: 'bold' }}>
+                      {source.event_count}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                        {source.threat_types.map((type, idx) => (
+                          <span key={idx} className="type-tag type-automatic" style={{ fontSize: '10px' }}>
+                            {type}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td>
+                      {source.is_blocked ? (
+                        <span className="badge badge-action-block font-mono" style={{ fontWeight: 'bold' }}>
+                          BLOCKED
+                        </span>
+                      ) : (
+                        <span className="badge badge-action-allow font-mono" style={{ fontWeight: 'bold' }}>
+                          ALLOWED
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      {source.is_blocked ? (
+                        <button
+                          className={`btn-action-soc ${!isAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: '11px',
+                            backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                            borderColor: 'rgba(16, 185, 129, 0.4)',
+                            color: '#34d399'
+                          }}
+                          onClick={() => {
+                            if (!isAdmin) return;
+                            handleUnblockObservedSource(source.rule_id, source.ip_address);
+                          }}
+                          disabled={!isAdmin}
+                          title={isAdmin ? "Unblock source IP access" : "Administrator privileges required to unblock source IP"}
+                        >
+                          UNBLOCK
+                        </button>
+                      ) : (
+                        <button
+                          className={`btn-action-soc ${!isAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: '11px',
+                            backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                            borderColor: 'rgba(239, 68, 68, 0.4)',
+                            color: '#f87171'
+                          }}
+                          onClick={() => {
+                            if (!isAdmin) return;
+                            handleBlockObservedSource(source.ip_address);
+                          }}
+                          disabled={!isAdmin}
+                          title={isAdmin ? "Block source IP access via WAF" : "Administrator privileges required to block source IP"}
+                        >
+                          BLOCK
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {observedSources.length === 0 && (
+                  <tr>
+                    <td colSpan="6" style={{ textAlign: 'center', padding: '30px' }} className="text-muted font-mono">
+                      No honeypot activity source IPs observed yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       {/* 3. Main Split View: Rules list vs Hit Audit timeline */}
       <div className="waf-main-grid">
+
         {/* Rules Table */}
         <div className="waf-panel card-cyber rules-panel">
           <div className="panel-header">

@@ -25,6 +25,8 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
 
   const [backendStatus, setBackendStatus] = useState('CHECKING');
   const [ollamaStatus, setOllamaStatus] = useState('CHECKING');
@@ -415,19 +417,70 @@ export default function DashboardLayout() {
             </div>
 
             <button
-              onClick={() => {
-                logout();
-                navigate('/login');
-              }}
-              className="p-2 rounded-lg bg-slate-900/80 border border-red-500/20 text-slate-400 hover:text-red-400 hover:border-red-500/40 transition-colors shrink-0"
+              onClick={() => setShowLogoutModal(true)}
+              className="p-2 rounded-lg bg-slate-900/80 border border-red-500/20 text-slate-400 hover:text-red-400 hover:border-red-500/40 transition-colors shrink-0 cursor-pointer"
               title="Logout from SentinelAI SOC"
             >
               <LogOut size={16} />
             </button>
           </div>
-
-
         </header>
+
+        {/* Logout Confirmation Modal */}
+        {showLogoutModal && (
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in"
+            onClick={() => setShowLogoutModal(false)}
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowLogoutModal(false); }}
+            tabIndex={0}
+          >
+            <div
+              className="w-full max-w-md p-6 bg-slate-900 border border-red-500/30 rounded-xl shadow-2xl space-y-5 text-left"
+              onClick={(e) => e.stopPropagation()}
+            >
+
+              <div className="flex items-center gap-3 text-red-400 border-b border-slate-800 pb-3">
+                <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                  <LogOut size={20} />
+                </div>
+                <div>
+                  <h3 className="font-mono text-sm font-bold tracking-wider uppercase text-slate-100">
+                    SIGN OUT OF SENTINELAI?
+                  </h3>
+                  <p className="text-xs text-slate-400 font-mono">
+                    SOC Session Termination Confirmation
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-sm text-slate-300 leading-relaxed font-mono">
+                Are you sure you want to end your current SOC session?
+              </p>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutModal(false)}
+                  className="px-4 py-2 text-xs font-mono font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors cursor-pointer"
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLogoutModal(false);
+                    logout();
+                    navigate('/login');
+                  }}
+                  className="px-4 py-2 text-xs font-mono font-bold text-white bg-red-600 hover:bg-red-500 border border-red-400/30 rounded-lg shadow-lg shadow-red-950/50 transition-colors cursor-pointer"
+                >
+                  YES, LOG OUT
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
 
 
         <main className="viewport-content">
