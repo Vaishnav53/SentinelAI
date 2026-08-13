@@ -399,19 +399,27 @@ export default function DashboardLayout() {
           </div>
 
           {/* User Profile & Logout */}
-          <div className="flex items-center gap-3 ml-3 pl-3 border-l border-slate-800">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-emerald-500/20">
-              <div className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-400 font-mono text-xs font-bold">
+          <div className="flex items-center gap-3 ml-3 pl-3 border-l border-slate-800 shrink-0">
+            <div className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-slate-900/90 border whitespace-nowrap ${
+              user?.role === 'admin' ? 'border-amber-500/30' : 'border-emerald-500/30'
+            }`}>
+              <div className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center font-mono text-xs font-bold ${
+                user?.role === 'admin'
+                  ? 'bg-amber-500/20 border border-amber-400/40 text-amber-400'
+                  : 'bg-emerald-500/20 border border-emerald-400/40 text-emerald-400'
+              }`}>
+
                 {user?.username ? user.username.substring(0, 2).toUpperCase() : 'SO'}
               </div>
-              <div className="flex flex-col text-left">
-                <span className="text-xs font-semibold text-slate-200 font-mono leading-tight">
+              <div className="flex flex-col text-left justify-center min-w-0">
+                <span className="text-xs font-semibold text-slate-200 font-mono leading-tight truncate">
                   {user?.username || 'Analyst'}
                 </span>
-                <span className={`text-[10px] uppercase font-mono tracking-wider leading-none font-bold ${user?.role === 'admin' ? 'text-amber-400' : 'text-emerald-400'}`}>
+                <span className={`text-[10px] uppercase font-mono tracking-wider leading-tight font-bold ${
+                  user?.role === 'admin' ? 'text-amber-400' : 'text-emerald-400'
+                }`}>
                   {user?.role === 'admin' ? 'Administrator' : 'Analyst'}
                 </span>
-
               </div>
             </div>
 
@@ -420,12 +428,13 @@ export default function DashboardLayout() {
                 logout();
                 navigate('/login');
               }}
-              className="p-2 rounded-lg bg-slate-900/80 border border-red-500/20 text-slate-400 hover:text-red-400 hover:border-red-500/40 transition-colors"
+              className="p-2 rounded-lg bg-slate-900/80 border border-red-500/20 text-slate-400 hover:text-red-400 hover:border-red-500/40 transition-colors shrink-0"
               title="Logout from SentinelAI SOC"
             >
               <LogOut size={16} />
             </button>
           </div>
+
         </header>
 
 

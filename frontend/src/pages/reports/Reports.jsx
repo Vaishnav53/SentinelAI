@@ -105,8 +105,9 @@ export default function Reports() {
       setReportReady(false);
       
       // Fetch report markdown directly using the download endpoint
-      const url = `${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api'}/reports/download/${job.id}`;
-      const response = await fetch(url);
+      const url = `${import.meta.env.VITE_API_BASE_URL || '/api'}/reports/download/${job.id}`;
+      const response = await fetch(url, { credentials: 'include' });
+
       if (response.ok) {
         const text = await response.text();
         setAiSummary(text);
@@ -179,8 +180,9 @@ export default function Reports() {
   const handleExportCSV = async () => {
     if (!targetId) return;
     try {
-      const url = `${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api'}/reports/export-csv?type=${encodeURIComponent(reportType)}&id=${encodeURIComponent(targetId)}`;
-      const response = await fetch(url);
+      const url = `${import.meta.env.VITE_API_BASE_URL || '/api'}/reports/export-csv?type=${encodeURIComponent(reportType)}&id=${encodeURIComponent(targetId)}`;
+      const response = await fetch(url, { credentials: 'include' });
+
       if (!response.ok) throw new Error("Failed to download CSV");
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);

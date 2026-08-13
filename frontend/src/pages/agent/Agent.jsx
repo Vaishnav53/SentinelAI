@@ -294,12 +294,14 @@ export default function Agent() {
     setLoading(true);
 
     try {
-      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
+      const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
       const response = await fetch(`${apiBase}/agent/chat/stream`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
+
         body: JSON.stringify({
           message: text,
           model: modelName,
