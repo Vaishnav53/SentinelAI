@@ -22,3 +22,5 @@ def get_current_user(
         )
         
     return AuthService.get_user_from_session(db, token)
+
+

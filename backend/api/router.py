@@ -28,8 +28,9 @@ api_router.include_router(honeypot_router)
 
 # 3. Protected SentinelAI SOC User API Routers
 api_router.include_router(settings_router, dependencies=[Depends(get_current_user)])
-api_router.include_router(attacks_router, dependencies=[Depends(get_current_user)])
+api_router.include_router(attacks_router)
 api_router.include_router(sensors_router, dependencies=[Depends(get_current_user)])
+
 api_router.include_router(agent_router, dependencies=[Depends(get_current_user)])
 api_router.include_router(reports_router, dependencies=[Depends(get_current_user)])
 api_router.include_router(monitoring_router, dependencies=[Depends(get_current_user)])

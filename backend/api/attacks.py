@@ -8,7 +8,8 @@ import random
 import json
 import logging
 from backend.database.session import get_db, SessionLocal
-from backend.models.models import AttackEvent, HoneypotSensor
+from backend.models.models import AttackEvent, HoneypotSensor, SentinelUser
+from backend.api.dependencies import get_current_user
 from backend.schemas.attacks import (
     AttackEventRead,
     AttackEventUpdateStatus,
@@ -17,6 +18,7 @@ from backend.schemas.attacks import (
     AttackTypeCount,
     TimelineMetric
 )
+
 
 router = APIRouter(prefix="/attacks", tags=["Attacks"])
 
@@ -164,6 +166,8 @@ async def start_attack_simulator():
 async def websocket_endpoint(websocket: WebSocket):
     from backend.core.config import settings
     from backend.services.auth import AuthService
+
+    await websocket.accept()
     cookie_name = settings.AUTH_SESSION_COOKIE_NAME
     token = websocket.cookies.get(cookie_name)
     if not token:
@@ -179,7 +183,7 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         db.close()
 
-    await manager.connect(websocket)
+    manager.active_connections.append(websocket)
 
     try:
         while True:
@@ -188,9 +192,11 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
+
 @router.get("", response_model=List[AttackEventRead])
 def get_attacks(
     db: Session = Depends(get_db),
+    current_user: SentinelUser = Depends(get_current_user),
     severity: Optional[str] = Query(None),
     attack_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
@@ -231,7 +237,10 @@ def get_attacks(
     return attacks
 
 @router.get("/stats", response_model=AttackStats)
-def get_attack_stats(db: Session = Depends(get_db)):
+def get_attack_stats(
+    db: Session = Depends(get_db),
+    current_user: SentinelUser = Depends(get_current_user)
+):
     """Calculate severity distribution, attack type distribution, and recent activity timeline."""
     total_count = db.query(AttackEvent).count()
     
@@ -279,7 +288,11 @@ def get_attack_stats(db: Session = Depends(get_db)):
     )
 
 @router.get("/{id}", response_model=AttackEventRead)
-def get_attack_details(id: int, db: Session = Depends(get_db)):
+def get_attack_details(
+    id: int, 
+    db: Session = Depends(get_db),
+    current_user: SentinelUser = Depends(get_current_user)
+):
     """Get single attack event detail by database ID."""
     attack = db.query(AttackEvent).filter(AttackEvent.id == id).first()
     if not attack:
@@ -290,7 +303,8 @@ def get_attack_details(id: int, db: Session = Depends(get_db)):
 async def update_attack_status(
     id: int, 
     payload: AttackEventUpdateStatus, 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: SentinelUser = Depends(get_current_user)
 ):
     """Change the response status of an event."""
     attack = db.query(AttackEvent).filter(AttackEvent.id == id).first()
@@ -314,8 +328,10 @@ class IncidentRemediationPayload(BaseModel):
 async def perform_incident_action(
     id: int,
     payload: IncidentRemediationPayload,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: SentinelUser = Depends(get_current_user)
 ):
+
     """Execute SOC incident containment, assignments, note logs, and audit trails."""
     attack = db.query(AttackEvent).filter(AttackEvent.id == id).first()
     if not attack:
