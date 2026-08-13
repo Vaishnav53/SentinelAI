@@ -10,10 +10,14 @@ if db_url.startswith("postgres://"):
 
 if db_url.startswith("sqlite:///"):
     db_path = db_url.replace("sqlite:///", "")
-    # Handle absolute vs relative paths
-    if db_path and db_path != ":memory:":
-        db_dir = os.path.dirname(os.path.abspath(db_path))
+    if db_path and db_path != ":memory:" and not os.path.isabs(db_path):
+        # Resolve relative to project root (D:\Documents\SentinelAI)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        abs_db_path = os.path.abspath(os.path.join(project_root, db_path))
+        db_dir = os.path.dirname(abs_db_path)
         os.makedirs(db_dir, exist_ok=True)
+        db_url = f"sqlite:///{abs_db_path.replace('\\', '/')}"
+
 
 # Configure connection parameters and pool based on database dialect
 if "postgresql" in db_url or "postgres" in db_url:

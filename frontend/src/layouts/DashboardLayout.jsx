@@ -37,6 +37,12 @@ export default function DashboardLayout() {
   
   const location = useLocation();
 
+  // Automatically close logout confirmation modal on route changes
+  useEffect(() => {
+    setShowLogoutModal(false);
+  }, [location.pathname]);
+
+
   // Notification SOC center hooks
   const [notifications, setNotifications] = useState([]);
   const [toasts, setToasts] = useState([]);
@@ -426,63 +432,6 @@ export default function DashboardLayout() {
           </div>
         </header>
 
-        {/* Logout Confirmation Modal */}
-        {showLogoutModal && (
-          <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in"
-            onClick={() => setShowLogoutModal(false)}
-            onKeyDown={(e) => { if (e.key === 'Escape') setShowLogoutModal(false); }}
-            tabIndex={0}
-          >
-            <div
-              className="w-full max-w-md p-6 bg-slate-900 border border-red-500/30 rounded-xl shadow-2xl space-y-5 text-left"
-              onClick={(e) => e.stopPropagation()}
-            >
-
-              <div className="flex items-center gap-3 text-red-400 border-b border-slate-800 pb-3">
-                <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20">
-                  <LogOut size={20} />
-                </div>
-                <div>
-                  <h3 className="font-mono text-sm font-bold tracking-wider uppercase text-slate-100">
-                    SIGN OUT OF SENTINELAI?
-                  </h3>
-                  <p className="text-xs text-slate-400 font-mono">
-                    SOC Session Termination Confirmation
-                  </p>
-                </div>
-              </div>
-
-              <p className="text-sm text-slate-300 leading-relaxed font-mono">
-                Are you sure you want to end your current SOC session?
-              </p>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowLogoutModal(false)}
-                  className="px-4 py-2 text-xs font-mono font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors cursor-pointer"
-                >
-                  CANCEL
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowLogoutModal(false);
-                    logout();
-                    navigate('/login');
-                  }}
-                  className="px-4 py-2 text-xs font-mono font-bold text-white bg-red-600 hover:bg-red-500 border border-red-400/30 rounded-lg shadow-lg shadow-red-950/50 transition-colors cursor-pointer"
-                >
-                  YES, LOG OUT
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-
-
         <main className="viewport-content">
           <Outlet />
         </main>
@@ -502,7 +451,7 @@ export default function DashboardLayout() {
                   </div>
                   <div className="toast-footer">
                     <span className="toast-time">{new Date(toast.created_at).toLocaleTimeString()}</span>
-                    <span 
+                    <span
                       className="toast-view-link"
                       onClick={() => {
                         setToasts(toasts.filter(t => t.id !== toast.id));
@@ -513,7 +462,7 @@ export default function DashboardLayout() {
                     </span>
                   </div>
                 </div>
-                <button 
+                <button
                   className="toast-close-btn"
                   onClick={() => setToasts(toasts.filter(t => t.id !== toast.id))}
                 >
@@ -523,7 +472,62 @@ export default function DashboardLayout() {
             ))}
           </div>
         )}
+
+        {/* Viewport-level Logout Confirmation Modal */}
+        {showLogoutModal && (
+          <div
+            className="sentinel-modal-overlay animate-fade-in"
+            onClick={() => setShowLogoutModal(false)}
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowLogoutModal(false); }}
+            tabIndex={0}
+          >
+            <div
+              className="sentinel-modal-card"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sentinel-modal-header">
+                <div className="sentinel-modal-icon-box">
+                  <LogOut size={20} />
+                </div>
+                <div>
+                  <h3 className="sentinel-modal-title">
+                    SIGN OUT OF SENTINELAI?
+                  </h3>
+                  <p className="sentinel-modal-subtitle">
+                    SOC Session Termination Confirmation
+                  </p>
+                </div>
+              </div>
+
+              <div className="sentinel-modal-body">
+                Are you sure you want to end your current SOC session?
+              </div>
+
+              <div className="sentinel-modal-actions">
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutModal(false)}
+                  className="sentinel-modal-btn-cancel"
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLogoutModal(false);
+                    logout();
+                    navigate('/login');
+                  }}
+                  className="sentinel-modal-btn-confirm"
+                >
+                  YES, LOG OUT
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
     </div>
   );
 }
