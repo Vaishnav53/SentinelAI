@@ -424,11 +424,14 @@ export default function DashboardLayout() {
 
             <button
               onClick={() => setShowLogoutModal(true)}
-              className="p-2 rounded-lg bg-slate-900/80 border border-red-500/20 text-slate-400 hover:text-red-400 hover:border-red-500/40 transition-colors shrink-0 cursor-pointer"
+              className="sentinel-logout-btn"
               title="Logout from SentinelAI SOC"
+              aria-label="Logout from SentinelAI SOC"
             >
-              <LogOut size={16} />
+              <LogOut size={14} />
+              <span>LOGOUT</span>
             </button>
+
           </div>
         </header>
 
