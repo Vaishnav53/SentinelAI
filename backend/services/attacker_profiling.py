@@ -28,65 +28,53 @@ class AttackerProfilingService:
 
     def get_all_attackers(self) -> List[Dict[str, Any]]:
         """Retrieve all unique attacking IPs with incident metrics aggregates."""
-        # Find distinct IPs across telemetry models
-        ips = set()
-        for ip in self.db.query(AttackEvent.source_ip).distinct().all():
-            if ip[0]: ips.add(ip[0])
-        for ip in self.db.query(WAFHit.ip_address).distinct().all():
-            if ip[0]: ips.add(ip[0])
-        for ip in self.db.query(DecoySandboxFile.ip_address).distinct().all():
-            if ip[0]: ips.add(ip[0])
-        for ip in self.db.query(HoneypotActivityLog.source_ip).distinct().all():
-            if ip[0]: ips.add(ip[0])
+        from sqlalchemy import func
+
+        # 1. Aggregate counts per IP
+        attack_counts = dict(self.db.query(AttackEvent.source_ip, func.count(AttackEvent.id)).filter(AttackEvent.source_ip != None).group_by(AttackEvent.source_ip).all())
+        waf_counts = dict(self.db.query(WAFHit.ip_address, func.count(WAFHit.id)).filter(WAFHit.ip_address != None).group_by(WAFHit.ip_address).all())
+        sandbox_counts = dict(self.db.query(DecoySandboxFile.ip_address, func.count(DecoySandboxFile.id)).filter(DecoySandboxFile.ip_address != None).group_by(DecoySandboxFile.ip_address).all())
+        activity_counts = dict(self.db.query(HoneypotActivityLog.source_ip, func.count(HoneypotActivityLog.id)).filter(HoneypotActivityLog.source_ip != None).group_by(HoneypotActivityLog.source_ip).all())
+
+        # Blocked IPs
+        blocked_ips = set(ip[0] for ip in self.db.query(WAFRule.ip_address).filter(WAFRule.is_enabled == 1, WAFRule.action == "BLOCK").all() if ip[0])
+
+        # All distinct IPs
+        all_ips = set(attack_counts.keys()) | set(waf_counts.keys()) | set(sandbox_counts.keys()) | set(activity_counts.keys())
+
+        # Fast GeoIP lookup
+        geo_map = {}
+        for ae in self.db.query(AttackEvent.source_ip, AttackEvent.country, AttackEvent.city).filter(AttackEvent.source_ip != None).all():
+            if ae[0] and ae[0] not in geo_map and ae[1] and ae[1] != "Unknown":
+                geo_map[ae[0]] = (ae[1], ae[2] or "Unknown")
+
+        # Fast Max Severities
+        sev_map = {}
+        severities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+        for ae in self.db.query(AttackEvent.source_ip, AttackEvent.severity).filter(AttackEvent.source_ip != None).all():
+            if ae[0]:
+                curr = sev_map.get(ae[0], "LOW")
+                sev_val = ae[1].upper() if ae[1] else "LOW"
+                if sev_val in severities and (curr not in severities or severities.index(sev_val) > severities.index(curr)):
+                    sev_map[ae[0]] = sev_val
 
         results = []
-        for ip in ips:
-            attack_count = self.db.query(AttackEvent).filter(AttackEvent.source_ip == ip).count()
-            waf_count = self.db.query(WAFHit).filter(WAFHit.ip_address == ip).count()
-            sandbox_count = self.db.query(DecoySandboxFile).filter(DecoySandboxFile.ip_address == ip).count()
-            activity_count = self.db.query(HoneypotActivityLog).filter(HoneypotActivityLog.source_ip == ip).count()
-            
-            # Highest severity calculation
-            max_severity = "LOW"
-            severities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
-            for a in self.db.query(AttackEvent.severity).filter(AttackEvent.source_ip == ip).all():
-                sev_val = a[0].upper() if a[0] else "LOW"
-                if sev_val in severities:
-                    if severities.index(sev_val) > severities.index(max_severity):
-                        max_severity = sev_val
-
-            for hl in self.db.query(HoneypotActivityLog.severity).filter(HoneypotActivityLog.source_ip == ip).all():
-                sev_val = hl[0].upper() if hl[0] else "LOW"
-                if sev_val in severities:
-                    if severities.index(sev_val) > severities.index(max_severity):
-                        max_severity = sev_val
-            
-            # WAF Block active status
-            is_blocked = self.db.query(WAFRule).filter(
-                WAFRule.ip_address == ip,
-                WAFRule.is_enabled == 1,
-                WAFRule.action == "BLOCK"
-            ).first() is not None
-
-            # Look up GeoIP from any logged attacks raw metadata
-            country = "Unknown"
-            city = "Unknown"
-            a_event = self.db.query(AttackEvent).filter(AttackEvent.source_ip == ip).first()
-            if a_event:
-                country = a_event.country or "Unknown"
-                city = a_event.city or "Unknown"
-
+        for ip in all_ips:
+            if not ip:
+                continue
+            geo = geo_map.get(ip, ("Unknown", "Unknown"))
+            country, city = geo
             if country == "Unknown" and is_local_ip(ip):
                 country = "Local Network"
                 city = "Local Infrastructure"
 
             results.append({
                 "ip_address": ip,
-                "attack_count": attack_count + activity_count,
-                "waf_count": waf_count,
-                "sandbox_count": sandbox_count,
-                "highest_severity": max_severity,
-                "is_blocked": is_blocked,
+                "attack_count": attack_counts.get(ip, 0) + activity_counts.get(ip, 0),
+                "waf_count": waf_counts.get(ip, 0),
+                "sandbox_count": sandbox_counts.get(ip, 0),
+                "highest_severity": sev_map.get(ip, "LOW"),
+                "is_blocked": ip in blocked_ips,
                 "country": country,
                 "city": city
             })
