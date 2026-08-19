@@ -90,20 +90,40 @@ def test_remote_source_ip_preserved_in_log():
         db.close()
 
 def test_honeypot_api_router_endpoints(client):
+    # 1. Authenticated mode switch to LAN
     status_resp = client.get("/api/honeypot/status")
     assert status_resp.status_code == 200
     data = status_resp.json()
     assert "lan_mode" in data
     assert "url" in data
 
+    # Switch to LAN mode
     mode_resp = client.post("/api/honeypot/mode", json={"lan_mode": True})
     assert mode_resp.status_code == 200
     mode_data = mode_resp.json()
     assert mode_data["lan_mode"] is True
     assert mode_data["bind_host"] == "0.0.0.0"
+    assert "0.0.0.0" not in mode_data["url"]
+
+    # Switch back to Local mode
+    mode_local = client.post("/api/honeypot/mode", json={"lan_mode": False})
+    assert mode_local.status_code == 200
+    local_data = mode_local.json()
+    assert local_data["lan_mode"] is False
+    assert local_data["bind_host"] == "127.0.0.1"
+    assert local_data["url"] == "http://127.0.0.1:8088"
+
+    # Invalid payload validation
+    invalid_resp = client.post("/api/honeypot/mode", json={"lan_mode": "invalid_boolean_string_value"})
+    assert invalid_resp.status_code in (400, 422)
 
     stop_resp = client.post("/api/honeypot/stop")
     assert stop_resp.status_code == 200
+
+    # 2. Unauthenticated rejection
+    client.cookies.clear()
+    unauth_resp = client.post("/api/honeypot/mode", json={"lan_mode": True})
+    assert unauth_resp.status_code == 401
 
 def test_honeypot_event_detail_by_id_and_missing_event():
     from datetime import datetime

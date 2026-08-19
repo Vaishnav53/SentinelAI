@@ -171,14 +171,20 @@ async def websocket_endpoint(websocket: WebSocket):
     cookie_name = settings.AUTH_SESSION_COOKIE_NAME
     token = websocket.cookies.get(cookie_name)
     if not token:
-        await websocket.close(code=4001, reason="Unauthorized session")
+        try:
+            await websocket.close(code=1008, reason="Unauthorized session")
+        except Exception:
+            pass
         return
 
     db = SessionLocal()
     try:
         AuthService.get_user_from_session(db, token)
     except Exception:
-        await websocket.close(code=4001, reason="Unauthorized session")
+        try:
+            await websocket.close(code=1008, reason="Unauthorized session")
+        except Exception:
+            pass
         return
     finally:
         db.close()

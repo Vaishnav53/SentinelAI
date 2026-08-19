@@ -42,6 +42,8 @@ export default function HoneypotLab() {
     return true;
   });
 
+  const isTransitioningRef = React.useRef(false);
+
   const applyStatusData = (statusData) => {
     if (!statusData) return;
     const prevStatus = honeypotStatus;
@@ -81,12 +83,17 @@ export default function HoneypotLab() {
   useEffect(() => {
     fetchStatusAndSensors();
     const interval = setInterval(async () => {
+      if (isTransitioningRef.current) return;
       try {
         const statusData = await apiClient.get('/honeypot/status');
-        applyStatusData(statusData);
+        if (!isTransitioningRef.current) {
+          applyStatusData(statusData);
+        }
       } catch (err) {
-        setHoneypotStatus('OFFLINE');
-        setIsReady(false);
+        if (!isTransitioningRef.current) {
+          setHoneypotStatus('OFFLINE');
+          setIsReady(false);
+        }
       }
     }, 3000);
 
@@ -128,6 +135,7 @@ export default function HoneypotLab() {
     if (isTransitioning) return;
     try {
       setIsTransitioning(true);
+      isTransitioningRef.current = true;
       setErrorMessage(null);
       if (honeypotStatus === 'ONLINE' || honeypotStatus === 'STARTING') {
         setStatusNotice('Stopping HTTP Decoy listener...');
@@ -145,17 +153,18 @@ export default function HoneypotLab() {
       console.error('Failed to toggle honeypot state:', e);
       setHoneypotStatus('ERROR');
       setErrorMessage(e.message || 'Failed to toggle honeypot service state.');
-    } finally { setIsTransitioning(false); setStatusNotice(null); }
+    } finally {
+      setIsTransitioning(false);
+      isTransitioningRef.current = false;
+      setStatusNotice(null);
+    }
   };
 
   const handleModeChange = async (targetLanMode) => {
     if (isTransitioning) return;
-    if (targetLanMode) {
-      const confirmLan = window.confirm('WARNING: Enabling LAN Mode will bind the vulnerable sandbox decoy server to 0.0.0.0, allowing inbound connections from your local network subnet.\n\nEnsure your network is trusted. Proceed?');
-      if (!confirmLan) return;
-    }
     try {
       setIsTransitioning(true);
+      isTransitioningRef.current = true;
       setErrorMessage(null);
       setStatusNotice(honeypotStatus === 'ONLINE' || honeypotStatus === 'STARTING' ? 'Rebinding listener interface & restarting HTTP Decoy...' : 'Applying interface binding mode...');
       const res = await apiClient.post('/honeypot/mode', { lan_mode: targetLanMode });
@@ -164,8 +173,18 @@ export default function HoneypotLab() {
       setSensors(sensorsData);
     } catch (e) {
       console.error('Failed to change binding interface mode:', e);
-      setErrorMessage(e.message || 'Failed to update binding interface mode.');
-    } finally { setIsTransitioning(false); setStatusNotice(null); }
+      setErrorMessage(e.message || 'Unable to switch honeypot binding mode. The current configuration remains active.');
+      try {
+        const statusData = await apiClient.get('/honeypot/status');
+        applyStatusData(statusData);
+      } catch (statusErr) {
+        console.error('Failed to reload honeypot status after mode switch error:', statusErr);
+      }
+    } finally {
+      setIsTransitioning(false);
+      isTransitioningRef.current = false;
+      setStatusNotice(null);
+    }
   };
 
   const copyToClipboard = (text, index) => {
@@ -314,9 +333,30 @@ export default function HoneypotLab() {
                 {lanMode && <span className="text-yellow text-xxs font-mono mt-1" style={{ fontSize: '9px', color: '#ffd32a' }}>Note: Windows Firewall must allow inbound TCP traffic on port 8088 for LAN devices to connect.</span>}
               </div>
               <div className="flex items-center gap-2" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span className="font-mono" style={{ fontSize: '10px', color: !lanMode ? 'var(--cyan-primary)' : '#8b949e', fontWeight: !lanMode ? 'bold' : 'normal' }}>LOCAL MODE</span>
-                <label className="cyber-switch"><input type="checkbox" checked={lanMode} disabled={isTransitioning} onChange={(e) => handleModeChange(e.target.checked)} /><span className="slider round"></span></label>
-                <span className="font-mono" style={{ fontSize: '10px', color: lanMode ? 'var(--yellow)' : '#8b949e', fontWeight: lanMode ? 'bold' : 'normal' }}>LAN MODE</span>
+                <span
+                  className="font-mono"
+                  style={{ fontSize: '10px', color: !lanMode ? 'var(--cyan-primary)' : '#8b949e', fontWeight: !lanMode ? 'bold' : 'normal', cursor: isTransitioning ? 'not-allowed' : 'pointer', userSelect: 'none' }}
+                  onClick={() => !isTransitioning && lanMode && handleModeChange(false)}
+                >
+                  LOCAL MODE
+                </span>
+                <label className="cyber-switch">
+                  <input
+                    type="checkbox"
+                    id="lan-mode-toggle"
+                    checked={lanMode}
+                    disabled={isTransitioning}
+                    onChange={(e) => handleModeChange(e.target.checked)}
+                  />
+                  <span className="slider round"></span>
+                </label>
+                <span
+                  className="font-mono"
+                  style={{ fontSize: '10px', color: lanMode ? 'var(--yellow)' : '#8b949e', fontWeight: lanMode ? 'bold' : 'normal', cursor: isTransitioning ? 'not-allowed' : 'pointer', userSelect: 'none' }}
+                  onClick={() => !isTransitioning && !lanMode && handleModeChange(true)}
+                >
+                  LAN MODE
+                </span>
               </div>
             </div>
           </div>

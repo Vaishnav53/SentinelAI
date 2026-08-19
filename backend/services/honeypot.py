@@ -2462,6 +2462,9 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
     def do_DELETE(self):
         self.handle_request()
 
+class ReusableHTTPServer(http.server.HTTPServer):
+    allow_reuse_address = True
+
 class HoneypotManager:
     def __init__(self):
         self.server: Optional[http.server.HTTPServer] = None
@@ -2531,11 +2534,10 @@ class HoneypotManager:
         self.display_host = self.get_local_lan_ip() if lan_mode else "127.0.0.1"
 
         try:
-            self.server = http.server.HTTPServer(
+            self.server = ReusableHTTPServer(
                 (self.bind_host, self.port),
                 HoneypotRequestHandler
             )
-            self.server.allow_reuse_address = True
 
             def run_server():
                 logger.info(f"Honeypot listening on http://{self.bind_host}:{self.port} starting...")
@@ -2600,8 +2602,14 @@ class HoneypotManager:
 
         try:
             if self.server:
-                self.server.shutdown()
-                self.server.server_close()
+                try:
+                    self.server.shutdown()
+                except Exception:
+                    pass
+                try:
+                    self.server.server_close()
+                except Exception:
+                    pass
             if self.thread:
                 self.thread.join(timeout=1.5)
 
@@ -2664,6 +2672,8 @@ class HoneypotManager:
         """Switch binding mode between Local Only and LAN Lab."""
         if self.is_running:
             self.stop()
+            import time
+            time.sleep(0.05)
             self.start(lan_mode=lan_mode)
         else:
             self.lan_mode = lan_mode

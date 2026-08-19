@@ -8,7 +8,7 @@ from backend.schemas.attacks import AttackEventRead
 from backend.core.registry import get_honeypot_manager
 from backend.services.honeypot import HoneypotManager
 
-from backend.api.dependencies import require_admin
+from backend.api.dependencies import require_admin, get_current_user
 
 class StartPayload(BaseModel):
     lan_mode: bool = False
@@ -37,7 +37,7 @@ def stop_honeypot_service(db: Session = Depends(get_db), manager: HoneypotManage
     manager.stop()
     return manager.get_full_status()
 
-@router.post("/mode", response_model=Dict[str, Any], dependencies=[Depends(require_admin)])
+@router.post("/mode", response_model=Dict[str, Any], dependencies=[Depends(get_current_user)])
 def switch_honeypot_mode(
     payload: StartPayload,
     db: Session = Depends(get_db),
