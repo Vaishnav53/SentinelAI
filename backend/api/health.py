@@ -29,16 +29,17 @@ def get_services_health(db: Session = Depends(get_db)):
     except Exception as e:
         db_status = ServiceStatusDetail(status="OFFLINE", details=f"Database unreachable: {str(e)}")
         
-    # 2. Ollama Status Check
-    # Ollama checking will be implemented dynamically in later phases. For now, report CHECKING.
-    ollama_status = ServiceStatusDetail(status="CHECKING", details="Discovery pending")
+    # 2. Groq AI Status Check
+    groq_status = ServiceStatusDetail(
+        status="ONLINE" if settings.GROQ_API_KEY else "UNAVAILABLE",
+        details="Groq Cloud API Key Configured" if settings.GROQ_API_KEY else "GROQ_API_KEY missing"
+    )
     
     # 3. Collectors Status Check
-    # Collectors checking will be implemented dynamically in later phases. For now, report ACTIVE.
     collectors_status = ServiceStatusDetail(status="ACTIVE", details="Ready")
     
     return ServiceHealthStatus(
         database=db_status,
-        ollama=ollama_status,
+        groq=groq_status,
         collectors=collectors_status
     )

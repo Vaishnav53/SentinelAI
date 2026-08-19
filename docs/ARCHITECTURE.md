@@ -70,7 +70,7 @@ graph TB
 * Database initialization and seed script automatically populates initial demo telemetry (`populate_demo_data()`).
 
 ### 4. AI Layer (Groq Cloud & Local Fallback Engine)
-* **Groq Cloud API**: Groq Cloud is the primary live LLM provider (`llama-3.3-70b-versatile`) for high-speed cloud inference.
+* **Groq Cloud API**: Groq Cloud is the primary live LLM provider (`openai/gpt-oss-120b`) for high-speed cloud inference.
 * **Deterministic Local Fallback Engine**: When Groq is unavailable or unconfigured, SentinelAI uses a deterministic local fallback response engine to supply structured incident analyses without breaking the interface.
 
 ### 5. Threat Intelligence & GeoIP Layer

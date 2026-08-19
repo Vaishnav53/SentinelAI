@@ -12,5 +12,5 @@ class ServiceStatusDetail(BaseModel):
 
 class ServiceHealthStatus(BaseModel):
     database: ServiceStatusDetail
-    ollama: ServiceStatusDetail
+    groq: ServiceStatusDetail
     collectors: ServiceStatusDetail

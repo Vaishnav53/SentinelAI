@@ -12,8 +12,7 @@ export default function SettingsPage() {
   const [appName, setAppName] = useState('SentinelAI');
   const [apiHost, setApiHost] = useState('127.0.0.1');
   const [apiPort, setApiPort] = useState(8000);
-  const [ollamaHost, setOllamaHost] = useState('http://127.0.0.1:11434');
-  const [ollamaModel, setOllamaModel] = useState('llama3.1');
+  const [defaultGroqModel, setDefaultGroqModel] = useState('openai/gpt-oss-120b');
   const [retentionDays, setRetentionDays] = useState(30);
   const [collectorInterval, setCollectorInterval] = useState(5);
   const [abuseipdbApiKey, setAbuseipdbApiKey] = useState('');
@@ -35,8 +34,15 @@ export default function SettingsPage() {
         if (data.app_name) setAppName(data.app_name);
         if (data.api_host) setApiHost(data.api_host);
         if (data.api_port) setApiPort(data.api_port);
-        if (data.ollama_host) setOllamaHost(data.ollama_host);
-        if (data.ollama_model) setOllamaModel(data.ollama_model);
+        if (data.default_groq_model) {
+          const m = data.default_groq_model;
+          if (m.includes('llama') || m.includes('mixtral') || m.includes('gemma')) {
+            setDefaultGroqModel('openai/gpt-oss-120b');
+          } else {
+            setDefaultGroqModel(m);
+          }
+        }
+
         if (data.retention_days) setRetentionDays(data.retention_days);
         if (data.collector_interval) setCollectorInterval(data.collector_interval);
         if (data.abuseipdb_api_key) setAbuseipdbApiKey(data.abuseipdb_api_key);
@@ -74,10 +80,8 @@ export default function SettingsPage() {
       const payload = {
         app_name: appName,
         api_host: apiHost,
-        api_port: parseInt(apiPort),
-        ollama_host: ollamaHost,
-        ollama_model: ollamaModel,
-        retention_days: parseInt(retentionDays),
+        default_groq_model: defaultGroqModel,
+
         collector_interval: parseInt(collectorInterval),
         abuseipdb_api_key: abuseipdbApiKey,
         virustotal_api_key: virustotalApiKey,
@@ -186,20 +190,11 @@ export default function SettingsPage() {
               </div>
 
               <div className="form-field">
-                <label>Ollama Endpoint:</label>
-                <input 
-                  type="text" 
-                  value={ollamaHost} 
-                  onChange={(e) => setOllamaHost(e.target.value)} 
-                />
-              </div>
-
-              <div className="form-field">
                 <label>Preferred LLM Model:</label>
                 <input 
                   type="text" 
-                  value={ollamaModel} 
-                  onChange={(e) => setOllamaModel(e.target.value)} 
+                  value={defaultGroqModel}
+                  onChange={(e) => setDefaultGroqModel(e.target.value)}
                 />
               </div>
             </div>

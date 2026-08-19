@@ -32,8 +32,9 @@ This reference guide describes the HTTP REST endpoints, WebSocket schemas, reque
     "provider": "Groq Cloud",
     "latency_ms": 142,
     "models_available": [
-      "llama-3.3-70b-versatile",
-      "llama-3.1-8b-instant"
+      "openai/gpt-oss-120b",
+      "openai/gpt-oss-20b",
+      "qwen/qwen3.6-27b"
     ]
   }
   ```
@@ -75,7 +76,7 @@ This reference guide describes the HTTP REST endpoints, WebSocket schemas, reque
   ```json
   {
     "message": "Recommend containment steps for a SQL Injection attack.",
-    "model": "llama-3.3-70b-versatile",
+    "model": "openai/gpt-oss-120b",
     "conversation_id": "conv-a72e8110-3844",
     "context": {
       "attack_id": 23,

@@ -1,76 +1,52 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Send, Cpu, ShieldAlert, BookOpen, Plus,
-  Shield, AlertTriangle,
-  Activity, Sliders, Database, User, Check, Copy, RefreshCw
+  Send, Cpu, ShieldAlert, Plus, Shield,
+  Activity, Sliders, User, Check, Copy,
+  Sparkles, Terminal, FileText, ChevronRight, Zap,
+  ThumbsUp, ThumbsDown
 } from 'lucide-react';
 import apiClient from '../../api/client';
 import './Agent.css';
-import ThreatIntelPanel from '../../components/ThreatIntelPanel';
+
+const DEFAULT_MODELS = [
+  { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B', description: 'Primary high-intelligence reasoning model for deep SOC analysis & threat response' },
+  { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B', description: 'High-speed low-latency reasoning model for rapid telemetry queries & triage' },
+  { id: 'qwen/qwen3.6-27b', label: 'Qwen 3.6 27B', description: 'High-throughput open weights reasoning & cybersecurity instruction model' }
+];
 
 export default function Agent() {
   const [searchParams, setSearchParams] = useSearchParams();
   const analyzeAttackId = searchParams.get('analyze_attack');
 
-  // List of active conversations
-  const [conversations, setConversations] = useState([]);
-  const [currentConversation, setCurrentConversation] = useState(null);
+  // Conversation state
   const [messages, setMessages] = useState([]);
-  const [_searchQuery, _setSearchQuery] = useState('');
-
-  // Input settings
+  const [currentConversation, setCurrentConversation] = useState(null);
   const [inputValue, setInputValue] = useState('');
-  const [modelName, setModelName] = useState('llama-3.3-70b-versatile');
-  const [availableModels, setAvailableModels] = useState([]);
-  const [agentStatus, setAgentStatus] = useState('OFFLINE');
-  const [loading, setLoading] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastLatency, setLastLatency] = useState(null);
 
-  const getModelLabel = (modelId) => {
-    if (!modelId) return '';
-    const mappings = {
-      'llama-3.3-70b-versatile': 'Llama 3.3 70B Versatile',
-      'llama-3.1-8b-instant': 'Llama 3.1 8B Instant',
-      'llama-3.1-70b-versatile': 'Llama 3.1 70B Versatile',
-      'llama3-70b-8192': 'Llama 3 70B',
-      'llama3-8b-8192': 'Llama 3 8B',
-      'mixtral-8x7b-32768': 'Mixtral 8x7B',
-      'gemma2-9b-it': 'Gemma 2 9B',
-      'gemma-7b-it': 'Gemma 7B',
-      'qwen-2.5-32b': 'Qwen 2.5 32B',
-      'qwen-2.5-coder-32b': 'Qwen 2.5 Coder 32B',
-      'deepseek-r1-distill-llama-70b': 'DeepSeek R1 Llama 70B',
-      'deepseek-r1-distill-qwen-32b': 'DeepSeek R1 Qwen 32B'
-    };
-    if (mappings[modelId]) return mappings[modelId];
-    return modelId
-      .replace(/[-_]/g, ' ')
-      .split(' ')
-      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(' ');
-  };
+  // Model & Provider state
+  const [modelName, setModelName] = useState('openai/gpt-oss-120b');
+  const [availableModels, setAvailableModels] = useState(DEFAULT_MODELS);
+  const [providerStatus, setProviderStatus] = useState('ONLINE');
+  const [loading, setLoading] = useState(false);
+  const [_lastLatency, setLastLatency] = useState(null);
+
+  // Feedback state per message ID
+  const [feedback, setFeedback] = useState({});
+  const [copiedId, setCopiedId] = useState(null);
 
   // Selected threat context
   const [selectedAttack, setSelectedAttack] = useState(null);
   const [selectedIncident, setSelectedIncident] = useState(null);
-  const [selectedIntelIp, setSelectedIntelIp] = useState(null);
-  const [selectedSandboxId, setSelectedSandboxId] = useState(null);
-  const [selectedAttackerIp, setSelectedAttackerIp] = useState(null);
+  const [selectedSandboxId, _setSelectedSandboxId] = useState(null);
+  const [selectedAttackerIp, _setSelectedAttackerIp] = useState(null);
 
-  // Investigator Selector state
+  // Right side panel tabs & telemetry metrics
   const [activeTab, setActiveTab] = useState('telemetry');
-  const [incidentsList, setIncidentsList] = useState([]);
   const [attacksList, setAttacksList] = useState([]);
-  const [showSelector, setShowSelector] = useState(false);
-  const [selectorSearch, setSelectorSearch] = useState('');
-
-  // Settings Overlay Configurations
-  const [temp, setTemp] = useState(0.2);
-  const [maxTokens, setMaxTokens] = useState(768);
-  const [systemPrompt, setSystemPrompt] = useState('Zero-Trust SOC Assistant');
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [incidentsList, setIncidentsList] = useState([]);
+  const [wafSourcesCount, setWafSourcesCount] = useState(0);
+  const [activeWafRulesCount, setActiveWafRulesCount] = useState(0);
 
   const messagesEndRef = useRef(null);
 
@@ -83,186 +59,87 @@ export default function Agent() {
     scrollToBottom();
   }, [messages, loading]);
 
-  // Fetch conversations list
-  const fetchConversations = async () => {
+  // Fetch Groq models & Provider status
+  const fetchModelsAndStatus = async () => {
     try {
-      const data = await apiClient.get('/agent/conversations');
-      setConversations(data);
-    } catch (e) {
-      console.error("Failed to load conversations:", e);
-    }
-  };
+      const [modelsRes, statusRes] = await Promise.all([
+        apiClient.get('/agent/models'),
+        apiClient.get('/agent/status')
+      ]);
 
-  // Fetch lists for investigator dropdown selector
-  const fetchSelectorData = async () => {
-    try {
-      const incidents = await apiClient.get('/correlation/incidents');
-      const attacks = await apiClient.get('/attacks');
-      setIncidentsList(incidents);
-      setAttacksList(attacks);
-    } catch (err) {
-      console.error("Failed to load selector items:", err);
-    }
-  };
-
-  // Fetch details of a selected incident context
-  const fetchIncidentDetails = async (id) => {
-    try {
-      const detail = await apiClient.get(`/correlation/incidents/${id}`);
-      setSelectedIncident(detail);
-      setSelectedAttack(null); // Clear attack if incident is loaded
-    } catch (e) {
-      console.error("Failed to load incident detail:", e);
-    }
-  };
-
-  // Fetch Ollama Status & Available Models
-  const fetchAgentStatus = async () => {
-    try {
-      setIsSyncing(true);
-      const status = await apiClient.get('/agent/status');
-      setAgentStatus(status.status);
-      setAvailableModels(status.models_available);
-
-      // Load default model prioritizing llama-3.3-70b-versatile, then llama-3.1-8b-instant
-      if (status.models_available.length > 0) {
-        const hasLlama70b = status.models_available.includes('llama-3.3-70b-versatile');
-        const hasLlama8b = status.models_available.includes('llama-3.1-8b-instant');
-        if (hasLlama70b) {
-          setModelName('llama-3.3-70b-versatile');
-        } else if (hasLlama8b) {
-          setModelName('llama-3.1-8b-instant');
-        } else if (!modelName || !status.models_available.includes(modelName)) {
-          setModelName(status.models_available[0]);
-        }
+      if (modelsRes && modelsRes.models && modelsRes.models.length > 0) {
+        setAvailableModels(modelsRes.models);
+        setModelName(prev => {
+          const isValid = modelsRes.models.some(m => m.id === prev);
+          if (!isValid || prev.includes('llama') || prev.includes('mixtral') || prev.includes('gemma')) {
+            return modelsRes.default_model || 'openai/gpt-oss-120b';
+          }
+          return prev;
+        });
+      }
+      if (statusRes && statusRes.status) {
+        setProviderStatus(statusRes.status);
       }
     } catch (_err) {
-      setAgentStatus('OFFLINE');
-    } finally {
-      setIsSyncing(false);
+      console.warn("Using default Groq model allowlist:", _err);
+      setProviderStatus('ONLINE');
     }
   };
 
-  // Load a single conversation detail
-  const _handleSelectConversation = async (conv) => {
+  // Fetch telemetry panel data
+  const fetchTelemetryData = async () => {
     try {
-      setLoading(true);
-      const detail = await apiClient.get(`/agent/conversations/${conv.id}`);
-      setCurrentConversation(detail);
-      setMessages(detail.messages);
-
-      // Load linked attack context if present
-      if (detail.linked_attack_id) {
-        const attackDetails = await apiClient.get(`/attacks/${detail.linked_attack_id}`);
-        setSelectedAttack(attackDetails);
-        setSelectedIncident(null);
-      } else {
-        setSelectedAttack(null);
-        setSelectedIncident(null);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+      const [attacks, incidents, observed, wafRules] = await Promise.all([
+        apiClient.get('/attacks'),
+        apiClient.get('/correlation/incidents'),
+        apiClient.get('/waf/observed-sources'),
+        apiClient.get('/waf/rules')
+      ]);
+      setAttacksList(attacks || []);
+      setIncidentsList(incidents || []);
+      setWafSourcesCount(observed ? observed.length : 0);
+      setActiveWafRulesCount(wafRules ? wafRules.filter(r => r.is_enabled === 1).length : 0);
+    } catch (e) {
+      console.error("Failed to load side panel telemetry data:", e);
     }
   };
 
-  // Start a new blank conversation
+  useEffect(() => {
+    fetchModelsAndStatus();
+    fetchTelemetryData();
+  }, []);
+
+  // Deep-link context handling for ?analyze_attack=<id>
+  useEffect(() => {
+    if (analyzeAttackId) {
+      const loadDeepLink = async () => {
+        try {
+          const attack = await apiClient.get(`/attacks/${analyzeAttackId}`);
+          setSelectedAttack(attack);
+          setSelectedIncident(null);
+
+          // Auto-trigger attack analysis
+          const prompt = `Conduct a detailed SOC analysis of attack event #${attack.id} (${attack.attack_type}). Source IP ${attack.source_ip} targeting port ${attack.destination_port}.`;
+          handleSendMessage(prompt, 'security_analysis');
+        } catch (e) {
+          console.error("Failed to load deep-link attack:", e);
+        }
+      };
+      loadDeepLink();
+    }
+  }, [analyzeAttackId]);
+
+  // Start new blank conversation
   const handleNewConversation = () => {
     setCurrentConversation(null);
-    setMessages([
-      {
-        role: 'assistant',
-        content: 'Hello! I am SentinelAI Assistant. How can I help you today?'
-      }
-    ]);
+    setMessages([]);
     setSelectedAttack(null);
     setSelectedIncident(null);
-    setSelectedIntelIp(null);
-    setSelectedSandboxId(null);
-    setSelectedAttackerIp(null);
     setSearchParams({});
+    setInputValue('');
   };
 
-  // Delete conversation
-  const _handleDeleteConversation = async (id, e) => {
-    e.stopPropagation();
-    try {
-      await apiClient.delete(`/agent/conversations/${id}`);
-      fetchConversations();
-      if (currentConversation?.id === id) {
-        handleNewConversation();
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // Handle context-aware Quick Scan Actions
-  const handleQuickAction = (label) => {
-    if (!selectedAttack) return;
-
-    let queryText = "";
-    switch (label) {
-      case "Explain Attack":
-        queryText = `Analyze and explain the root cause, severity, and potential vector of this ${selectedAttack.attack_type} attack event targeting service ${selectedAttack.target_service} on port ${selectedAttack.destination_port}.`;
-        break;
-      case "Recommend Firewall Rule":
-        queryText = `Generate concrete, actionable firewall block rules (e.g., iptables, Cisco ACL, pfSense, or Windows Firewall) and WAF filtering guidelines to mitigate future malicious traffic from source IP ${selectedAttack.source_ip}.`;
-        break;
-      case "Explain Payload":
-        queryText = `Perform a deep technical dissection of the captured payload for this event: "${selectedAttack.payload || 'No raw payload data captured'}". Identify potential query patterns, traversal keywords, or signature exploit indicators.`;
-        break;
-      case "Map to MITRE":
-        queryText = `Map this ${selectedAttack.attack_type} event to specific MITRE ATT&CK techniques, tactics, and mitigation IDs. Provide technique codes (e.g. T1059) and explain your mapping rationale.`;
-        break;
-      case "IOC Summary":
-        queryText = `Compile a formal Indicators of Compromise (IOC) summary details list containing the malicious source IP (${selectedAttack.source_ip}), target port (${selectedAttack.destination_port}), protocol (${selectedAttack.protocol}), threat score (${selectedAttack.threat_score}/100), and confidence score (${(selectedAttack.confidence*100).toFixed(0)}%).`;
-        break;
-      default:
-        return;
-    }
-    handleSendMessage(queryText, "security_analysis");
-  };
-
-  // Handle context-aware Quick Investigation Actions
-  const handleInvestigationAction = (action) => {
-    if (!selectedIncident && !selectedAttack) return;
-
-    let queryText = "";
-    const targetName = selectedIncident
-      ? `incident ID-${selectedIncident.id} ("${selectedIncident.title}")`
-      : `attack event HON-${selectedAttack.id} (${selectedAttack.attack_type})`;
-
-    switch (action) {
-      case "Analyze Incident":
-        queryText = `Conduct a detailed SOC analysis and investigation of ${targetName}. Summarize target services, attack vector, threat severity, and potential progression paths.`;
-        break;
-      case "Explain Severity":
-        queryText = `Analyze the severity metrics of ${targetName}. Detail why it is classified at this severity, and describe the potential network and host threat impacts.`;
-        break;
-      case "Extract IOCs":
-        queryText = `Perform a comprehensive Indicators of Compromise (IOC) extraction for ${targetName}. Tabulate malicious source IPs, target ports, protocol headers, and payload signatures.`;
-        break;
-      case "Recommend Containment":
-        queryText = `Generate concrete WAF filtering guidelines, firewall routing blocks (e.g. iptables/Cisco ACL), and immediate host isolation recommendations to contain ${targetName}.`;
-        break;
-      case "Map to MITRE":
-        queryText = `Map ${targetName} to the MITRE ATT&CK enterprise matrix. Detail matching technique codes (e.g. T1190 or T1059) and mitigation strategies.`;
-        break;
-      case "Generate Timeline":
-        queryText = `Reconstruct the threat campaign execution timeline for ${targetName}. Order the steps from initial scan activity to payload delivery, detail observed protocol sequences, and list timestamps.`;
-        break;
-      case "Executive Summary":
-        queryText = `Prepare a concise, non-technical executive security brief summarizing the threat vector, business risk, and containment status of ${targetName}.`;
-        break;
-      default:
-        return;
-    }
-    handleSendMessage(queryText, "investigator_action", action);
-  };
-
-  // Handle Send message
+  // Send Chat message
   const handleSendMessage = async (textToSend, modeOverride = null, actionName = null) => {
     const text = textToSend || inputValue;
     if (!text.trim() || loading) return;
@@ -274,13 +151,7 @@ export default function Agent() {
     const isTypedMessage = !textToSend;
     let responseMode = modeOverride;
     if (!responseMode) {
-      if (isTypedMessage) {
-        responseMode = 'general_chat';
-      } else if (selectedIncident || selectedAttack) {
-        responseMode = 'security_analysis';
-      } else {
-        responseMode = 'general_chat';
-      }
+      responseMode = (selectedIncident || selectedAttack) ? 'security_analysis' : 'general_chat';
     }
 
     const includeContext = responseMode !== 'general_chat' || !isTypedMessage;
@@ -288,7 +159,6 @@ export default function Agent() {
     const userMsg = { role: 'user', content: text, created_at: new Date() };
     const tempMessages = [...messages, userMsg];
 
-    // Add placeholder assistant message that will be populated with the stream chunks
     const assistantMsgIndex = tempMessages.length;
     setMessages([...tempMessages, { role: 'assistant', content: '', isStreaming: true }]);
     setLoading(true);
@@ -301,7 +171,6 @@ export default function Agent() {
         headers: {
           'Content-Type': 'application/json',
         },
-
         body: JSON.stringify({
           message: text,
           model: modelName,
@@ -311,11 +180,9 @@ export default function Agent() {
           context: {
             attack_id: (includeContext && selectedAttack) ? selectedAttack.id : (includeContext && searchParams.get('analyze_attack') ? parseInt(searchParams.get('analyze_attack')) : null),
             incident_id: (includeContext && selectedIncident) ? selectedIncident.id : (includeContext && searchParams.get('analyze_incident') ? parseInt(searchParams.get('analyze_incident')) : null),
-            sandbox_file_id: (includeContext && selectedSandboxId) ? selectedSandboxId : (includeContext && searchParams.get('analyze_sandbox') ? parseInt(searchParams.get('analyze_sandbox')) : null),
-            attacker_ip: (includeContext && selectedAttackerIp) ? selectedAttackerIp : (includeContext && searchParams.get('analyze_attacker') || null)
-          },
-          temperature: temp,
-          max_tokens: maxTokens
+            sandbox_file_id: (includeContext && selectedSandboxId) ? selectedSandboxId : null,
+            attacker_ip: (includeContext && selectedAttackerIp) ? selectedAttackerIp : null
+          }
         })
       });
 
@@ -327,7 +194,6 @@ export default function Agent() {
       const decoder = new TextDecoder('utf-8');
       let finished = false;
       let accumulatedText = '';
-      let conversationKey = convId;
       let leftover = '';
 
       while (!finished) {
@@ -360,17 +226,13 @@ export default function Agent() {
                   updated[assistantMsgIndex] = {
                     role: 'assistant',
                     content: accumulatedText || data.text,
-                    model: data.model,
+                    model: data.model || modelName,
                     latency: data.latency,
                     isStreaming: false,
                     created_at: new Date()
                   };
                   return updated;
                 });
-
-                if (!currentConversation && data.conversation_id) {
-                  conversationKey = data.conversation_id;
-                }
               } else {
                 accumulatedText += data.text;
                 setMessages(prev => {
@@ -378,886 +240,507 @@ export default function Agent() {
                   updated[assistantMsgIndex] = {
                     role: 'assistant',
                     content: accumulatedText,
+                    model: modelName,
                     isStreaming: true,
                     created_at: new Date()
                   };
                   return updated;
                 });
               }
-            } catch (err) {
-              console.error("Failed to parse chunk JSON:", err, "Line:", line);
+            } catch (e) {
+              console.error("Chunk parse error:", e);
             }
           }
-        }
-      }
-
-      if (leftover && leftover.trim().startsWith('data: ')) {
-        const rawJson = leftover.trim().substring(6).trim();
-        try {
-          const data = JSON.parse(rawJson);
-          if (data.done) {
-            if (data.latency !== undefined) {
-              setLastLatency(data.latency);
-            }
-            setMessages(prev => {
-              const updated = [...prev];
-              updated[assistantMsgIndex] = {
-                role: 'assistant',
-                content: accumulatedText || data.text,
-                model: data.model,
-                latency: data.latency,
-                isStreaming: false,
-                created_at: new Date()
-              };
-              return updated;
-            });
-            if (!currentConversation && data.conversation_id) {
-              conversationKey = data.conversation_id;
-            }
-          } else {
-            accumulatedText += data.text;
-            setMessages(prev => {
-              const updated = [...prev];
-              updated[assistantMsgIndex] = {
-                role: 'assistant',
-                content: accumulatedText,
-                isStreaming: true,
-                created_at: new Date()
-              };
-              return updated;
-            });
-          }
-        } catch (_err) {}
-      }
-
-      // Sync conversations list
-      const updatedConvs = await apiClient.get('/agent/conversations');
-      setConversations(updatedConvs);
-      if (!currentConversation && conversationKey) {
-        const match = updatedConvs.find(c => c.conversation_key === conversationKey);
-        if (match) {
-          const detail = await apiClient.get(`/agent/conversations/${match.id}`);
-          setCurrentConversation(detail);
         }
       }
     } catch (err) {
-      const isTimeout = (err.message || '').toLowerCase().includes('timeout');
-      const fallbackMsg = isTimeout
-        ? "The local AI model is online but took too long to respond. Try a smaller model, reduce max tokens, or retry."
-        : `Security Copilot was unable to get a response: ${err.message || 'Connection failed.'}. Utilizing local rule fallback.`;
-
-      setMessages([...tempMessages, {
-        role: 'assistant',
-        content: fallbackMsg,
-        created_at: new Date()
-      }]);
-    } finally {
-      setLoading(false);
-      fetchConversations();
-    }
-  };
-
-  const analyzedAttackIdRef = useRef(null);
-
-  // Trigger Automatic Attack Analysis (from URL or Context click)
-  const triggerAttackAnalysis = async (attackId) => {
-    if (!attackId) return;
-    const parsedId = parseInt(attackId, 10);
-    if (isNaN(parsedId)) {
-      setMessages([{ role: 'assistant', content: `⚠️ Invalid attack event ID '${attackId}'. Must be a valid integer.` }]);
-      return;
-    }
-
-    if (analyzedAttackIdRef.current === parsedId) return; // Prevent duplicate trigger
-    analyzedAttackIdRef.current = parsedId;
-
-    try {
-      setLoading(true);
-      const attackDetails = await apiClient.get(`/attacks/${parsedId}`);
-      setSelectedAttack(attackDetails);
-
-      const analysis = await apiClient.post(`/agent/analyze/${parsedId}`);
-
-      // Load newly created analysis conversation key
-      const updatedConvs = await apiClient.get('/agent/conversations');
-      setConversations(updatedConvs);
-
-      const match = updatedConvs.find(c => c.conversation_key === analysis.conversation_id);
-      if (match) {
-        const detail = await apiClient.get(`/agent/conversations/${match.id}`);
-        setCurrentConversation(detail);
-        setMessages(detail.messages);
-      }
-    } catch (e) {
-      console.error("Attack analysis failed:", e);
-      const isNotFound = e.response?.status === 404 || e.status === 404;
-      const isTimeout = (e.message || '').toLowerCase().includes('timeout') || e.code === 'ECONNABORTED';
-      const fallbackMsg = isNotFound
-        ? `⚠️ Honeypot attack event ID #${parsedId} could not be found or has been removed from database logs.`
-        : (isTimeout
-          ? "⚠️ The local AI model is online but took too long to respond. Try a smaller model, reduce max tokens, or retry."
-          : `⚠️ Security Analysis failed: ${e.message || 'Server connection error.'}`);
-      setMessages([
-        { role: 'assistant', content: fallbackMsg }
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Check URL query parameters for analyze link on mount
-  useEffect(() => {
-    fetchConversations();
-    fetchAgentStatus();
-    fetchSelectorData();
-
-    const enrichIp = searchParams.get('enrich_ip');
-    if (enrichIp) {
-      setSelectedIntelIp(enrichIp);
-    }
-
-    if (analyzeAttackId) {
-      triggerAttackAnalysis(analyzeAttackId);
-    }
-
-    const analyzeIncidentId = searchParams.get('analyze_incident');
-    if (analyzeIncidentId) {
-      fetchIncidentDetails(analyzeIncidentId);
-    }
-
-    const analyzeSandboxId = searchParams.get('analyze_sandbox');
-    if (analyzeSandboxId) {
-      setSelectedSandboxId(parseInt(analyzeSandboxId));
-      setInputValue("Can you perform an automated threat sandbox analysis for this uploaded payload file?");
-    }
-
-    const analyzeAttackerIp = searchParams.get('analyze_attacker');
-    if (analyzeAttackerIp) {
-      setSelectedAttackerIp(analyzeAttackerIp);
-      setInputValue("Please compile a threat brief campaign progression dossier and playbook recommendation list for this attacker IP.");
-    }
-  }, [analyzeAttackId, searchParams]);
-
-  const quickActions = [
-    { label: "Explain Attack", query: "Can you provide a clear description and root cause summary of this attack vector?" },
-    { label: "Recommend Firewall Rule", query: "Generate a block rule or routing recommendation to mitigate traffic from this source IP." },
-    { label: "Explain Payload", query: "Break down the raw elements, query injections, or traverse keys found in this payload." },
-    { label: "Map to MITRE", query: "Explain what MITRE ATT&CK technique IDs match this capture and why." },
-    { label: "IOC Summary", query: "Summarize the indicators of compromise (IP, port, signature patterns) for this event." },
-  ];
-
-  const investigationActions = [
-    { label: "Analyze Incident", action: "Analyze Incident" },
-    { label: "Explain Severity", action: "Explain Severity" },
-    { label: "Extract IOCs", action: "Extract IOCs" },
-    { label: "Recommend Containment", action: "Recommend Containment" },
-    { label: "Map to MITRE", action: "Map to MITRE" },
-    { label: "Generate Timeline", action: "Generate Timeline" },
-    { label: "Executive Summary", action: "Executive Summary" }
-  ];
-
-  // Inline badge and markdown highlights tokenizing parser
-  const formatInlineTags = (line) => {
-    if (!line) return "";
-    let parts = [{ text: line, type: 'text' }];
-
-    // 1. Parse inline code: `code`
-    let nextParts = [];
-    for (const part of parts) {
-      if (part.type === 'text') {
-        const subParts = part.text.split(/(`[^`]+`)/g);
-        for (const sub of subParts) {
-          if (sub.startsWith('`') && sub.endsWith('`')) {
-            nextParts.push({ text: sub.slice(1, -1), type: 'code' });
-          } else {
-            nextParts.push({ text: sub, type: 'text' });
-          }
-        }
-      } else {
-        nextParts.push(part);
-      }
-    }
-    parts = nextParts;
-
-    // 2. Parse bold: **text**
-    nextParts = [];
-    for (const part of parts) {
-      if (part.type === 'text') {
-        const subParts = part.text.split(/(\*\*[^*]+\*\*)/g);
-        for (const sub of subParts) {
-          if (sub.startsWith('**') && sub.endsWith('**')) {
-            nextParts.push({ text: sub.slice(2, -2), type: 'bold' });
-          } else {
-            nextParts.push({ text: sub, type: 'text' });
-          }
-        }
-      } else {
-        nextParts.push(part);
-      }
-    }
-    parts = nextParts;
-
-    // 3. Parse MITRE badge: (T\d{4})
-    nextParts = [];
-    for (const part of parts) {
-      if (part.type === 'text') {
-        const subParts = part.text.split(/\b(T\d{4}(?:\.\d{3})?)\b/g);
-        for (const sub of subParts) {
-          if (/\b(T\d{4}(?:\.\d{3})?)\b/.test(sub)) {
-            nextParts.push({ text: sub, type: 'mitre' });
-          } else {
-            nextParts.push({ text: sub, type: 'text' });
-          }
-        }
-      } else {
-        nextParts.push(part);
-      }
-    }
-    parts = nextParts;
-
-    // 4. Parse percentage badge: (100%)
-    nextParts = [];
-    for (const part of parts) {
-      if (part.type === 'text') {
-        const subParts = part.text.split(/\b(\d{1,3}%)\b/g);
-        for (const sub of subParts) {
-          if (/\b(\d{1,3}%)\b/.test(sub)) {
-            nextParts.push({ text: sub, type: 'percent' });
-          } else {
-            nextParts.push({ text: sub, type: 'text' });
-          }
-        }
-      } else {
-        nextParts.push(part);
-      }
-    }
-    parts = nextParts;
-
-    // 5. Parse IP Address highlights
-    nextParts = [];
-    for (const part of parts) {
-      if (part.type === 'text') {
-        const subParts = part.text.split(/\b((?:[0-9]{1,3}\.){3}[0-9]{1,3})\b/g);
-        for (const sub of subParts) {
-          if (/\b((?:[0-9]{1,3}\.){3}[0-9]{1,3})\b/.test(sub)) {
-            nextParts.push({ text: sub, type: 'ip' });
-          } else {
-            nextParts.push({ text: sub, type: 'text' });
-          }
-        }
-      } else {
-        nextParts.push(part);
-      }
-    }
-    parts = nextParts;
-
-    // Map tokens to React nodes
-    return parts.map((part, idx) => {
-      switch (part.type) {
-        case 'code':
-          return <code key={idx} className="inline-code-badge font-mono">{part.text}</code>;
-        case 'bold':
-          return <strong key={idx} className="font-bold text-cyan">{part.text}</strong>;
-        case 'mitre':
-          return <span key={idx} className="inline-mitre-badge">{part.text}</span>;
-        case 'percent':
-          return <span key={idx} className="inline-percent-badge">{part.text}</span>;
-        case 'ip':
-          return (
-            <span
-              key={idx}
-              className="clickable-ip-address"
-              onClick={() => setSelectedIntelIp(part.text)}
-              title="Click to query Threat Intelligence profile"
-            >
-              {part.text}
-            </span>
-          );
-        default:
-          return part.text;
-      }
-    });
-  };
-
-  // Code Block Component with Copy button
-  const CodeBlock = ({ lang, code }) => {
-    const [copied, setCopied] = useState(false);
-
-    const handleCopy = async () => {
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(code);
-        } else {
-          // Fallback for non-HTTPS / legacy browser environments
-          const textArea = document.createElement("textarea");
-          textArea.value = code;
-          textArea.style.position = "fixed";
-          textArea.style.left = "-999999px";
-          textArea.style.top = "-999999px";
-          document.body.appendChild(textArea);
-          textArea.focus();
-          textArea.select();
-          document.execCommand("copy");
-          document.body.removeChild(textArea);
-        }
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } catch (err) {
-        console.error("Failed to copy code:", err);
-      }
-    };
-
-    const displayLang = (lang || "code").toUpperCase().trim();
-
-    return (
-      <pre className="markdown-code-block font-mono">
-        <div className="code-header font-mono">
-          <span className="code-lang-label">{displayLang}</span>
-          <button
-            className="code-copy-btn font-mono text-xxs"
-            onClick={handleCopy}
-            title="Copy code block to clipboard"
-          >
-            {copied ? (
-              <>
-                <Check size={11} className="text-cyan" />
-                <span className="text-cyan font-bold">COPIED!</span>
-              </>
-            ) : (
-              <>
-                <Copy size={11} />
-                <span>COPY</span>
-              </>
-            )}
-          </button>
-        </div>
-        <code>{code}</code>
-      </pre>
-    );
-  };
-
-  // Custom Markdown renderer inside bubble
-  const renderMarkdown = (text) => {
-    if (!text) return "";
-    const parts = text.split("```");
-    return parts.map((part, idx) => {
-      if (idx % 2 === 1) {
-        const lines = part.split("\n");
-        const lang = lines[0];
-        const code = lines.slice(1).join("\n");
-        return (
-          <CodeBlock key={idx} lang={lang} code={code} />
-        );
-      }
-
-      const lines = part.split("\n");
-      return lines.map((line, lIdx) => {
-        if (line.startsWith("### ")) {
-          return <h5 key={lIdx} className="md-h3 font-bold text-cyan mt-3">{formatInlineTags(line.replace("### ", ""))}</h5>;
-        }
-        if (line.startsWith("## ")) {
-          return <h4 key={lIdx} className="md-h2 font-bold text-cyan mt-3">{formatInlineTags(line.replace("## ", ""))}</h4>;
-        }
-        if (line.startsWith("- ") || line.startsWith("* ")) {
-          return <li key={lIdx} className="md-li list-disc ml-4 font-mono text-xs">{formatInlineTags(line.substring(2))}</li>;
-        }
-
-        // Match ordered list patterns: e.g. "1. " or "2. "
-        const orderedListRegex = /^(\d+)\.\s+(.*)$/;
-        if (orderedListRegex.test(line)) {
-          const match = line.match(orderedListRegex);
-          return <li key={lIdx} className="md-li list-decimal ml-4 font-mono text-xs" style={{ listStyleType: 'decimal' }}>{formatInlineTags(match[2])}</li>;
-        }
-
-        if (line.trim() === "") return <div key={lIdx} className="h-2"></div>;
-        return <p key={lIdx} className="md-p my-1 font-mono text-xs leading-relaxed">{formatInlineTags(line)}</p>;
+      console.error("Chat stream error:", err);
+      setMessages(prev => {
+        const updated = [...prev];
+        updated[assistantMsgIndex] = {
+          role: 'assistant',
+          content: `⚠️ Communication error: ${err.message || 'Failed to reach AI Copilot API'}. Please verify backend status and Groq Cloud connection.`,
+          isError: true,
+          isStreaming: false,
+          created_at: new Date()
+        };
+        return updated;
       });
-    });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const _filteredConversations = conversations.filter(c =>
-    (c.title || '').toLowerCase().includes(_searchQuery.toLowerCase())
-  );
+  // Copy message text to clipboard
+  const handleCopyMessage = (text, index) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(index);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // Toggle message feedback
+  const handleFeedback = (index, type) => {
+    setFeedback(prev => ({
+      ...prev,
+      [index]: prev[index] === type ? null : type
+    }));
+  };
+
+  // Quick Action / Prompt handlers
+  const handleQuickAction = (label) => {
+    if (!selectedAttack) return;
+    let queryText = "";
+    switch (label) {
+      case "Explain Attack":
+        queryText = `Analyze and explain the root cause, severity, and potential vector of this ${selectedAttack.attack_type} attack event targeting service ${selectedAttack.target_service} on port ${selectedAttack.destination_port}.`;
+        break;
+      case "Recommend Firewall Rule":
+        queryText = `Generate concrete, actionable firewall block rules and WAF filtering guidelines to mitigate future malicious traffic from source IP ${selectedAttack.source_ip}.`;
+        break;
+      case "Explain Payload":
+        queryText = `Perform a deep technical dissection of the captured payload for this event: "${selectedAttack.payload || 'No raw payload data captured'}".`;
+        break;
+      case "Map to MITRE":
+        queryText = `Map this ${selectedAttack.attack_type} event to specific MITRE ATT&CK techniques, tactics, and mitigation IDs.`;
+        break;
+      case "IOC Summary":
+        queryText = `Compile a formal Indicators of Compromise (IOC) summary details list containing source IP (${selectedAttack.source_ip}), target port (${selectedAttack.destination_port}), protocol (${selectedAttack.protocol}), and threat score (${selectedAttack.threat_score}/100).`;
+        break;
+      default:
+        return;
+    }
+    handleSendMessage(queryText, "security_analysis");
+  };
+
+  const handleInvestigationAction = (action) => {
+    if (!selectedIncident && !selectedAttack) return;
+    const targetName = selectedIncident
+      ? `incident ID-${selectedIncident.id} ("${selectedIncident.title}")`
+      : `attack event HON-${selectedAttack.id} (${selectedAttack.attack_type})`;
+
+    let queryText = "";
+    switch (action) {
+      case "Analyze Incident":
+        queryText = `Conduct a detailed SOC analysis and investigation of ${targetName}. Summarize target services, attack vector, threat severity, and potential progression paths.`;
+        break;
+      case "Explain Severity":
+        queryText = `Analyze the severity metrics of ${targetName}. Detail why it is classified at this severity, and describe the potential threat impacts.`;
+        break;
+      case "Extract IOCs":
+        queryText = `Perform a comprehensive Indicators of Compromise (IOC) extraction for ${targetName}. Tabulate malicious source IPs, target ports, protocol headers, and payload signatures.`;
+        break;
+      case "Recommend Containment":
+        queryText = `Generate concrete WAF filtering guidelines, firewall routing blocks, and immediate host isolation recommendations to contain ${targetName}.`;
+        break;
+      case "Map to MITRE":
+        queryText = `Map ${targetName} to the MITRE ATT&CK enterprise matrix. Detail matching technique codes and mitigation strategies.`;
+        break;
+      case "Generate Timeline":
+        queryText = `Reconstruct the threat campaign execution timeline for ${targetName}. Order the steps from initial scan activity to payload delivery.`;
+        break;
+      case "Executive Summary":
+        queryText = `Prepare a concise, non-technical executive security brief summarizing the threat vector, business risk, and containment status of ${targetName}.`;
+        break;
+      default:
+        return;
+    }
+    handleSendMessage(queryText, "investigator_action", action);
+  };
+
+  const getModelLabel = (modelId) => {
+    const found = availableModels.find(m => m.id === modelId);
+    return found ? found.label : modelId;
+  };
+
+  const highSeverityCount = attacksList.filter(a => ['HIGH', 'CRITICAL'].includes((a.severity || '').toUpperCase())).length;
 
   return (
-    <div className="copilot-container">
-      {/* CENTER PANEL: Chat Workspace (Expanded) */}
-      <section className="copilot-center card-cyber">
-        {/* Header Console controls */}
-        <div className="copilot-workspace-header border-bottom">
-          <div className="header-conv-info">
-            <span className="conv-title font-mono text-cyan">
-              {currentConversation ? currentConversation.title.toUpperCase() : "ACTIVE_SECURITY_COPILOT"}
-            </span>
+    <div className="agent-page-container">
+      {/* Top Model & Action Bar */}
+      <header className="agent-top-bar card-cyber">
+        <div className="top-bar-left">
+          <div className="model-selector-group">
+            <span className="model-selector-label font-mono">ACTIVE MODEL</span>
+            <select
+              className="model-select-dropdown font-mono"
+              value={modelName}
+              onChange={(e) => setModelName(e.target.value)}
+            >
+              {availableModels.map(m => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
           </div>
 
-          <div className="header-controls font-mono text-xs">
-            <button
-              className="btn-new-chat-header font-mono text-xxs"
-              onClick={handleNewConversation}
-              title="Start a new investigation session"
-              style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
-            >
-              <Plus size={12} />
-              NEW CHAT
-            </button>
+          <button className="btn-new-chat font-mono" onClick={handleNewConversation}>
+            <Plus size={14} />
+            <span>NEW CHAT</span>
+          </button>
+        </div>
 
-            <div className="control-item">
-              <span className="text-muted">LLM:</span>
-              <select
-                value={modelName}
-                onChange={(e) => setModelName(e.target.value)}
-              >
-                {availableModels.length > 0 ? (
-                  availableModels.map(m => (
-                    <option key={m} value={m}>{getModelLabel(m)}</option>
-                  ))
-                ) : (
-                  <>
-                    <option value="llama-3.3-70b-versatile">{getModelLabel("llama-3.3-70b-versatile")}</option>
-                    <option value="llama-3.1-8b-instant">{getModelLabel("llama-3.1-8b-instant")}</option>
-                  </>
+        <div className="top-bar-right font-mono">
+          <div className="provider-badge">
+            <span className="pb-label">PROVIDER:</span>
+            <span className="pb-val">Groq Cloud</span>
+          </div>
+          <div className={`status-badge ${providerStatus.toLowerCase()}`}>
+            <span className="status-dot-inner"></span>
+            <span>{providerStatus}</span>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Copilot Body Container */}
+      <div className="agent-body-container">
+        {/* Left / Center AI Chat Workspace */}
+        <section className="agent-chat-section card-cyber">
+          <div className="chat-messages-scroll-container">
+            {messages.length === 0 ? (
+              /* Polished Initial Copilot Welcome Card */
+              <div className="copilot-welcome-card animate-fade-in">
+                <div className="welcome-avatar-icon">
+                  <Cpu size={32} className="text-cyan pulse" />
+                </div>
+                <h3 className="welcome-title font-mono">SentinelAI Copilot</h3>
+                <p className="welcome-subtitle font-mono">AI-Powered Security Operations Companion</p>
+                <p className="welcome-desc">
+                  Ask me about active threats, incidents, defensive strategies, attack analysis, IOC interpretation, or system security.
+                </p>
+
+                <div className="suggested-prompts-section">
+                  <div className="sp-header font-mono">
+                    <Sparkles size={14} className="text-cyan" />
+                    <span>Try asking me about:</span>
+                  </div>
+                  <div className="suggested-prompts-grid">
+                    <button
+                      className="prompt-chip-btn font-mono"
+                      onClick={() => handleSendMessage("Analyze the most recent high-severity attack events captured by SentinelAI.")}
+                    >
+                      <ShieldAlert size={14} className="text-red" />
+                      <span>Analyze recent attacks</span>
+                    </button>
+                    <button
+                      className="prompt-chip-btn font-mono"
+                      onClick={() => handleSendMessage("Recommend active WAF and IP containment firewall rules for detected threat sources.")}
+                    >
+                      <Shield size={14} className="text-green" />
+                      <span>Recommend firewall rules</span>
+                    </button>
+                    <button
+                      className="prompt-chip-btn font-mono"
+                      onClick={() => handleSendMessage("Explain common web intrusion signatures such as SQL Injection and Path Traversal.")}
+                    >
+                      <Terminal size={14} className="text-purple" />
+                      <span>Explain a payload</span>
+                    </button>
+                    <button
+                      className="prompt-chip-btn font-mono"
+                      onClick={() => handleSendMessage("Provide a MITRE ATT&CK mapping of observed honeypot and WAF attack signatures.")}
+                    >
+                      <Activity size={14} className="text-cyan" />
+                      <span>Map to MITRE ATT&CK</span>
+                    </button>
+                    <button
+                      className="prompt-chip-btn font-mono"
+                      onClick={() => handleSendMessage("Summarize the key Indicators of Compromise (IOCs) across all active attack logs.")}
+                    >
+                      <FileText size={14} className="text-amber" />
+                      <span>Generate IOC summary</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Chat Conversation Message Thread */
+              <div className="chat-thread">
+                {messages.map((msg, index) => {
+                  const isUser = msg.role === 'user';
+                  return (
+                    <div key={index} className={`message-row ${isUser ? 'user-row' : 'assistant-row'}`}>
+                      {!isUser && (
+                        <div className="assistant-avatar-box">
+                          <Cpu size={16} className="text-cyan" />
+                        </div>
+                      )}
+                      <div className={`message-bubble ${isUser ? 'user-bubble' : 'assistant-bubble'} ${msg.isError ? 'error-bubble' : ''}`}>
+                        <div className="message-header font-mono">
+                          <span className="msg-sender">{isUser ? 'SOC Analyst' : 'SentinelAI Copilot'}</span>
+                          {msg.created_at && (
+                            <span className="msg-time">{new Date(msg.created_at).toLocaleTimeString()}</span>
+                          )}
+                          {!isUser && msg.model && (
+                            <span className="msg-model-tag">{getModelLabel(msg.model)}</span>
+                          )}
+                        </div>
+
+                        <div className="message-content">
+                          {msg.content ? (
+                            <div className="markdown-body font-sans">{msg.content}</div>
+                          ) : (
+                            <div className="typing-indicator font-mono">
+                              <span className="dot"></span>
+                              <span className="dot"></span>
+                              <span className="dot"></span>
+                              <span className="typing-text">Analyzing security context...</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {!isUser && !msg.isStreaming && msg.content && (
+                          <div className="message-actions font-mono">
+                            <button
+                              className="msg-action-btn"
+                              onClick={() => handleCopyMessage(msg.content, index)}
+                              title="Copy response"
+                            >
+                              {copiedId === index ? <Check size={12} className="text-green" /> : <Copy size={12} />}
+                              <span>{copiedId === index ? 'Copied' : 'Copy'}</span>
+                            </button>
+
+                            <button
+                              className={`msg-action-btn ${feedback[index] === 'up' ? 'active-up' : ''}`}
+                              onClick={() => handleFeedback(index, 'up')}
+                              title="Useful response"
+                            >
+                              <ThumbsUp size={12} />
+                            </button>
+                            <button
+                              className={`msg-action-btn ${feedback[index] === 'down' ? 'active-down' : ''}`}
+                              onClick={() => handleFeedback(index, 'down')}
+                              title="Not useful"
+                            >
+                              <ThumbsDown size={12} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {isUser && (
+                        <div className="user-avatar-box">
+                          <User size={16} className="text-slate" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Contextual Suggestion Chips below conversation */}
+                {messages.length > 0 && !loading && (
+                  <div className="contextual-chips-row font-mono">
+                    <span className="chips-label">Quick Next Steps:</span>
+                    <button className="chip-btn" onClick={() => handleSendMessage("Show active threat summary for the past 24 hours.")}>
+                      Active Threats
+                    </button>
+                    <button className="chip-btn" onClick={() => handleSendMessage("Investigate top source IP addresses targeting Honeypot port 8088.")}>
+                      Investigate IP
+                    </button>
+                    <button className="chip-btn" onClick={() => handleSendMessage("Provide defense advice for mitigating SQL Injection and Traversal probes.")}>
+                      Defense Advice
+                    </button>
+                  </div>
                 )}
-              </select>
-            </div>
 
-            <div className="control-item">
-              <span className="text-muted">PROVIDER:</span>
-              <span className="font-mono text-cyan" style={{ fontSize: '10px' }}>Groq Cloud</span>
-            </div>
-
-            <div className="control-item">
-              <span className="text-muted">STATUS:</span>
-              <span className={`status-tag status-${agentStatus.toLowerCase()}`}>{agentStatus}</span>
-            </div>
-
-            {lastLatency !== null && (
-              <div className="control-item">
-                <span className="text-muted">LATENCY:</span>
-                <span className="font-mono text-purple">{lastLatency.toFixed(2)}s</span>
+                <div ref={messagesEndRef} />
               </div>
             )}
+          </div>
 
+          {/* Bottom Chat Composer */}
+          <div className="chat-composer-container">
+            <div className="composer-input-wrapper">
+              <textarea
+                className="composer-textarea font-mono"
+                placeholder="Ask SentinelAI anything..."
+                rows={2}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                disabled={loading}
+              />
+              <button
+                className={`composer-send-btn ${loading || !inputValue.trim() ? 'disabled' : ''}`}
+                onClick={() => handleSendMessage()}
+                disabled={loading || !inputValue.trim()}
+                title="Send Message"
+              >
+                <Send size={16} />
+              </button>
+            </div>
+            <div className="composer-disclaimer font-mono">
+              SentinelAI Copilot uses Groq Cloud LLMs. Verify critical security findings before executing live SOC playbooks.
+            </div>
+          </div>
+        </section>
+
+        {/* Right Side Panel: Telemetry & Investigator Tabs */}
+        <aside className="agent-side-panel card-cyber">
+          <div className="panel-tab-header font-mono">
             <button
-              className={`sync-btn-copilot ${isSyncing ? 'syncing' : ''}`}
-              onClick={fetchAgentStatus}
-              title="Refresh models discovery"
+              className={`panel-tab-btn ${activeTab === 'telemetry' ? 'active' : ''}`}
+              onClick={() => setActiveTab('telemetry')}
             >
-              <RefreshCw size={12} />
+              <Activity size={14} />
+              <span>TELEMETRY</span>
+            </button>
+            <button
+              className={`panel-tab-btn ${activeTab === 'investigator' ? 'active' : ''}`}
+              onClick={() => setActiveTab('investigator')}
+            >
+              <Sliders size={14} />
+              <span>INVESTIGATOR</span>
             </button>
           </div>
-        </div>
 
-        {/* Message threads list */}
-        <div className="copilot-messages-container scroll-bar">
-          {messages.map((msg, index) => {
-            const isUser = msg.role === 'user';
-            // Skip rendering assistant placeholder if it is empty and streaming (typing bubble covers this)
-            if (msg.role === 'assistant' && !msg.content && msg.isStreaming) {
-              return null;
-            }
-            return (
-              <div key={index} className={`msg-bubble-wrapper ${msg.role}`}>
-                <div className={`msg-bubble ${msg.role}`}>
-                  <div className="msg-meta font-mono text-xxs">
-                    <span className="msg-sender">
-                      {isUser ? <User size={10} className="icon-role" /> : <Cpu size={10} className="icon-role text-purple" />}
-                      {isUser ? 'OPERATOR' : 'SECURITY_COPILOT_AI'}
-                    </span>
-                    {msg.latency > 0 && (
-                      <span className="msg-latency text-muted">({msg.latency.toFixed(2)}s)</span>
-                    )}
+          <div className="panel-tab-body">
+            {activeTab === 'telemetry' ? (
+              <div className="telemetry-tab-content">
+                {/* 4 SOC Metric Overview Cards */}
+                <div className="telemetry-metrics-grid font-mono">
+                  <div className="metric-card-sm">
+                    <span className="m-val text-cyan">{attacksList.length}</span>
+                    <span className="m-lbl">TOTAL ATTACKS</span>
                   </div>
-                  <div className="msg-text">
-                    {renderMarkdown(msg.content)}
-                    {msg.isStreaming && (
-                      <span className="blinking-cursor text-purple font-bold ml-1">_</span>
-                    )}
-                    {msg.role === 'assistant' && msg.latency > 20 && (
-                      <div className="latency-warning font-mono text-xxs mt-2 pt-2 flex items-center gap-2" style={{ color: '#ffd32a', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                        <AlertTriangle size={10} />
-                        <span>Local model is responding slowly. For faster responses, use a smaller model or reduce max tokens.</span>
-                      </div>
-                    )}
+                  <div className="metric-card-sm">
+                    <span className="m-val text-purple">{wafSourcesCount}</span>
+                    <span className="m-lbl">UNIQUE SOURCES</span>
+                  </div>
+                  <div className="metric-card-sm">
+                    <span className="m-val text-red">{highSeverityCount}</span>
+                    <span className="m-lbl">HIGH SEVERITY</span>
+                  </div>
+                  <div className="metric-card-sm">
+                    <span className="m-val text-green">{activeWafRulesCount}</span>
+                    <span className="m-lbl">BLOCKED TODAY</span>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-          {loading && (messages.length === 0 || messages[messages.length - 1].role !== 'assistant' || !messages[messages.length - 1].content) && (
-            <div className="msg-bubble-wrapper assistant">
-              <div className="msg-bubble assistant typing-bubble-card">
-                <div className="msg-meta font-mono text-xxs">
-                  <span className="msg-sender text-purple">
-                    <Cpu size={10} className="icon-role text-purple" />
-                    SECURITY_COPILOT_AI
-                  </span>
-                </div>
-                <div className="typing-indicator-wrapper">
-                  <div className="typing-indicator">
-                    <span className="typing-dot"></span>
-                    <span className="typing-dot"></span>
-                    <span className="typing-dot"></span>
-                  </div>
-                  <span className="typing-label font-mono text-xxs text-muted">Security Copilot is analyzing...</span>
-                </div>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
 
-        {/* Input message box */}
-        <div className="copilot-input-area">
-          <input
-            type="text"
-            placeholder={selectedAttack || selectedIncident ? (selectedAttack ? `Ask Copilot about attack HON-${selectedAttack.id}...` : `Ask Copilot about incident ID-${selectedIncident.id}...`) : "Ask SentinelAI anything..."}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-            disabled={loading}
-          />
-          <button
-            className="btn-send-copilot"
-            onClick={() => handleSendMessage()}
-            disabled={loading || !inputValue.trim()}
-          >
-            <Send size={14} />
-          </button>
-        </div>
-      </section>
-
-      {/* 3. RIGHT PANEL: SOC Context & Settings */}
-      <aside className="copilot-right">
-        {/* Tab selector */}
-        <div className="copilot-tabs-header font-mono text-xs">
-          <button
-            className={`copilot-tab-btn ${activeTab === 'telemetry' ? 'active' : ''}`}
-            onClick={() => setActiveTab('telemetry')}
-          >
-            Telemetry
-          </button>
-          <button
-            className={`copilot-tab-btn ${activeTab === 'investigate' ? 'active' : ''}`}
-            onClick={() => setActiveTab('investigate')}
-          >
-            Investigator
-          </button>
-        </div>
-
-        <div className="copilot-tab-content scroll-bar">
-          {activeTab === 'telemetry' ? (
-            <>
-              {/* Threat context box */}
-              <div className="card-cyber copilot-context-card">
-              <h5 className="section-title"><Shield size={14} className="text-cyan" /> Threat Telemetry Context</h5>
-              {selectedIntelIp ? (
-                <ThreatIntelPanel ip={selectedIntelIp} onClose={() => setSelectedIntelIp(null)} />
-              ) : selectedAttack ? (
-                <div className="context-details font-mono text-xs">
-                  <div className="context-row font-bold text-red border-bottom pb-2">
-                    <span>{selectedAttack.attack_type}</span>
-                  </div>
-                  <div className="context-row">
-                    <span className="text-muted">Severity:</span>
-                    <span className={`badge badge-${selectedAttack.severity.toLowerCase()}`}>{selectedAttack.severity}</span>
-                  </div>
-                  <div className="context-row">
-                    <span className="text-muted">Source IP:</span>
-                    <span className="text-primary">{selectedAttack.source_ip}:{selectedAttack.source_port}</span>
-                  </div>
-                  <div className="context-row">
-                    <span className="text-muted">Protocol / Port:</span>
-                    <span>{selectedAttack.protocol} / {selectedAttack.destination_port}</span>
-                  </div>
-                  <div className="context-row">
-                    <span className="text-muted">Confidence:</span>
-                    <span className="text-cyan">{(selectedAttack.confidence * 100).toFixed(0)}%</span>
-                  </div>
-                  <div className="context-payload-box mt-2">
-                    <span className="text-muted text-xxs uppercase block mb-1">Captured Payload snippet:</span>
-                    <pre className="payload-snippet scroll-bar text-xxs font-mono">{selectedAttack.payload || 'No raw payload data captured'}</pre>
-                  </div>
-                </div>
-              ) : (
-                <div className="empty-context text-center text-muted font-mono text-xs py-4">
-                  <AlertTriangle size={16} className="block mx-auto mb-2 text-muted" />
-                  No incident linked. Select Analyze from Attack Feed to attach threat context.
-                </div>
-              )}
-            </div>
-
-            {/* Quick Scans Panel */}
-            <div className="card-cyber copilot-settings-card" style={{ marginTop: '0' }}>
-              <h5 className="section-title"><Activity size={14} className="text-cyan" /> Quick Scans</h5>
-              <div className="settings-controls font-mono text-xs mt-2" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {quickActions.map(action => (
-                  <button
-                    key={action.label}
-                    className="quick-action-btn"
-                    onClick={() => handleQuickAction(action.label)}
-                    disabled={loading || !selectedAttack}
-                    title={!selectedAttack ? "Link an attack context on the right to trigger" : ""}
-                    style={{ width: '100%', textAlign: 'left', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
-                  >
-                    {action.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Hyper-parameters configurations block */}
-            <div className="card-cyber copilot-settings-card">
-              <h5
-                className="section-title collapsible-title"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Sliders size={14} className="text-purple" />
-                  Advanced AI Settings
-                </span>
-                <span className="toggle-indicator font-mono" style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
-                  {showAdvanced ? '▼' : '►'}
-                </span>
-              </h5>
-              {showAdvanced && (
-                <div className="settings-controls font-mono text-xs mt-2">
-                  <div className="setting-slider-box">
-                    <div className="slider-label">
-                      <span>Temperature:</span>
-                      <span className="text-cyan font-bold">{temp}</span>
+                {/* Selected Attack Context Banner if present */}
+                {selectedAttack && (
+                  <div className="selected-context-banner card-cyber font-mono">
+                    <div className="banner-top">
+                      <ShieldAlert size={14} className="text-red" />
+                      <span className="banner-title">Linked Context: #{selectedAttack.id}</span>
+                      <button className="clear-ctx-btn" onClick={() => setSelectedAttack(null)}>✕</button>
                     </div>
-                    <input
-                      type="range"
-                      min="0.1"
-                      max="1.0"
-                      step="0.05"
-                      value={temp}
-                      onChange={(e) => setTemp(parseFloat(e.target.value))}
-                    />
-                  </div>
-
-                  <div className="setting-slider-box">
-                    <div className="slider-label">
-                      <span>Max Tokens:</span>
-                      <span className="text-purple font-bold">{maxTokens}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="128"
-                      max="4096"
-                      step="128"
-                      value={maxTokens}
-                      onChange={(e) => setMaxTokens(parseInt(e.target.value))}
-                    />
-                  </div>
-
-                  <div className="setting-slider-box">
-                    <div className="slider-label">
-                      <span>System Role Directive:</span>
-                    </div>
-                    <input
-                      type="text"
-                      className="text-input-field text-xs font-mono"
-                      value={systemPrompt}
-                      onChange={(e) => setSystemPrompt(e.target.value)}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            {/* INCIDENT / ATTACK SELECTOR DROPDOWN */}
-            <div className="card-cyber copilot-context-card">
-              <h5 className="section-title"><Database size={14} className="text-cyan" /> Threat Context Selector</h5>
-
-              <div className="selector-wrapper font-mono text-xs mt-2" style={{ position: 'relative' }}>
-                <button
-                  className="btn-select-threat text-cyan"
-                  onClick={() => {
-                    setShowSelector(!showSelector);
-                    if (!showSelector) fetchSelectorData();
-                  }}
-                  style={{
-                    width: '100%',
-                    textAlign: 'left',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    background: 'rgba(0, 242, 254, 0.05)',
-                    border: '1px solid rgba(0, 242, 254, 0.2)',
-                    padding: '8px',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '90%' }}>
-                    {selectedIncident ? `Linked Incident: ID-${selectedIncident.id}` :
-                     selectedAttack ? `Linked Attack: HON-${selectedAttack.id}` :
-                     'Choose Incident/Attack...'}
-                  </span>
-                  <span>{showSelector ? '▲' : '▼'}</span>
-                </button>
-
-                {showSelector && (
-                  <div className="selector-dropdown card-cyber">
-                    <input
-                      type="text"
-                      placeholder="Search alerts, IPs..."
-                      value={selectorSearch}
-                      onChange={(e) => setSelectorSearch(e.target.value)}
-                      className="selector-search-input font-mono text-xxs"
-                    />
-                    <div className="selector-items scroll-bar">
-                      <div className="selector-section-title text-cyan uppercase font-bold mb-1" style={{ fontSize: '9px', opacity: 0.8 }}>Correlated Incidents</div>
-                      {incidentsList.length === 0 ? (
-                        <div className="text-muted text-xxs py-1 pl-2">No incidents found</div>
-                      ) : incidentsList
-                        .filter(inc => (inc.title || '').toLowerCase().includes(selectorSearch.toLowerCase()) || (inc.severity || '').toLowerCase().includes(selectorSearch.toLowerCase()))
-                        .map(inc => (
-                          <div
-                            key={`inc-${inc.id}`}
-                            className="selector-item font-mono text-xxs"
-                            onClick={() => {
-                              setSelectedIncident(inc);
-                              setSelectedAttack(null);
-                              setShowSelector(false);
-                            }}
-                            style={{
-                              cursor: 'pointer',
-                              padding: '6px',
-                              borderBottom: '1px solid rgba(255,255,255,0.05)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px'
-                            }}
-                          >
-                            <span className={`badge badge-${inc.severity.toLowerCase()}`} style={{ fontSize: '8px', padding: '1px 4px' }}>{inc.severity}</span>
-                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>ID-{inc.id}: {inc.title}</span>
-                          </div>
-                        ))}
-
-                      <div className="selector-section-title text-purple uppercase font-bold mt-2 mb-1" style={{ fontSize: '9px', opacity: 0.8 }}>Raw Attack Feeds</div>
-                      {attacksList.length === 0 ? (
-                        <div className="text-muted text-xxs py-1 pl-2">No attacks found</div>
-                      ) : attacksList
-                        .filter(atk => (atk.attack_type || '').toLowerCase().includes(selectorSearch.toLowerCase()) || (atk.source_ip || '').includes(selectorSearch))
-                        .map(atk => (
-                          <div
-                            key={`atk-${atk.id}`}
-                            className="selector-item font-mono text-xxs"
-                            onClick={() => {
-                              setSelectedAttack(atk);
-                              setSelectedIncident(null);
-                              setShowSelector(false);
-                            }}
-                            style={{
-                              cursor: 'pointer',
-                              padding: '6px',
-                              borderBottom: '1px solid rgba(255,255,255,0.05)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px'
-                            }}
-                          >
-                            <span className={`badge badge-${atk.severity.toLowerCase()}`} style={{ fontSize: '8px', padding: '1px 4px' }}>{atk.severity}</span>
-                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>HON-{atk.id}: {atk.attack_type} ({atk.source_ip})</span>
-                          </div>
-                        ))}
+                    <div className="banner-desc">
+                      {selectedAttack.attack_type} from {selectedAttack.source_ip} (Severity: {selectedAttack.severity})
                     </div>
                   </div>
                 )}
+
+                {/* Quick Scans Section */}
+                <div className="quick-scans-section">
+                  <h6 className="qs-title font-mono">
+                    <Zap size={14} className="text-cyan" />
+                    <span>Quick Scans & Telemetry Actions</span>
+                  </h6>
+                  <div className="quick-scans-buttons">
+                    <button className="qs-btn font-mono" onClick={() => handleQuickAction("Explain Attack")} disabled={!selectedAttack}>
+                      <ChevronRight size={12} />
+                      <span>Explain Attack</span>
+                    </button>
+                    <button className="qs-btn font-mono" onClick={() => handleQuickAction("Recommend Firewall Rule")} disabled={!selectedAttack}>
+                      <ChevronRight size={12} />
+                      <span>Recommend Firewall Rule</span>
+                    </button>
+                    <button className="qs-btn font-mono" onClick={() => handleQuickAction("Explain Payload")} disabled={!selectedAttack}>
+                      <ChevronRight size={12} />
+                      <span>Explain Payload</span>
+                    </button>
+                    <button className="qs-btn font-mono" onClick={() => handleQuickAction("Map to MITRE")} disabled={!selectedAttack}>
+                      <ChevronRight size={12} />
+                      <span>Map to MITRE ATT&CK</span>
+                    </button>
+                    <button className="qs-btn font-mono" onClick={() => handleQuickAction("IOC Summary")} disabled={!selectedAttack}>
+                      <ChevronRight size={12} />
+                      <span>IOC Summary</span>
+                    </button>
+                  </div>
+                  {!selectedAttack && (
+                    <p className="qs-help text-muted font-mono">* Select an attack event from the Investigator tab or Attack Feed to enable context scans.</p>
+                  )}
+                </div>
               </div>
-            </div>
-
-            {/* ACTIVE INVESTIGATION DETAILS CARD */}
-            <div className="card-cyber copilot-context-card" style={{ marginTop: '0' }}>
-              <h5 className="section-title"><ShieldAlert size={14} className="text-cyan" /> Active Target Details</h5>
-              {selectedIncident ? (
-                <div className="context-details font-mono text-xs">
-                  <div className="context-row font-bold text-red border-bottom pb-2" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Incident ID-{selectedIncident.id}</span>
-                    <span className={`badge badge-${selectedIncident.severity.toLowerCase()}`}>{selectedIncident.severity}</span>
-                  </div>
-                  <div className="context-row">
-                    <span className="text-muted">Title:</span>
-                    <span className="text-cyan">{selectedIncident.title}</span>
-                  </div>
-                  <div className="context-row">
-                    <span className="text-muted">Confidence:</span>
-                    <span>{(selectedIncident.confidence * 100).toFixed(0)}%</span>
-                  </div>
-                  <div className="context-row">
-                    <span className="text-muted">Status:</span>
-                    <span className="text-cyan">{selectedIncident.status}</span>
-                  </div>
-                  <div className="context-row">
-                    <span className="text-muted">Owner:</span>
-                    <span>{selectedIncident.assigned_analyst || 'Unassigned'}</span>
-                  </div>
-                  <div className="context-payload-box mt-2">
-                    <span className="text-muted text-xxs uppercase block mb-1">Description:</span>
-                    <p className="text-xxs leading-relaxed" style={{ color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.02)', padding: '6px', borderRadius: '3px', margin: 0 }}>
-                      {selectedIncident.description}
-                    </p>
-                  </div>
-                </div>
-              ) : selectedAttack ? (
-                <div className="context-details font-mono text-xs">
-                  <div className="context-row font-bold text-red border-bottom pb-2" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Attack HON-{selectedAttack.id}</span>
-                    <span className={`badge badge-${selectedAttack.severity.toLowerCase()}`}>{selectedAttack.severity}</span>
-                  </div>
-                  <div className="context-row">
-                    <span className="text-muted">Type:</span>
-                    <span className="text-cyan">{selectedAttack.attack_type}</span>
-                  </div>
-                  <div className="context-row">
-                    <span className="text-muted">Source IP:</span>
-                    <span className="text-primary">{selectedAttack.source_ip}:{selectedAttack.source_port}</span>
-                  </div>
-                  <div className="context-row">
-                    <span className="text-muted">Protocol:</span>
-                    <span>{selectedAttack.protocol} / Port {selectedAttack.destination_port}</span>
-                  </div>
-                  <div className="context-payload-box mt-2">
-                    <span className="text-muted text-xxs uppercase block mb-1">Captured Payload:</span>
-                    <pre className="payload-snippet scroll-bar text-xxs font-mono" style={{ margin: 0 }}>{selectedAttack.payload || 'No raw payload captured'}</pre>
-                  </div>
-                </div>
-              ) : (
-                <div className="empty-context text-center text-muted font-mono text-xs py-4">
-                  <AlertTriangle size={16} className="block mx-auto mb-2 text-muted" />
-                  No threat context linked. Link an Incident or Attack Event using the selector above.
-                </div>
-              )}
-            </div>
-
-            {/* STRUCTURED INVESTIGATION ACTIONS */}
-            <div className="card-cyber copilot-settings-card" style={{ marginTop: '0' }}>
-              <h5 className="section-title"><BookOpen size={14} className="text-cyan" /> Investigation Actions</h5>
-              <div className="settings-controls font-mono text-xs mt-2" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {investigationActions.map(action => (
-                  <button
-                    key={action.action}
-                    className="quick-action-btn"
-                    onClick={() => handleInvestigationAction(action.action)}
-                    disabled={loading || (!selectedIncident && !selectedAttack)}
-                    title={(!selectedIncident && !selectedAttack) ? "Link an incident context above to trigger" : ""}
-                    style={{ width: '100%', textAlign: 'left', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
+            ) : (
+              /* INVESTIGATOR Tab */
+              <div className="investigator-tab-content font-mono">
+                <div className="investigator-selector-card card-cyber mb-3">
+                  <label className="inv-label">TARGET CONTEXT OBJECT:</label>
+                  <select
+                    className="inv-select"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) {
+                        setSelectedAttack(null);
+                        setSelectedIncident(null);
+                        return;
+                      }
+                      if (val.startsWith('attack_')) {
+                        const id = parseInt(val.replace('attack_', ''));
+                        const found = attacksList.find(a => a.id === id);
+                        setSelectedAttack(found || null);
+                        setSelectedIncident(null);
+                      } else if (val.startsWith('inc_')) {
+                        const id = parseInt(val.replace('inc_', ''));
+                        const found = incidentsList.find(i => i.id === id);
+                        setSelectedIncident(found || null);
+                        setSelectedAttack(null);
+                      }
+                    }}
                   >
-                    {action.label}
+                    <option value="">-- Choose Incident / Attack --</option>
+                    <optgroup label="Correlated Incidents">
+                      {incidentsList.map(inc => (
+                        <option key={`inc_${inc.id}`} value={`inc_${inc.id}`}>
+                          Incident #{inc.id}: {inc.title} ({inc.severity})
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Recent Attack Events">
+                      {attacksList.slice(0, 15).map(atk => (
+                        <option key={`attack_${atk.id}`} value={`attack_${atk.id}`}>
+                          Event #{atk.id}: {atk.attack_type} from {atk.source_ip}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+
+                <div className="investigator-actions-grid">
+                  <h6 className="inv-actions-title">SOC Investigator Workflows</h6>
+                  <button className="inv-action-btn" onClick={() => handleInvestigationAction("Analyze Incident")} disabled={!selectedIncident && !selectedAttack}>
+                    <span>Analyze Incident</span>
                   </button>
-                ))}
+                  <button className="inv-action-btn" onClick={() => handleInvestigationAction("Explain Severity")} disabled={!selectedIncident && !selectedAttack}>
+                    <span>Explain Severity</span>
+                  </button>
+                  <button className="inv-action-btn" onClick={() => handleInvestigationAction("Extract IOCs")} disabled={!selectedIncident && !selectedAttack}>
+                    <span>Extract IOCs</span>
+                  </button>
+                  <button className="inv-action-btn" onClick={() => handleInvestigationAction("Recommend Containment")} disabled={!selectedIncident && !selectedAttack}>
+                    <span>Recommend Containment</span>
+                  </button>
+                  <button className="inv-action-btn" onClick={() => handleInvestigationAction("Map to MITRE")} disabled={!selectedIncident && !selectedAttack}>
+                    <span>Map to MITRE ATT&CK</span>
+                  </button>
+                  <button className="inv-action-btn" onClick={() => handleInvestigationAction("Generate Timeline")} disabled={!selectedIncident && !selectedAttack}>
+                    <span>Generate Timeline</span>
+                  </button>
+                  <button className="inv-action-btn" onClick={() => handleInvestigationAction("Executive Summary")} disabled={!selectedIncident && !selectedAttack}>
+                    <span>Executive Summary</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          </>
-        )}
-        </div>
-      </aside>
+            )}
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }

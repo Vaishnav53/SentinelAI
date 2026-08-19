@@ -21,43 +21,56 @@ from backend.schemas.agent import (
     AnalysisResponse
 )
 
+SUPPORTED_GROQ_MODELS = [
+    {
+        "id": "openai/gpt-oss-120b",
+        "label": "GPT-OSS 120B",
+        "description": "Primary high-intelligence reasoning model for deep SOC analysis & threat response"
+    },
+    {
+        "id": "openai/gpt-oss-20b",
+        "label": "GPT-OSS 20B",
+        "description": "High-speed low-latency reasoning model for rapid telemetry queries & triage"
+    },
+    {
+        "id": "qwen/qwen3.6-27b",
+        "label": "Qwen 3.6 27B",
+        "description": "High-throughput open weights reasoning & cybersecurity instruction model"
+    }
+]
+
 def map_model_to_groq(model_name: str) -> str:
-    """Map a local model name or custom input to a valid Groq model ID."""
+    """Map a model ID or input string to a supported Groq model ID."""
     if not model_name:
         return settings.DEFAULT_GROQ_MODEL
-    model_name_lower = model_name.lower()
-    if "llama" in model_name_lower:
-        if "70b" in model_name_lower or "versatile" in model_name_lower:
-            return "llama-3.3-70b-versatile"
-        return "llama-3.1-8b-instant"
-    elif "qwen" in model_name_lower:
-        return "llama-3.1-8b-instant"
-    elif "mixtral" in model_name_lower:
-        return "mixtral-8x7b-32768"
-    elif "gemma" in model_name_lower:
-        return "gemma2-9b-it"
-    
-    valid_groq_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it", "llama3-8b-8192"]
-    if model_name in valid_groq_models:
+
+    valid_ids = [m["id"] for m in SUPPORTED_GROQ_MODELS]
+    if model_name in valid_ids:
         return model_name
+
+    model_name_lower = model_name.lower()
+    if "120b" in model_name_lower or "gpt-oss-120b" in model_name_lower or "llama" in model_name_lower or "versatile" in model_name_lower or "mixtral" in model_name_lower or "gemma" in model_name_lower:
+        return "openai/gpt-oss-120b"
+    elif "20b" in model_name_lower or "gpt-oss-20b" in model_name_lower:
+        return "openai/gpt-oss-20b"
+    elif "qwen" in model_name_lower:
+        return "qwen/qwen3.6-27b"
+    elif "gpt-oss" in model_name_lower:
+        return "openai/gpt-oss-120b"
+
     return settings.DEFAULT_GROQ_MODEL
 
-async def resolve_ollama_model_name(model_name: str) -> str:
-    """Resolve requested base model name to the exact tag string returned by Ollama."""
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.get(f"{settings.OLLAMA_BASE_URL}/api/tags")
-            if resp.status_code == 200:
-                available_tags = [m["name"] for m in resp.json().get("models", [])]
-                if model_name not in available_tags:
-                    for tag in available_tags:
-                        if tag.split(':')[0] == model_name.split(':')[0]:
-                            return tag
-    except Exception as e:
-        logging.warning(f"Ollama tags lookup failed: {e}")
-    return model_name
-
 router = APIRouter(prefix="/agent", tags=["AI Agent"])
+
+@router.get("/models")
+async def get_agent_models():
+    """Retrieve supported Groq models metadata allowlist."""
+    return {
+        "provider": "Groq Cloud",
+        "models": SUPPORTED_GROQ_MODELS,
+        "default_model": settings.DEFAULT_GROQ_MODEL
+    }
+
 
 @router.get("/status", response_model=AgentStatus)
 async def get_agent_status(
@@ -121,7 +134,7 @@ async def post_chat_stream(
     settings_service = Depends(get_settings_service)
 ):
     """Submit prompt to Copilot, returning a streaming response chunk-by-chunk."""
-    raw_model = payload.model or settings_service.get_setting(db, "default_ollama_model", settings.DEFAULT_OLLAMA_MODEL)
+    raw_model = payload.model or settings_service.get_setting(db, "default_groq_model", settings.DEFAULT_GROQ_MODEL)
     model_name = map_model_to_groq(raw_model)
     
     conv_key = payload.conversation_id
@@ -284,7 +297,7 @@ async def post_chat_stream(
         })
 
     # Check if Groq API is configured
-    is_ollama_online = bool(settings.GROQ_API_KEY)
+    is_groq_online = bool(settings.GROQ_API_KEY)
 
     async def generate_response():
         start_time = datetime.utcnow()
@@ -292,7 +305,8 @@ async def post_chat_stream(
         source = "groq"
 
         # If Groq is completely offline, fall back to offline simulation
-        if not is_ollama_online:
+        if not is_groq_online:
+
             source = "fallback"
             fallback_full_text = ""
             msg_lower = payload.message.lower().strip()
@@ -482,11 +496,12 @@ The analysis request for '{payload.message}' has been logged in the SOC investig
         else:
             # Call Groq API
             groq_url = "https://api.groq.com/openai/v1/chat/completions"
-            timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 90.0))
+            timeout_seconds = float(settings_service.get_setting(db, "ai_timeout_seconds", 90.0))
+
             temperature = payload.temperature if payload.temperature is not None else 0.7
 
-            raw_tokens = payload.max_tokens if payload.max_tokens is not None else 768
-            max_tokens = min(max(raw_tokens, 64), 2048)
+            raw_tokens = payload.max_tokens if payload.max_tokens is not None else 1024
+            max_tokens = min(max(raw_tokens, 128), 4096)
             
             try:
                 async with httpx.AsyncClient(timeout=timeout_seconds) as client:
@@ -514,7 +529,8 @@ The analysis request for '{payload.message}' has been logged in the SOC investig
                                         break
                                     try:
                                         chunk_json = json.loads(data_content)
-                                        text_chunk = chunk_json.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                                        delta = chunk_json.get("choices", [{}])[0].get("delta", {})
+                                        text_chunk = delta.get("content", "")
                                         if text_chunk:
                                             response_text += text_chunk
                                             yield f"data: {json.dumps({'text': text_chunk, 'done': False, 'conversation_id': conv_key, 'model': model_name})}\n\n"
@@ -527,18 +543,7 @@ The analysis request for '{payload.message}' has been logged in the SOC investig
                 error_name = type(e).__name__
                 logging.warning(f"Groq stream error ({error_name}): {str(e)}.")
                 if not response_text:
-                    err_msg = f"""### ⚠️ Groq Cloud AI Offline or Timed Out
-
-I was unable to establish a timely connection with the Groq Cloud service ({error_name}).
-
-**Possible Causes:**
-1. **API Key Missing or Invalid:** Ensure that your `GROQ_API_KEY` is correctly defined in `backend/.env`.
-2. **Network Connection Issues:** Verify that the host is connected to the internet and can access `https://api.groq.com`.
-3. **Rate Limits / Quotas:** You may have exceeded your Groq account's rate limits.
-
-**Recommended Troubleshooting:**
-- Check your internet access.
-- Validate your `GROQ_API_KEY` settings."""
+                    err_msg = "AI service temporarily unavailable. Please try again shortly."
                     words = err_msg.split(" ")
                     for idx, word in enumerate(words):
                         space = " " if idx < len(words) - 1 else ""
@@ -586,7 +591,7 @@ async def post_chat(
 ):
     """Submit prompt to Copilot, persisting conversations in SQLite db."""
     start_time = datetime.utcnow()
-    raw_model = payload.model or settings_service.get_setting(db, "default_ollama_model", settings.DEFAULT_OLLAMA_MODEL)
+    raw_model = payload.model or settings_service.get_setting(db, "default_groq_model", settings.DEFAULT_GROQ_MODEL)
     model_name = map_model_to_groq(raw_model)
     
     # 1. Retrieve or Create AIConversation context
@@ -758,11 +763,12 @@ async def post_chat(
     source = "model"
     if settings.GROQ_API_KEY:
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
-        timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 90.0))
+        timeout_seconds = float(settings_service.get_setting(db, "ai_timeout_seconds", 90.0))
+
         
         # Custom options
         temperature = payload.temperature if payload.temperature is not None else 0.7
-        max_tokens = payload.max_tokens if payload.max_tokens is not None else 256
+        max_tokens = payload.max_tokens if payload.max_tokens is not None else 1024
         
         try:
             async with httpx.AsyncClient(timeout=timeout_seconds) as client:
@@ -790,8 +796,9 @@ async def post_chat(
     else:
         source = "fallback"
 
-    # 5. Local Mock Fallback if Ollama Offline/Timed Out or returns empty
+    # 5. Local Mock Fallback if Groq API Offline/Timed Out or returns empty
     if not response_text:
+
         source = "fallback"
         msg_lower = payload.message.lower()
         if linked_incident_id:
@@ -926,7 +933,7 @@ Track anomalous parent-child process paths (e.g., web server spawning bash shell
 SOC Defense Handbook Section 4.2"""
         else:
             response_text = """### Threat Summary
-Ollama response request has timed out.
+AI response request has timed out.
 
 ### MITRE ATT&CK
 N/A
@@ -938,13 +945,14 @@ N/A
 Latency in threat response telemetry delivery.
 
 ### Detection
-Check uvicorn and ollama daemon container log levels.
+Check uvicorn log levels and network connection to Groq Cloud.
 
 ### Remediation
-The local AI model is online but responded too slowly. Try using a smaller model, lower max tokens, or run Ollama with GPU acceleration.
+Groq Cloud API connection timed out. Verify network connectivity, API quota, or try a smaller model.
 
 ### References
 SentinelAI System Performance Guide"""
+
 
     # 6. Save AI Response in DB
     latency = (datetime.utcnow() - start_time).total_seconds()
@@ -994,7 +1002,7 @@ async def analyze_attack(
     payload_str = attack.payload or "No payload data"
     raw_metadata_str = attack.raw_metadata
 
-    raw_model = settings_service.get_setting(db, "default_ollama_model", settings.DEFAULT_OLLAMA_MODEL)
+    raw_model = settings_service.get_setting(db, "default_groq_model", settings.DEFAULT_GROQ_MODEL)
     model_name = map_model_to_groq(raw_model)
     conv_key = f"analysis_attack_{attack_id}"
     
@@ -1089,7 +1097,8 @@ Begin the analysis now:"""
     
     if settings.GROQ_API_KEY:
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
-        timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 90.0))
+        timeout_seconds = float(settings_service.get_setting(db, "ai_timeout_seconds", 90.0))
+
         
         try:
             async with httpx.AsyncClient(timeout=timeout_seconds) as client:
@@ -1100,7 +1109,7 @@ Begin the analysis now:"""
                         "model": model_name, 
                         "messages": messages_payload, 
                         "temperature": 0.2,
-                        "max_tokens": 512,
+                        "max_tokens": 1024,
                         "top_p": 0.9,
                         "stream": False
                     }

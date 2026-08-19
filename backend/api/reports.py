@@ -13,7 +13,7 @@ from backend.database.session import get_db
 from backend.core.config import settings
 from backend.core.registry import get_settings_service
 from backend.models.models import ReportJob, Report, AttackEvent, CorrelatedIncident, DecoySandboxFile
-from backend.api.agent import resolve_ollama_model_name
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reports", tags=["Reports"])
@@ -223,28 +223,30 @@ async def generate_ai_summary(
         f"Be precise, technical, and objective."
     )
 
-    raw_model = settings_service.get_setting(db, "default_ollama_model", settings.DEFAULT_OLLAMA_MODEL)
-    model_name = await resolve_ollama_model_name(raw_model)
-    timeout_seconds = float(settings_service.get_setting(db, "ollama_timeout_seconds", 120.0))
-    
+    model_name = settings_service.get_setting(db, "default_groq_model", settings.DEFAULT_GROQ_MODEL)
     markdown_content = ""
-    try:
-        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-            resp = await client.post(
-                f"{settings.OLLAMA_BASE_URL}/api/chat",
-                json={
-                    "model": model_name,
-                    "messages": [
-                        {"role": "system", "content": "You are a senior cyber security principal generating official SentinelAI security compliance logs."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    "stream": False
-                }
-            )
-            if resp.status_code == 200:
-                markdown_content = resp.json().get("message", {}).get("content", "")
-    except Exception as e:
-        logger.warning(f"Ollama offline during report AI synthesis, using template fallback: {e}")
+    if settings.GROQ_API_KEY:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"},
+                    json={
+                        "model": model_name,
+                        "messages": [
+                            {"role": "system", "content": "You are a senior cyber security principal generating official SentinelAI security compliance logs."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.2
+                    }
+                )
+                if resp.status_code == 200:
+                    choices = resp.json().get("choices", [])
+                    if choices:
+                        markdown_content = choices[0].get("message", {}).get("content", "")
+        except Exception as e:
+            logger.warning(f"Groq API synthesis error during report generation, using template fallback: {e}")
+
 
     # Fallback to local markdown template if Ollama timed out/failed
     if not markdown_content:

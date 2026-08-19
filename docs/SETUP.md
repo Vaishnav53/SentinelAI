@@ -38,7 +38,7 @@ TRUSTED_HOSTS=127.0.0.1,localhost,testserver
 
 # Groq Cloud AI Settings
 GROQ_API_KEY=your_groq_api_key_here
-DEFAULT_GROQ_MODEL=llama-3.3-70b-versatile
+DEFAULT_GROQ_MODEL=openai/gpt-oss-120b
 
 # Storage & Logging
 REPORT_STORAGE=./storage/reports

@@ -71,7 +71,7 @@ This document provides a comprehensive specification of every monitoring, visual
     6. `Generate Timeline`: Reconstruction of event sequences leading up to the incident.
     7. `Executive Summary`: High-level non-technical summary tailored for leadership.
 * **AI Provider & Fallback**:
-  * **Groq Cloud Integration**: Primary live LLM provider using `llama-3.3-70b-versatile` for high-speed cloud inference.
+  * **Groq Cloud Integration**: Primary live LLM provider using `openai/gpt-oss-120b` for high-speed cloud inference.
   * **Deterministic Local Fallback Engine**: When Groq is unavailable or unconfigured, SentinelAI uses a deterministic local fallback response engine to supply structured incident analyses.
 
 ---

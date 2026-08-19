@@ -66,7 +66,7 @@ SentinelAI is an advanced, local-first Security Operations Center (SOC) simulati
 * **Framework**: FastAPI (Uvicorn ASGI Server)
 * **ORM & Persistence**: SQLAlchemy (SQLite for local dev, PostgreSQL for containerized setup)
 * **Realtime Communication**: WebSockets (`/api/attacks/ws`)
-* **AI Provider & Fallback**: Groq Cloud API (`llama-3.3-70b-versatile`) with a deterministic local fallback response engine when Groq is unconfigured or unavailable.
+* **AI Provider & Fallback**: Groq Cloud API (`openai/gpt-oss-120b`) with a deterministic local fallback response engine when Groq is unconfigured or unavailable.
 * **Testing**: Pytest automated test suite (19 test cases)
 
 ### Frontend

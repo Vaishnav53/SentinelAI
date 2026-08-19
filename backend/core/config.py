@@ -38,13 +38,10 @@ class Settings(BaseModel):
 
 
 
-    # Local AI Settings
-    OLLAMA_BASE_URL: str = Field(default_factory=lambda: os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"))
-    DEFAULT_OLLAMA_MODEL: str = Field(default_factory=lambda: os.getenv("DEFAULT_OLLAMA_MODEL", "llama3.2:3b"))
-    
     # Groq AI Settings
     GROQ_API_KEY: Optional[str] = Field(default_factory=lambda: os.getenv("GROQ_API_KEY"))
-    DEFAULT_GROQ_MODEL: str = Field(default_factory=lambda: os.getenv("DEFAULT_GROQ_MODEL", "llama-3.3-70b-versatile"))
+    DEFAULT_GROQ_MODEL: str = Field(default_factory=lambda: os.getenv("DEFAULT_GROQ_MODEL", "openai/gpt-oss-120b"))
+
     
     # Storage Settings
     REPORT_STORAGE: str = Field(default_factory=lambda: os.getenv("REPORT_STORAGE", "./storage/reports"))

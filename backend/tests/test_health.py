@@ -11,8 +11,8 @@ def test_get_services_health(client):
     assert response.status_code == 200
     data = response.json()
     assert "database" in data
-    assert "ollama" in data
+    assert "groq" in data
     assert "collectors" in data
     assert data["database"]["status"] == "ONLINE"
-    assert data["ollama"]["status"] == "CHECKING"
+    assert data["groq"]["status"] in ("ONLINE", "UNAVAILABLE")
     assert data["collectors"]["status"] == "ACTIVE"

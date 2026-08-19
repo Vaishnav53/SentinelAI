@@ -27,7 +27,7 @@ Provide an intelligent cybersecurity copilot and structured incident investigati
 > Structured investigation actions submit contextual prompts through implemented agent routes: streamed responses via `POST /api/agent/chat/stream` and structured threat summaries via `POST /api/agent/analyze/{attack_id}`.
 
 ### 2. AI Provider & Fallback Architecture
-* **Primary Live Provider**: Groq Cloud API (`llama-3.3-70b-versatile`) configured via `GROQ_API_KEY` in environment variables.
+* **Primary Live Provider**: Groq Cloud API (`openai/gpt-oss-120b`) configured via `GROQ_API_KEY` in environment variables.
 * **Deterministic Local Fallback**: When Groq Cloud is unavailable or unconfigured, SentinelAI uses a deterministic local fallback response engine to supply structured incident guidance and threat summaries without breaking the analyst interface.
 
 ## Security & Guardrails

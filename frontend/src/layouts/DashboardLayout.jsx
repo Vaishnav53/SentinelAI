@@ -29,7 +29,7 @@ export default function DashboardLayout() {
 
 
   const [backendStatus, setBackendStatus] = useState('CHECKING');
-  const [ollamaStatus, setOllamaStatus] = useState('CHECKING');
+  const [groqStatus, setGroqStatus] = useState('CHECKING');
   const [honeypotStatus, setHoneypotStatus] = useState('CHECKING');
   const [cpuUsage, setCpuUsage] = useState(0);
   const [memoryUsage, setMemoryUsage] = useState(0);
@@ -88,16 +88,17 @@ export default function DashboardLayout() {
         apiClient.get('/monitoring/current')
       ]);
       setBackendStatus(health.database.status === 'ONLINE' ? 'ONLINE' : 'DEGRADED');
-      setOllamaStatus(health.ollama.status);
+      setGroqStatus(health.groq ? health.groq.status : 'ONLINE');
       setHoneypotStatus(hpStatus.status);
       setCpuUsage(systemMetrics.cpu_percent);
       setMemoryUsage(systemMetrics.memory_percent);
     } catch (e) {
       setBackendStatus('OFFLINE');
-      setOllamaStatus('OFFLINE');
+      setGroqStatus('UNAVAILABLE');
       setHoneypotStatus('OFFLINE');
     }
   };
+
 
   useEffect(() => {
     checkStatus();
@@ -341,10 +342,11 @@ export default function DashboardLayout() {
             </div>
 
             <div className="status-indicator">
-              <span className="status-name">LOCAL AI:</span>
-              <span className={`status-dot ${ollamaStatus.toLowerCase()}`}></span>
-              <span className="status-text">{ollamaStatus}</span>
+              <span className="status-name">GROQ AI:</span>
+              <span className={`status-dot ${groqStatus.toLowerCase()}`}></span>
+              <span className="status-text">{groqStatus}</span>
             </div>
+
 
             <div className="status-indicator">
               <span className="status-name">H-DECOY:</span>

@@ -63,8 +63,8 @@ def populate_demo_data(db: Session):
             ApplicationSetting(key="app_env", value="development", type="string"),
             ApplicationSetting(key="api_host", value="127.0.0.1", type="string"),
             ApplicationSetting(key="api_port", value="8000", type="int"),
-            ApplicationSetting(key="ollama_host", value="http://127.0.0.1:11434", type="string"),
-            ApplicationSetting(key="ollama_model", value="llama3.1", type="string"),
+            ApplicationSetting(key="default_groq_model", value="openai/gpt-oss-120b", type="string"),
+
             ApplicationSetting(key="retention_days", value="30", type="int"),
             ApplicationSetting(key="collector_interval", value="5", type="int"),
             ApplicationSetting(key="theme", value="cyber-dark", type="string"),
