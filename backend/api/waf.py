@@ -7,22 +7,37 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from backend.database.session import get_db
-from backend.models.models import WAFRule, WAFHit, AuditLog, AttackEvent, HoneypotActivityLog, DecoySandboxFile
+from backend.models.models import WAFRule, WAFHit, AuditLog, AttackEvent, HoneypotActivityLog
 from backend.api.dependencies import require_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/waf", tags=["waf"])
 
+def is_local_ip(ip: str) -> bool:
+    """Determine if an IP address belongs to RFC 1918 private or loopback ranges."""
+    if not ip:
+        return False
+    local_prefixes = (
+        "127.", "::1", "localhost",
+        "192.168.", "10.", "172.16.", "172.17.", "172.18.", "172.19.",
+        "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.",
+        "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31."
+    )
+    return any(ip.startswith(prefix) for prefix in local_prefixes)
+
 class ObservedSourceRead(BaseModel):
     ip_address: str
     last_seen: str
+    first_seen: Optional[str] = None
     event_count: int
-    threat_types: List[str]
+    threat_types: List[str] = []
+    services: List[str] = []
+    severity: str = "LOW"
     is_blocked: bool
+    is_local: bool = False
     rule_id: Optional[int] = None
 
 class WAFRuleRead(BaseModel):
-
     id: int
     ip_address: Optional[str] = None
     action: str
@@ -74,6 +89,8 @@ class WAFStatus(BaseModel):
     active_rules_count: int
     auto_rules_count: int
     manual_rules_count: int
+    honeypot_attackers_count: int = 0
+    blocked_attackers_count: int = 0
 
 @router.get("/rules", response_model=List[WAFRuleRead])
 def get_waf_rules(
@@ -154,7 +171,6 @@ def update_waf_rule(id: int, payload: WAFRuleUpdate, db: Session = Depends(get_d
 
 @router.delete("/rules/{id}", dependencies=[Depends(require_admin)])
 def delete_waf_rule(id: int, db: Session = Depends(get_db)):
-
     """Remove a security containment rule."""
     rule = db.query(WAFRule).filter(WAFRule.id == id).first()
     if not rule:
@@ -176,19 +192,29 @@ def delete_waf_rule(id: int, db: Session = Depends(get_db)):
 @router.get("/status", response_model=WAFStatus)
 def get_waf_status(db: Session = Depends(get_db)):
     """Fetch aggregated defense metrics for WAF status dashboard widgets."""
-    blocked_count = db.query(WAFHit).filter(WAFHit.action == "BLOCK").count()
-    quarantined_count = db.query(WAFHit).filter(WAFHit.action == "QUARANTINE").count()
-    
-    active_rules_count = db.query(WAFRule).filter(WAFRule.is_enabled == 1).count()
-    auto_rules_count = db.query(WAFRule).filter(WAFRule.rule_type == "AUTOMATIC").count()
-    manual_rules_count = db.query(WAFRule).filter(WAFRule.rule_type == "MANUAL").count()
+    blocked_count = db.query(func.count(WAFHit.id)).filter(WAFHit.action == "BLOCK").scalar() or 0
+    quarantined_count = db.query(func.count(WAFHit.id)).filter(WAFHit.action == "QUARANTINE").scalar() or 0
+
+    active_rules_count = db.query(func.count(WAFRule.id)).filter(WAFRule.is_enabled == 1).scalar() or 0
+    auto_rules_count = db.query(func.count(WAFRule.id)).filter(WAFRule.rule_type == "AUTOMATIC").scalar() or 0
+    manual_rules_count = db.query(func.count(WAFRule.id)).filter(WAFRule.rule_type == "MANUAL").scalar() or 0
+
+    # Distinct honeypot attackers count using fast distinct query projections
+    hp_attack_ips = set(r[0] for r in db.query(AttackEvent.source_ip).filter(AttackEvent.source_ip != None).distinct().all())
+    hp_activity_ips = set(r[0] for r in db.query(HoneypotActivityLog.source_ip).filter(HoneypotActivityLog.source_ip != None).distinct().all())
+    hp_ips = hp_attack_ips | hp_activity_ips
+
+    blocked_ips_set = set(r[0] for r in db.query(WAFRule.ip_address).filter(WAFRule.is_enabled == 1, WAFRule.action == "BLOCK").all() if r[0])
+    blocked_attackers_count = len(hp_ips & blocked_ips_set)
 
     return WAFStatus(
         blocked_count=blocked_count,
         quarantined_count=quarantined_count,
         active_rules_count=active_rules_count,
         auto_rules_count=auto_rules_count,
-        manual_rules_count=manual_rules_count
+        manual_rules_count=manual_rules_count,
+        honeypot_attackers_count=len(hp_ips),
+        blocked_attackers_count=blocked_attackers_count
     )
 
 @router.get("/hits", response_model=List[WAFHitRead])
@@ -198,66 +224,79 @@ def get_waf_hits(db: Session = Depends(get_db)):
 
 @router.get("/observed-sources", response_model=List[ObservedSourceRead])
 def get_observed_sources(db: Session = Depends(get_db)):
-    """Retrieve all real source IPs observed across honeypot and telemetry logs."""
-    from collections import defaultdict
+    """Retrieve all real source IPs observed strictly across SentinelAI honeypot telemetry."""
+    counts_map = {}
+    first_seen_map = {}
+    last_seen_map = {}
+    types_map = {}
+    services_map = {}
+    sev_map = {}
+    severities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
 
-    timestamps_map = defaultdict(list)
-    threat_types_map = defaultdict(set)
-    counts_map = defaultdict(int)
-
-    # 1. AttackEvent
-    for ae in db.query(AttackEvent.source_ip, AttackEvent.created_at, AttackEvent.attack_type).filter(AttackEvent.source_ip != None).all():
-        ip = ae[0]
+    # 1. AttackEvents (Decoy sensors telemetry)
+    for ip, dt, a_type, sev, svc in db.query(
+        AttackEvent.source_ip, AttackEvent.created_at, AttackEvent.attack_type, AttackEvent.severity, AttackEvent.target_service
+    ).filter(AttackEvent.source_ip != None).all():
         if not ip: continue
-        counts_map[ip] += 1
-        if ae[1]: timestamps_map[ip].append(ae[1])
-        if ae[2]: threat_types_map[ip].add(ae[2])
+        counts_map[ip] = counts_map.get(ip, 0) + 1
+        if dt:
+            if ip not in first_seen_map or dt < first_seen_map[ip]: first_seen_map[ip] = dt
+            if ip not in last_seen_map or dt > last_seen_map[ip]: last_seen_map[ip] = dt
+        if a_type:
+            if ip not in types_map: types_map[ip] = set()
+            types_map[ip].add(a_type)
+        if svc:
+            if ip not in services_map: services_map[ip] = set()
+            services_map[ip].add(svc)
+        if sev:
+            curr_sev = sev_map.get(ip, "LOW")
+            s_val = sev.upper()
+            if s_val in severities and (curr_sev not in severities or severities.index(s_val) > severities.index(curr_sev)):
+                sev_map[ip] = s_val
 
-    # 2. HoneypotActivityLog
-    for hl in db.query(HoneypotActivityLog.source_ip, HoneypotActivityLog.timestamp, HoneypotActivityLog.action_type).filter(HoneypotActivityLog.source_ip != None).all():
-        ip = hl[0]
+    # 2. HoneypotActivityLog (Decoy portal interactions & probes)
+    for ip, dt, act, sev in db.query(
+        HoneypotActivityLog.source_ip, HoneypotActivityLog.timestamp, HoneypotActivityLog.action_type, HoneypotActivityLog.severity
+    ).filter(HoneypotActivityLog.source_ip != None).all():
         if not ip: continue
-        counts_map[ip] += 1
-        if hl[1]: timestamps_map[ip].append(hl[1])
-        if hl[2]: threat_types_map[ip].add(hl[2])
-
-    # 3. WAFHit
-    for wh in db.query(WAFHit.ip_address, WAFHit.created_at, WAFHit.action).filter(WAFHit.ip_address != None).all():
-        ip = wh[0]
-        if not ip: continue
-        counts_map[ip] += 1
-        if wh[1]: timestamps_map[ip].append(wh[1])
-        if wh[2]: threat_types_map[ip].add(f"WAF {wh[2]}")
-
-    # 4. DecoySandboxFile
-    for sf in db.query(DecoySandboxFile.ip_address, DecoySandboxFile.created_at, DecoySandboxFile.status).filter(DecoySandboxFile.ip_address != None).all():
-        ip = sf[0]
-        if not ip: continue
-        counts_map[ip] += 1
-        if sf[1]: timestamps_map[ip].append(sf[1])
-        if sf[2]: threat_types_map[ip].add(f"Sandbox {sf[2]}")
+        counts_map[ip] = counts_map.get(ip, 0) + 1
+        if dt:
+            if ip not in first_seen_map or dt < first_seen_map[ip]: first_seen_map[ip] = dt
+            if ip not in last_seen_map or dt > last_seen_map[ip]: last_seen_map[ip] = dt
+        if act:
+            if ip not in types_map: types_map[ip] = set()
+            types_map[ip].add(act.replace("_", " ").title())
+        if sev:
+            curr_sev = sev_map.get(ip, "LOW")
+            s_val = sev.upper()
+            if s_val in severities and (curr_sev not in severities or severities.index(s_val) > severities.index(curr_sev)):
+                sev_map[ip] = s_val
 
     # Active WAF block rules lookup
     blocked_rules_map = {
-        rule.ip_address: rule.id
-        for rule in db.query(WAFRule).filter(WAFRule.is_enabled == 1, WAFRule.action == "BLOCK").all()
-        if rule.ip_address
+        rule_ip: rule_id
+        for rule_id, rule_ip in db.query(WAFRule.id, WAFRule.ip_address).filter(WAFRule.is_enabled == 1, WAFRule.action == "BLOCK").all()
+        if rule_ip
     }
 
-    all_ips = set(counts_map.keys())
     observed_sources = []
-    for ip in all_ips:
-        timestamps = timestamps_map[ip]
-        latest_time = max(timestamps) if timestamps else datetime.utcnow()
-        last_seen_str = latest_time.strftime("%Y-%m-%d %H:%M:%S UTC")
+    for ip, cnt in counts_map.items():
+        if not ip: continue
+        fs = first_seen_map.get(ip)
+        ls = last_seen_map.get(ip)
         rule_id = blocked_rules_map.get(ip)
+        is_local = is_local_ip(ip)
 
         observed_sources.append(ObservedSourceRead(
             ip_address=ip,
-            last_seen=last_seen_str,
-            event_count=counts_map[ip],
-            threat_types=sorted(list(threat_types_map[ip])),
+            last_seen=ls.strftime("%Y-%m-%d %H:%M:%S UTC") if ls else datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+            first_seen=fs.isoformat() if fs else None,
+            event_count=cnt,
+            threat_types=sorted(list(types_map.get(ip, set()))),
+            services=sorted(list(services_map.get(ip, set()))),
+            severity=sev_map.get(ip, "LOW"),
             is_blocked=rule_id is not None,
+            is_local=is_local,
             rule_id=rule_id
         ))
 
