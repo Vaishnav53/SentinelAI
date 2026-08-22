@@ -30,7 +30,7 @@ def test_reports_workflow():
                 created_at=datetime.utcnow()
             )
             db.add(event)
-            
+
             incident = CorrelatedIncident(
                 title="Incident test chain",
                 description="Simulating lateral brute force chain",
@@ -43,7 +43,7 @@ def test_reports_workflow():
                 created_at=datetime.utcnow()
             )
             db.add(incident)
-            
+
             sfile = DecoySandboxFile(
                 filename="malware.exe",
                 size_bytes=2048,
@@ -116,7 +116,46 @@ def test_reports_workflow():
             assert b"malware.exe" in resp.content
             assert resp.headers["content-type"] == "text/csv; charset=utf-8"
 
-            # 6. Test delete report job
+            # 6. Test GET /api/reports/analytics (7d, 24h, 30d, custom)
+            analytics_resp = client.get("/api/reports/analytics?range=7d")
+            assert analytics_resp.status_code == 200
+            a_data = analytics_resp.json()
+            assert "kpis" in a_data
+            assert "total_events" in a_data["kpis"]
+            assert "unique_sources" in a_data["kpis"]
+            assert "critical_high_events" in a_data["kpis"]
+            assert "blocked_events" in a_data["kpis"]
+            assert "attack_trend" in a_data["kpis"]
+            assert "timeline_series" in a_data
+            assert "severity_distribution" in a_data
+            assert "top_attack_types" in a_data
+            assert "top_attack_sources" in a_data
+            assert "priority_incidents" in a_data
+            assert "deterministic_summary" in a_data
+            assert a_data["kpis"]["total_events"]["count"] >= 1
+            assert len(a_data["timeline_series"]) == 7
+
+            # Test 24h range analytics
+            resp_24h = client.get("/api/reports/analytics?range=24h")
+            assert resp_24h.status_code == 200
+            assert len(resp_24h.json()["timeline_series"]) == 24
+
+            # 7. Test POST /api/reports/ai-executive-summary
+            ai_exec_resp = client.post("/api/reports/ai-executive-summary", json={"time_range": "7d"})
+            assert ai_exec_resp.status_code == 200
+            ai_exec_data = ai_exec_resp.json()
+            assert "markdown" in ai_exec_data
+            assert "generated_at" in ai_exec_data
+            assert len(ai_exec_data["markdown"]) > 20
+
+            # 8. Test GET /api/reports/export-period-csv
+            period_csv_resp = client.get("/api/reports/export-period-csv?range=7d")
+            assert period_csv_resp.status_code == 200
+            assert b"SQL Injection" in period_csv_resp.content
+            assert b"192.168.99.99" in period_csv_resp.content
+            assert "text/csv" in period_csv_resp.headers["content-type"]
+
+            # 9. Test delete report job
             resp = client.delete(f"/api/reports/jobs/{job_id}")
             assert resp.status_code == 204
         finally:

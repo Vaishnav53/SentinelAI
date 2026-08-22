@@ -9,7 +9,7 @@ from backend.tests.conftest import create_test_auth_client
 def test_playbook_workflows_crud_and_execution():
     with create_test_auth_client() as client:
         db = SessionLocal()
-        
+
         # 1. Clean previous rules and playbooks
         db.query(ThreatPlaybook).delete()
         db.query(PlaybookExecution).delete()
@@ -76,7 +76,7 @@ def test_playbook_workflows_crud_and_execution():
 def test_attacker_profiling_aggregation():
     with create_test_auth_client() as client:
         db = SessionLocal()
-        
+
         # Ingest mock AttackEvent
         from datetime import datetime
         import json
@@ -91,7 +91,7 @@ def test_attacker_profiling_aggregation():
             payload="SELECT * FROM users",
             country="France",
             city="Paris",
-            raw_metadata=json.dumps({"latitude": 48.8566, "longitude": 2.3522})
+            raw_metadata=json.dumps({"latitude": 48.8566, "longitude": 2.3522, "asn": "AS12345"})
         )
         db.add(ae)
         db.commit()
@@ -101,17 +101,27 @@ def test_attacker_profiling_aggregation():
         assert res.status_code == 200
         profiles = res.json()
         assert len(profiles) >= 1
-        
+
         target_profile = next((p for p in profiles if p["ip_address"] == "88.88.88.88"), None)
         assert target_profile is not None
         assert target_profile["country"] == "France"
         assert target_profile["city"] == "Paris"
+        assert target_profile["risk_score"] > 0
+        assert target_profile["risk_level"] in ("LOW", "MEDIUM", "HIGH", "CRITICAL")
+        assert target_profile["total_events"] >= 1
+        assert "first_seen" in target_profile
+        assert "last_seen" in target_profile
+        assert "tags" in target_profile
 
         # Get details profile
         res = client.get("/api/attacker/profiles/88.88.88.88")
         assert res.status_code == 200
         detail = res.json()
         assert detail["attack_count"] >= 1
+        assert detail["total_events"] >= 1
+        assert detail["risk_score"] > 0
+        assert detail["asn"] == "AS12345"
+        assert "SELECT * FROM users" in detail["payload_samples"]
         assert len(detail["mitre_techniques"]) >= 1
         assert detail["mitre_techniques"][0]["id"] == "T1190"
         assert len(detail["timeline"]) >= 1

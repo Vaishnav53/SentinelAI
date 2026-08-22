@@ -18,6 +18,8 @@ const DEFAULT_MODELS = [
 export default function Agent() {
   const [searchParams, setSearchParams] = useSearchParams();
   const analyzeAttackId = searchParams.get('analyze_attack');
+  const analyzeAttackerIp = searchParams.get('analyze_attacker');
+  const analyzeIncidentId = searchParams.get('analyze_incident');
 
   // Conversation state
   const [messages, setMessages] = useState([]);
@@ -117,6 +119,7 @@ export default function Agent() {
           const attack = await apiClient.get(`/attacks/${analyzeAttackId}`);
           setSelectedAttack(attack);
           setSelectedIncident(null);
+          _setSelectedAttackerIp(null);
 
           // Auto-trigger attack analysis
           const prompt = `Conduct a detailed SOC analysis of attack event #${attack.id} (${attack.attack_type}). Source IP ${attack.source_ip} targeting port ${attack.destination_port}.`;
@@ -129,12 +132,56 @@ export default function Agent() {
     }
   }, [analyzeAttackId]);
 
+  // Deep-link context handling for ?analyze_attacker=<ip>
+  useEffect(() => {
+    if (analyzeAttackerIp) {
+      const loadAttackerLink = async () => {
+        try {
+          const profileData = await apiClient.get(`/attacker/profiles/${analyzeAttackerIp}`);
+          _setSelectedAttackerIp(analyzeAttackerIp);
+          setSelectedAttack(null);
+          setSelectedIncident(null);
+
+          const prompt = `Conduct a comprehensive threat intelligence analysis and risk evaluation for attacker IP ${analyzeAttackerIp} (GeoIP: ${profileData.city}, ${profileData.country}). Total events: ${profileData.total_events || profileData.attack_count}.`;
+          handleSendMessage(prompt, 'security_analysis');
+        } catch (e) {
+          console.error("Failed to load deep-link attacker profile:", e);
+          _setSelectedAttackerIp(analyzeAttackerIp);
+          const prompt = `Conduct a comprehensive threat intelligence analysis and risk evaluation for attacker IP ${analyzeAttackerIp}.`;
+          handleSendMessage(prompt, 'security_analysis');
+        }
+      };
+      loadAttackerLink();
+    }
+  }, [analyzeAttackerIp]);
+
+  // Deep-link context handling for ?analyze_incident=<id>
+  useEffect(() => {
+    if (analyzeIncidentId) {
+      const loadIncidentLink = async () => {
+        try {
+          const incident = await apiClient.get(`/correlation/incidents/${analyzeIncidentId}`);
+          setSelectedIncident(incident);
+          setSelectedAttack(null);
+          _setSelectedAttackerIp(null);
+
+          const prompt = `Conduct a detailed incident chain analysis for correlated incident #${incident.id} (${incident.title}). Severity: ${incident.severity}.`;
+          handleSendMessage(prompt, 'security_analysis');
+        } catch (e) {
+          console.error("Failed to load deep-link incident:", e);
+        }
+      };
+      loadIncidentLink();
+    }
+  }, [analyzeIncidentId]);
+
   // Start new blank conversation
   const handleNewConversation = () => {
     setCurrentConversation(null);
     setMessages([]);
     setSelectedAttack(null);
     setSelectedIncident(null);
+    _setSelectedAttackerIp(null);
     setSearchParams({});
     setInputValue('');
   };
