@@ -42,3 +42,60 @@ def test_map_model_to_groq_validation():
     # Unknown/invalid fallback defaults
     assert map_model_to_groq("unknown-model-xyz") == settings.DEFAULT_GROQ_MODEL
     assert map_model_to_groq(None) == settings.DEFAULT_GROQ_MODEL
+
+def test_copilot_conversational_greetings_and_general_questions(client):
+    # 1. Greeting test: "hi" must return a greeting, NOT attack analysis
+    res_hi = client.post("/api/agent/chat", json={
+        "message": "hi",
+        "response_mode": "general_chat"
+    })
+    assert res_hi.status_code == 200
+    data_hi = res_hi.json()
+    assert "Hi!" in data_hi["message"] or "Hello!" in data_hi["message"]
+    assert "Threat Summary" not in data_hi["message"]
+
+    # 2. General knowledge test: "What is Python?"
+    res_py = client.post("/api/agent/chat", json={
+        "message": "What is Python?",
+        "response_mode": "general_chat"
+    })
+    assert res_py.status_code == 200
+    data_py = res_py.json()
+    assert "Python" in data_py["message"]
+    assert "Threat Summary" not in data_py["message"]
+
+    # 3. Non-cybersecurity test: "What is the capital of Japan?"
+    res_jp = client.post("/api/agent/chat", json={
+        "message": "What is the capital of Japan?",
+        "response_mode": "general_chat"
+    })
+    assert res_jp.status_code == 200
+    data_jp = res_jp.json()
+    assert "Tokyo" in data_jp["message"]
+    assert "Threat Summary" not in data_jp["message"]
+
+def test_copilot_context_priority_does_not_hijack_greetings(client):
+    # Deep-link scenario: context contains attack_id=8058, but user types "hi"
+    res = client.post("/api/agent/chat", json={
+        "message": "hi",
+        "context": {
+            "attack_id": 8058
+        }
+    })
+    assert res.status_code == 200
+    data = res.json()
+    # Must answer "hi" naturally, NOT automatically produce Attack 8058 analysis
+    assert "Hi!" in data["message"] or "Hello!" in data["message"]
+    assert "Attack Event #8058 SOC Analysis" not in data["message"]
+
+def test_copilot_explicit_investigation_with_context(client):
+    # User explicitly asks to analyze the attack with attack context
+    res = client.post("/api/agent/chat", json={
+        "message": "Analyze attack 8058",
+        "context": {
+            "attack_id": 8058
+        }
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data["message"]) > 20

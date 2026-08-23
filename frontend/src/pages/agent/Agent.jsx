@@ -7,6 +7,7 @@ import {
   ThumbsUp, ThumbsDown
 } from 'lucide-react';
 import apiClient from '../../api/client';
+import MarkdownRenderer from './MarkdownRenderer';
 import './Agent.css';
 
 const DEFAULT_MODELS = [
@@ -33,15 +34,15 @@ export default function Agent() {
   const [loading, setLoading] = useState(false);
   const [_lastLatency, setLastLatency] = useState(null);
 
-  // Feedback state per message ID
+  // Feedback state per message index
   const [feedback, setFeedback] = useState({});
   const [copiedId, setCopiedId] = useState(null);
 
-  // Selected threat context
+  // Selected threat context (Optional background context for investigation)
   const [selectedAttack, setSelectedAttack] = useState(null);
   const [selectedIncident, setSelectedIncident] = useState(null);
-  const [selectedSandboxId, _setSelectedSandboxId] = useState(null);
-  const [selectedAttackerIp, _setSelectedAttackerIp] = useState(null);
+  const [selectedSandboxId, setSelectedSandboxId] = useState(null);
+  const [selectedAttackerIp, setSelectedAttackerIp] = useState(null);
 
   // Right side panel tabs & telemetry metrics
   const [activeTab, setActiveTab] = useState('telemetry');
@@ -53,12 +54,14 @@ export default function Agent() {
   const messagesEndRef = useRef(null);
 
   // Scroll to bottom
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (instant = false) => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: instant ? 'auto' : 'smooth' });
+    }
   };
 
   useEffect(() => {
-    scrollToBottom();
+    scrollToBottom(loading);
   }, [messages, loading]);
 
   // Fetch Groq models & Provider status
@@ -111,7 +114,7 @@ export default function Agent() {
     fetchTelemetryData();
   }, []);
 
-  // Deep-link context handling for ?analyze_attack=<id>
+  // Deep-link context handling for ?analyze_attack=<id> (Loads context without auto-triggering prompts)
   useEffect(() => {
     if (analyzeAttackId) {
       const loadDeepLink = async () => {
@@ -119,11 +122,8 @@ export default function Agent() {
           const attack = await apiClient.get(`/attacks/${analyzeAttackId}`);
           setSelectedAttack(attack);
           setSelectedIncident(null);
-          _setSelectedAttackerIp(null);
-
-          // Auto-trigger attack analysis
-          const prompt = `Conduct a detailed SOC analysis of attack event #${attack.id} (${attack.attack_type}). Source IP ${attack.source_ip} targeting port ${attack.destination_port}.`;
-          handleSendMessage(prompt, 'security_analysis');
+          setSelectedAttackerIp(null);
+          setSelectedSandboxId(null);
         } catch (e) {
           console.error("Failed to load deep-link attack:", e);
         }
@@ -138,17 +138,13 @@ export default function Agent() {
       const loadAttackerLink = async () => {
         try {
           const profileData = await apiClient.get(`/attacker/profiles/${analyzeAttackerIp}`);
-          _setSelectedAttackerIp(analyzeAttackerIp);
+          setSelectedAttackerIp(analyzeAttackerIp);
           setSelectedAttack(null);
           setSelectedIncident(null);
-
-          const prompt = `Conduct a comprehensive threat intelligence analysis and risk evaluation for attacker IP ${analyzeAttackerIp} (GeoIP: ${profileData.city}, ${profileData.country}). Total events: ${profileData.total_events || profileData.attack_count}.`;
-          handleSendMessage(prompt, 'security_analysis');
+          setSelectedSandboxId(null);
         } catch (e) {
           console.error("Failed to load deep-link attacker profile:", e);
-          _setSelectedAttackerIp(analyzeAttackerIp);
-          const prompt = `Conduct a comprehensive threat intelligence analysis and risk evaluation for attacker IP ${analyzeAttackerIp}.`;
-          handleSendMessage(prompt, 'security_analysis');
+          setSelectedAttackerIp(analyzeAttackerIp);
         }
       };
       loadAttackerLink();
@@ -163,10 +159,8 @@ export default function Agent() {
           const incident = await apiClient.get(`/correlation/incidents/${analyzeIncidentId}`);
           setSelectedIncident(incident);
           setSelectedAttack(null);
-          _setSelectedAttackerIp(null);
-
-          const prompt = `Conduct a detailed incident chain analysis for correlated incident #${incident.id} (${incident.title}). Severity: ${incident.severity}.`;
-          handleSendMessage(prompt, 'security_analysis');
+          setSelectedAttackerIp(null);
+          setSelectedSandboxId(null);
         } catch (e) {
           console.error("Failed to load deep-link incident:", e);
         }
@@ -181,7 +175,8 @@ export default function Agent() {
     setMessages([]);
     setSelectedAttack(null);
     setSelectedIncident(null);
-    _setSelectedAttackerIp(null);
+    setSelectedAttackerIp(null);
+    setSelectedSandboxId(null);
     setSearchParams({});
     setInputValue('');
   };
@@ -195,13 +190,7 @@ export default function Agent() {
       setInputValue('');
     }
 
-    const isTypedMessage = !textToSend;
-    let responseMode = modeOverride;
-    if (!responseMode) {
-      responseMode = (selectedIncident || selectedAttack) ? 'security_analysis' : 'general_chat';
-    }
-
-    const includeContext = responseMode !== 'general_chat' || !isTypedMessage;
+    const responseMode = modeOverride || (actionName ? 'investigator_action' : 'general_chat');
     const convId = currentConversation?.conversation_key || null;
     const userMsg = { role: 'user', content: text, created_at: new Date() };
     const tempMessages = [...messages, userMsg];
@@ -225,10 +214,10 @@ export default function Agent() {
           response_mode: responseMode,
           action: actionName,
           context: {
-            attack_id: (includeContext && selectedAttack) ? selectedAttack.id : (includeContext && searchParams.get('analyze_attack') ? parseInt(searchParams.get('analyze_attack')) : null),
-            incident_id: (includeContext && selectedIncident) ? selectedIncident.id : (includeContext && searchParams.get('analyze_incident') ? parseInt(searchParams.get('analyze_incident')) : null),
-            sandbox_file_id: (includeContext && selectedSandboxId) ? selectedSandboxId : null,
-            attacker_ip: (includeContext && selectedAttackerIp) ? selectedAttackerIp : null
+            attack_id: selectedAttack ? selectedAttack.id : (searchParams.get('analyze_attack') ? parseInt(searchParams.get('analyze_attack')) : null),
+            incident_id: selectedIncident ? selectedIncident.id : (searchParams.get('analyze_incident') ? parseInt(searchParams.get('analyze_incident')) : null),
+            sandbox_file_id: selectedSandboxId || null,
+            attacker_ip: selectedAttackerIp || searchParams.get('analyze_attacker') || null
           }
         })
       });
@@ -318,8 +307,9 @@ export default function Agent() {
     }
   };
 
-  // Copy message text to clipboard
+  // Copy plain textual message to clipboard (No SVG / icon text contamination)
   const handleCopyMessage = (text, index) => {
+    if (!text) return;
     navigator.clipboard.writeText(text);
     setCopiedId(index);
     setTimeout(() => setCopiedId(null), 2000);
@@ -339,19 +329,19 @@ export default function Agent() {
     let queryText = "";
     switch (label) {
       case "Explain Attack":
-        queryText = `Analyze and explain the root cause, severity, and potential vector of this ${selectedAttack.attack_type} attack event targeting service ${selectedAttack.target_service} on port ${selectedAttack.destination_port}.`;
+        queryText = `Analyze and explain the root cause, severity, and potential vector of attack event #${selectedAttack.id} (${selectedAttack.attack_type}) targeting service ${selectedAttack.target_service} on port ${selectedAttack.destination_port}.`;
         break;
       case "Recommend Firewall Rule":
         queryText = `Generate concrete, actionable firewall block rules and WAF filtering guidelines to mitigate future malicious traffic from source IP ${selectedAttack.source_ip}.`;
         break;
       case "Explain Payload":
-        queryText = `Perform a deep technical dissection of the captured payload for this event: "${selectedAttack.payload || 'No raw payload data captured'}".`;
+        queryText = `Perform a deep technical dissection of the captured payload for attack event #${selectedAttack.id}: "${selectedAttack.payload || 'No raw payload data captured'}".`;
         break;
       case "Map to MITRE":
-        queryText = `Map this ${selectedAttack.attack_type} event to specific MITRE ATT&CK techniques, tactics, and mitigation IDs.`;
+        queryText = `Map attack event #${selectedAttack.id} (${selectedAttack.attack_type}) to specific MITRE ATT&CK techniques, tactics, and mitigation IDs.`;
         break;
       case "IOC Summary":
-        queryText = `Compile a formal Indicators of Compromise (IOC) summary details list containing source IP (${selectedAttack.source_ip}), target port (${selectedAttack.destination_port}), protocol (${selectedAttack.protocol}), and threat score (${selectedAttack.threat_score}/100).`;
+        queryText = `Compile a formal Indicators of Compromise (IOC) summary details list for attack event #${selectedAttack.id} containing source IP (${selectedAttack.source_ip}), target port (${selectedAttack.destination_port}), protocol (${selectedAttack.protocol}), and threat score (${selectedAttack.threat_score}/100).`;
         break;
       default:
         return;
@@ -451,7 +441,7 @@ export default function Agent() {
                 <h3 className="welcome-title font-mono">SentinelAI Copilot</h3>
                 <p className="welcome-subtitle font-mono">AI-Powered Security Operations Companion</p>
                 <p className="welcome-desc">
-                  Ask me about active threats, incidents, defensive strategies, attack analysis, IOC interpretation, or system security.
+                  Ask me about active threats, incidents, defensive strategies, attack analysis, IOC interpretation, or general technical questions.
                 </p>
 
                 <div className="suggested-prompts-section">
@@ -523,7 +513,9 @@ export default function Agent() {
 
                         <div className="message-content">
                           {msg.content ? (
-                            <div className="markdown-body font-sans">{msg.content}</div>
+                            <div className="markdown-body font-sans">
+                              <MarkdownRenderer content={msg.content} />
+                            </div>
                           ) : (
                             <div className="typing-indicator font-mono">
                               <span className="dot"></span>
@@ -673,10 +665,38 @@ export default function Agent() {
                     <div className="banner-top">
                       <ShieldAlert size={14} className="text-red" />
                       <span className="banner-title">Linked Context: #{selectedAttack.id}</span>
-                      <button className="clear-ctx-btn" onClick={() => setSelectedAttack(null)}>✕</button>
+                      <button className="clear-ctx-btn" onClick={() => setSelectedAttack(null)} title="Clear context">✕</button>
                     </div>
                     <div className="banner-desc">
                       {selectedAttack.attack_type} from {selectedAttack.source_ip} (Severity: {selectedAttack.severity})
+                    </div>
+                  </div>
+                )}
+
+                {/* Selected Incident Context Banner if present */}
+                {selectedIncident && (
+                  <div className="selected-context-banner card-cyber font-mono">
+                    <div className="banner-top">
+                      <ShieldAlert size={14} className="text-amber" />
+                      <span className="banner-title">Linked Incident: #{selectedIncident.id}</span>
+                      <button className="clear-ctx-btn" onClick={() => setSelectedIncident(null)} title="Clear context">✕</button>
+                    </div>
+                    <div className="banner-desc">
+                      {selectedIncident.title} (Severity: {selectedIncident.severity})
+                    </div>
+                  </div>
+                )}
+
+                {/* Selected Attacker Profile Context Banner if present */}
+                {selectedAttackerIp && (
+                  <div className="selected-context-banner card-cyber font-mono">
+                    <div className="banner-top">
+                      <ShieldAlert size={14} className="text-purple" />
+                      <span className="banner-title">Attacker Profile: {selectedAttackerIp}</span>
+                      <button className="clear-ctx-btn" onClick={() => setSelectedAttackerIp(null)} title="Clear context">✕</button>
+                    </div>
+                    <div className="banner-desc">
+                      Telemetry analysis available for IP {selectedAttackerIp}
                     </div>
                   </div>
                 )}
