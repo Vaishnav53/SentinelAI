@@ -225,65 +225,97 @@ def get_waf_hits(db: Session = Depends(get_db)):
 @router.get("/observed-sources", response_model=List[ObservedSourceRead])
 def get_observed_sources(db: Session = Depends(get_db)):
     """Retrieve all real source IPs observed strictly across SentinelAI honeypot telemetry."""
-    counts_map = {}
-    first_seen_map = {}
-    last_seen_map = {}
-    types_map = {}
-    services_map = {}
-    sev_map = {}
     severities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
 
-    # 1. AttackEvents (Decoy sensors telemetry)
-    for ip, dt, a_type, sev, svc in db.query(
-        AttackEvent.source_ip, AttackEvent.created_at, AttackEvent.attack_type, AttackEvent.severity, AttackEvent.target_service
-    ).filter(AttackEvent.source_ip != None).all():
-        if not ip: continue
-        counts_map[ip] = counts_map.get(ip, 0) + 1
-        if dt:
-            if ip not in first_seen_map or dt < first_seen_map[ip]: first_seen_map[ip] = dt
-            if ip not in last_seen_map or dt > last_seen_map[ip]: last_seen_map[ip] = dt
-        if a_type:
-            if ip not in types_map: types_map[ip] = set()
-            types_map[ip].add(a_type)
-        if svc:
-            if ip not in services_map: services_map[ip] = set()
-            services_map[ip].add(svc)
-        if sev:
-            curr_sev = sev_map.get(ip, "LOW")
-            s_val = sev.upper()
-            if s_val in severities and (curr_sev not in severities or severities.index(s_val) > severities.index(curr_sev)):
-                sev_map[ip] = s_val
+    # 1. AttackEvents SQL aggregation
+    ae_rows = db.query(
+        AttackEvent.source_ip,
+        func.count(AttackEvent.id),
+        func.min(AttackEvent.created_at),
+        func.max(AttackEvent.created_at),
+        func.group_concat(func.distinct(AttackEvent.attack_type)),
+        func.group_concat(func.distinct(AttackEvent.target_service)),
+        func.group_concat(func.distinct(AttackEvent.severity))
+    ).filter(AttackEvent.source_ip != None).group_by(AttackEvent.source_ip).all()
 
-    # 2. HoneypotActivityLog (Decoy portal interactions & probes)
-    for ip, dt, act, sev in db.query(
-        HoneypotActivityLog.source_ip, HoneypotActivityLog.timestamp, HoneypotActivityLog.action_type, HoneypotActivityLog.severity
-    ).filter(HoneypotActivityLog.source_ip != None).all():
-        if not ip: continue
-        counts_map[ip] = counts_map.get(ip, 0) + 1
-        if dt:
-            if ip not in first_seen_map or dt < first_seen_map[ip]: first_seen_map[ip] = dt
-            if ip not in last_seen_map or dt > last_seen_map[ip]: last_seen_map[ip] = dt
-        if act:
-            if ip not in types_map: types_map[ip] = set()
-            types_map[ip].add(act.replace("_", " ").title())
-        if sev:
-            curr_sev = sev_map.get(ip, "LOW")
-            s_val = sev.upper()
-            if s_val in severities and (curr_sev not in severities or severities.index(s_val) > severities.index(curr_sev)):
-                sev_map[ip] = s_val
+    # 2. HoneypotActivityLog SQL aggregation
+    hp_rows = db.query(
+        HoneypotActivityLog.source_ip,
+        func.count(HoneypotActivityLog.id),
+        func.min(HoneypotActivityLog.timestamp),
+        func.max(HoneypotActivityLog.timestamp),
+        func.group_concat(func.distinct(HoneypotActivityLog.action_type)),
+        func.group_concat(func.distinct(HoneypotActivityLog.severity))
+    ).filter(HoneypotActivityLog.source_ip != None).group_by(HoneypotActivityLog.source_ip).all()
 
-    # Active WAF block rules lookup
+    # 3. Active WAF block rules lookup
     blocked_rules_map = {
         rule_ip: rule_id
         for rule_id, rule_ip in db.query(WAFRule.id, WAFRule.ip_address).filter(WAFRule.is_enabled == 1, WAFRule.action == "BLOCK").all()
         if rule_ip
     }
 
-    observed_sources = []
-    for ip, cnt in counts_map.items():
+    # Consolidate in Python per IP
+    ip_stats = {}
+
+    def get_entry(ip):
+        if ip not in ip_stats:
+            ip_stats[ip] = {
+                "cnt": 0, "first_seen": None, "last_seen": None,
+                "types_set": set(), "services_set": set(), "highest_sev": "LOW"
+            }
+        return ip_stats[ip]
+
+    for ip, cnt, min_dt, max_dt, a_types, svcs, sevs in ae_rows:
         if not ip: continue
-        fs = first_seen_map.get(ip)
-        ls = last_seen_map.get(ip)
+        entry = get_entry(ip)
+        entry["cnt"] += cnt
+        if min_dt:
+            dt = datetime.fromisoformat(min_dt) if isinstance(min_dt, str) else min_dt
+            if not entry["first_seen"] or dt < entry["first_seen"]:
+                entry["first_seen"] = dt
+        if max_dt:
+            dt = datetime.fromisoformat(max_dt) if isinstance(max_dt, str) else max_dt
+            if not entry["last_seen"] or dt > entry["last_seen"]:
+                entry["last_seen"] = dt
+        if a_types:
+            for t in a_types.split(","):
+                if t: entry["types_set"].add(t)
+        if svcs:
+            for s in svcs.split(","):
+                if s: entry["services_set"].add(s)
+        if sevs:
+            for s in sevs.split(","):
+                s_val = s.strip().upper()
+                if s_val in severities and severities.index(s_val) > severities.index(entry["highest_sev"]):
+                    entry["highest_sev"] = s_val
+
+    for ip, cnt, min_dt, max_dt, acts, sevs in hp_rows:
+        if not ip: continue
+        entry = get_entry(ip)
+        entry["cnt"] += cnt
+        if min_dt:
+            dt = datetime.fromisoformat(min_dt) if isinstance(min_dt, str) else min_dt
+            if not entry["first_seen"] or dt < entry["first_seen"]:
+                entry["first_seen"] = dt
+        if max_dt:
+            dt = datetime.fromisoformat(max_dt) if isinstance(max_dt, str) else max_dt
+            if not entry["last_seen"] or dt > entry["last_seen"]:
+                entry["last_seen"] = dt
+        if acts:
+            for a in acts.split(","):
+                if a: entry["types_set"].add(a.strip().replace("_", " ").title())
+        if sevs:
+            for s in sevs.split(","):
+                s_val = s.strip().upper()
+                if s_val in severities and severities.index(s_val) > severities.index(entry["highest_sev"]):
+                    entry["highest_sev"] = s_val
+
+    observed_sources = []
+    for ip, entry in ip_stats.items():
+        if not ip: continue
+        fs = entry["first_seen"]
+        ls = entry["last_seen"]
         rule_id = blocked_rules_map.get(ip)
         is_local = is_local_ip(ip)
 
@@ -291,10 +323,10 @@ def get_observed_sources(db: Session = Depends(get_db)):
             ip_address=ip,
             last_seen=ls.strftime("%Y-%m-%d %H:%M:%S UTC") if ls else datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
             first_seen=fs.isoformat() if fs else None,
-            event_count=cnt,
-            threat_types=sorted(list(types_map.get(ip, set()))),
-            services=sorted(list(services_map.get(ip, set()))),
-            severity=sev_map.get(ip, "LOW"),
+            event_count=entry["cnt"],
+            threat_types=sorted(list(entry["types_set"])),
+            services=sorted(list(entry["services_set"])),
+            severity=entry["highest_sev"],
             is_blocked=rule_id is not None,
             is_local=is_local,
             rule_id=rule_id

@@ -82,113 +82,163 @@ class AttackerProfilingService:
         """Retrieve all unique attacking IPs with telemetry metrics aggregates and real timestamps efficiently."""
         from sqlalchemy import func
 
-        # 1. Aggregate counts per IP
-        attack_counts = dict(self.db.query(AttackEvent.source_ip, func.count(AttackEvent.id)).filter(AttackEvent.source_ip != None).group_by(AttackEvent.source_ip).all())
-        waf_counts = dict(self.db.query(WAFHit.ip_address, func.count(WAFHit.id)).filter(WAFHit.ip_address != None).group_by(WAFHit.ip_address).all())
-        sandbox_counts = dict(self.db.query(DecoySandboxFile.ip_address, func.count(DecoySandboxFile.id)).filter(DecoySandboxFile.ip_address != None).group_by(DecoySandboxFile.ip_address).all())
-        activity_counts = dict(self.db.query(HoneypotActivityLog.source_ip, func.count(HoneypotActivityLog.id)).filter(HoneypotActivityLog.source_ip != None).group_by(HoneypotActivityLog.source_ip).all())
+        severities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
 
-        # Blocked IPs and WAF rule mappings
+        # 1. Blocked WAF rules map (fast index lookup)
         blocked_rules_map = {}
         for rule_id, rule_ip in self.db.query(WAFRule.id, WAFRule.ip_address).filter(WAFRule.is_enabled == 1, WAFRule.action == "BLOCK").all():
             if rule_ip:
                 blocked_rules_map[rule_ip] = rule_id
 
-        # All distinct IPs
-        all_ips = set(attack_counts.keys()) | set(waf_counts.keys()) | set(sandbox_counts.keys()) | set(activity_counts.keys())
+        # 2. AttackEvents SQL aggregation
+        ae_rows = self.db.query(
+            AttackEvent.source_ip,
+            func.count(AttackEvent.id),
+            func.min(AttackEvent.created_at),
+            func.max(AttackEvent.created_at),
+            func.group_concat(func.distinct(AttackEvent.attack_type)),
+            func.group_concat(func.distinct(AttackEvent.severity))
+        ).filter(AttackEvent.source_ip != None).group_by(AttackEvent.source_ip).all()
 
-        # Collect timestamps, attack types, severities, and geo per IP using lightweight tuples
-        first_seen_map = {}
-        last_seen_map = {}
-        types_map = {}
-        sev_map = {}
-        geo_map = {}
-        malicious_files_map = {}
-        severities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+        # Geo lookup from AttackEvent (only for non-Unknown country)
+        geo_rows = self.db.query(
+            AttackEvent.source_ip,
+            AttackEvent.country,
+            AttackEvent.city
+        ).filter(
+            AttackEvent.source_ip != None,
+            AttackEvent.country != None,
+            AttackEvent.country != "Unknown"
+        ).group_by(AttackEvent.source_ip).all()
+        geo_map = {r[0]: (r[1], r[2] or "Unknown") for r in geo_rows}
 
-        # AttackEvents: (source_ip, created_at, attack_type, country, city, severity)
-        for ip, dt, a_type, country, city, severity in self.db.query(
-            AttackEvent.source_ip, AttackEvent.created_at, AttackEvent.attack_type, AttackEvent.country, AttackEvent.city, AttackEvent.severity
-        ).filter(AttackEvent.source_ip != None).all():
+        # 3. HoneypotActivityLog SQL aggregation
+        hp_rows = self.db.query(
+            HoneypotActivityLog.source_ip,
+            func.count(HoneypotActivityLog.id),
+            func.min(HoneypotActivityLog.timestamp),
+            func.max(HoneypotActivityLog.timestamp),
+            func.group_concat(func.distinct(HoneypotActivityLog.action_type)),
+            func.group_concat(func.distinct(HoneypotActivityLog.severity))
+        ).filter(HoneypotActivityLog.source_ip != None).group_by(HoneypotActivityLog.source_ip).all()
+
+        # 4. WAFHit SQL aggregation
+        waf_rows = self.db.query(
+            WAFHit.ip_address,
+            func.count(WAFHit.id),
+            func.min(WAFHit.created_at),
+            func.max(WAFHit.created_at),
+            func.group_concat(func.distinct(WAFHit.action))
+        ).filter(WAFHit.ip_address != None).group_by(WAFHit.ip_address).all()
+
+        # 5. DecoySandboxFile SQL aggregation
+        sb_rows = self.db.query(
+            DecoySandboxFile.ip_address,
+            func.count(DecoySandboxFile.id),
+            func.min(DecoySandboxFile.created_at),
+            func.max(DecoySandboxFile.created_at),
+            func.group_concat(func.distinct(DecoySandboxFile.status))
+        ).filter(DecoySandboxFile.ip_address != None).group_by(DecoySandboxFile.ip_address).all()
+
+        # Consolidate per IP
+        ip_stats = {}
+
+        def get_entry(ip):
+            if ip not in ip_stats:
+                ip_stats[ip] = {
+                    "a_count": 0, "hp_count": 0, "w_count": 0, "s_count": 0,
+                    "first_seen": None, "last_seen": None,
+                    "types_set": set(), "highest_sev": "LOW",
+                    "has_malware": False
+                }
+            return ip_stats[ip]
+
+        for ip, cnt, min_dt, max_dt, a_types, sevs in ae_rows:
             if not ip: continue
+            entry = get_entry(ip)
+            entry["a_count"] += cnt
+            if min_dt:
+                dt = datetime.fromisoformat(min_dt) if isinstance(min_dt, str) else min_dt
+                if not entry["first_seen"] or dt < entry["first_seen"]:
+                    entry["first_seen"] = dt
+            if max_dt:
+                dt = datetime.fromisoformat(max_dt) if isinstance(max_dt, str) else max_dt
+                if not entry["last_seen"] or dt > entry["last_seen"]:
+                    entry["last_seen"] = dt
+            if a_types:
+                for t in a_types.split(","):
+                    if t: entry["types_set"].add(t)
+            if sevs:
+                for s in sevs.split(","):
+                    s_val = s.strip().upper()
+                    if s_val in severities and severities.index(s_val) > severities.index(entry["highest_sev"]):
+                        entry["highest_sev"] = s_val
 
-            if dt:
-                if ip not in first_seen_map or dt < first_seen_map[ip]: first_seen_map[ip] = dt
-                if ip not in last_seen_map or dt > last_seen_map[ip]: last_seen_map[ip] = dt
-
-            if a_type:
-                if ip not in types_map: types_map[ip] = set()
-                types_map[ip].add(a_type)
-
-            if country and country != "Unknown" and ip not in geo_map:
-                geo_map[ip] = (country, city or "Unknown")
-
-            if severity:
-                curr_sev = sev_map.get(ip, "LOW")
-                sev_val = severity.upper()
-                if sev_val in severities and (curr_sev not in severities or severities.index(sev_val) > severities.index(curr_sev)):
-                    sev_map[ip] = sev_val
-
-        # HoneypotActivityLogs: (source_ip, timestamp, action_type, severity)
-        for ip, dt, action_type, severity in self.db.query(
-            HoneypotActivityLog.source_ip, HoneypotActivityLog.timestamp, HoneypotActivityLog.action_type, HoneypotActivityLog.severity
-        ).filter(HoneypotActivityLog.source_ip != None).all():
+        for ip, cnt, min_dt, max_dt, acts, sevs in hp_rows:
             if not ip: continue
+            entry = get_entry(ip)
+            entry["hp_count"] += cnt
+            if min_dt:
+                dt = datetime.fromisoformat(min_dt) if isinstance(min_dt, str) else min_dt
+                if not entry["first_seen"] or dt < entry["first_seen"]:
+                    entry["first_seen"] = dt
+            if max_dt:
+                dt = datetime.fromisoformat(max_dt) if isinstance(max_dt, str) else max_dt
+                if not entry["last_seen"] or dt > entry["last_seen"]:
+                    entry["last_seen"] = dt
+            if acts:
+                for a in acts.split(","):
+                    if a: entry["types_set"].add(a.strip().replace("_", " ").title())
+            if sevs:
+                for s in sevs.split(","):
+                    s_val = s.strip().upper()
+                    if s_val in severities and severities.index(s_val) > severities.index(entry["highest_sev"]):
+                        entry["highest_sev"] = s_val
 
-            if dt:
-                if ip not in first_seen_map or dt < first_seen_map[ip]: first_seen_map[ip] = dt
-                if ip not in last_seen_map or dt > last_seen_map[ip]: last_seen_map[ip] = dt
-
-            if action_type:
-                if ip not in types_map: types_map[ip] = set()
-                types_map[ip].add(action_type.replace("_", " ").title())
-
-            if severity:
-                curr_sev = sev_map.get(ip, "LOW")
-                sev_val = severity.upper()
-                if sev_val in severities and (curr_sev not in severities or severities.index(sev_val) > severities.index(curr_sev)):
-                    sev_map[ip] = sev_val
-
-        # WAFHits: (ip_address, created_at, action)
-        for ip, dt, action in self.db.query(
-            WAFHit.ip_address, WAFHit.created_at, WAFHit.action
-        ).filter(WAFHit.ip_address != None).all():
+        for ip, cnt, min_dt, max_dt, acts in waf_rows:
             if not ip: continue
+            entry = get_entry(ip)
+            entry["w_count"] += cnt
+            if min_dt:
+                dt = datetime.fromisoformat(min_dt) if isinstance(min_dt, str) else min_dt
+                if not entry["first_seen"] or dt < entry["first_seen"]:
+                    entry["first_seen"] = dt
+            if max_dt:
+                dt = datetime.fromisoformat(max_dt) if isinstance(max_dt, str) else max_dt
+                if not entry["last_seen"] or dt > entry["last_seen"]:
+                    entry["last_seen"] = dt
+            if acts:
+                for a in acts.split(","):
+                    if a: entry["types_set"].add(f"WAF {a.strip()}")
+            if severities.index("HIGH") > severities.index(entry["highest_sev"]):
+                entry["highest_sev"] = "HIGH"
 
-            if dt:
-                if ip not in first_seen_map or dt < first_seen_map[ip]: first_seen_map[ip] = dt
-                if ip not in last_seen_map or dt > last_seen_map[ip]: last_seen_map[ip] = dt
-
-            if ip not in types_map: types_map[ip] = set()
-            types_map[ip].add(f"WAF {action}")
-
-            curr_sev = sev_map.get(ip, "LOW")
-            if severities.index("HIGH") > severities.index(curr_sev if curr_sev in severities else "LOW"):
-                sev_map[ip] = "HIGH"
-
-        # DecoySandboxFiles: (ip_address, created_at, status)
-        for ip, dt, status in self.db.query(
-            DecoySandboxFile.ip_address, DecoySandboxFile.created_at, DecoySandboxFile.status
-        ).filter(DecoySandboxFile.ip_address != None).all():
+        for ip, cnt, min_dt, max_dt, statuses in sb_rows:
             if not ip: continue
-
-            if dt:
-                if ip not in first_seen_map or dt < first_seen_map[ip]: first_seen_map[ip] = dt
-                if ip not in last_seen_map or dt > last_seen_map[ip]: last_seen_map[ip] = dt
-
-            if ip not in types_map: types_map[ip] = set()
-            types_map[ip].add(f"Sandbox Upload ({status})")
-
-            if status == "MALICIOUS":
-                malicious_files_map[ip] = True
-                sev_map[ip] = "CRITICAL"
-            else:
-                curr_sev = sev_map.get(ip, "LOW")
-                if severities.index("HIGH") > severities.index(curr_sev if curr_sev in severities else "LOW"):
-                    sev_map[ip] = "HIGH"
+            entry = get_entry(ip)
+            entry["s_count"] += cnt
+            if min_dt:
+                dt = datetime.fromisoformat(min_dt) if isinstance(min_dt, str) else min_dt
+                if not entry["first_seen"] or dt < entry["first_seen"]:
+                    entry["first_seen"] = dt
+            if max_dt:
+                dt = datetime.fromisoformat(max_dt) if isinstance(max_dt, str) else max_dt
+                if not entry["last_seen"] or dt > entry["last_seen"]:
+                    entry["last_seen"] = dt
+            if statuses:
+                for st in statuses.split(","):
+                    st_val = st.strip()
+                    if st_val:
+                        entry["types_set"].add(f"Sandbox Upload ({st_val})")
+                        if st_val == "MALICIOUS":
+                            entry["has_malware"] = True
+                            entry["highest_sev"] = "CRITICAL"
+                        else:
+                            if severities.index("HIGH") > severities.index(entry["highest_sev"]):
+                                entry["highest_sev"] = "HIGH"
 
         results = []
-        for ip in all_ips:
+        for ip, entry in ip_stats.items():
             if not ip:
                 continue
             geo = geo_map.get(ip, ("Unknown", "Unknown"))
@@ -198,16 +248,16 @@ class AttackerProfilingService:
                 country = "Local Network"
                 city = "Local Infrastructure"
 
-            first_seen_dt = first_seen_map.get(ip)
-            last_seen_dt = last_seen_map.get(ip)
+            first_seen_dt = entry["first_seen"]
+            last_seen_dt = entry["last_seen"]
 
-            a_count = attack_counts.get(ip, 0) + activity_counts.get(ip, 0)
-            w_count = waf_counts.get(ip, 0)
-            s_count = sandbox_counts.get(ip, 0)
+            a_count = entry["a_count"] + entry["hp_count"]
+            w_count = entry["w_count"]
+            s_count = entry["s_count"]
             total_events = a_count + w_count + s_count
-            highest_sev = sev_map.get(ip, "LOW")
-            types_set = types_map.get(ip, set())
-            has_malware = malicious_files_map.get(ip, False)
+            highest_sev = entry["highest_sev"]
+            types_set = entry["types_set"]
+            has_malware = entry["has_malware"]
 
             risk_score, risk_level = calculate_risk_assessment(
                 highest_severity=highest_sev,
@@ -247,8 +297,8 @@ class AttackerProfilingService:
                 "is_local": is_local,
                 "attack_types": sorted(list(types_set)),
                 "tags": tags,
-                "first_seen": first_seen_dt.isoformat() if first_seen_dt else None,
-                "last_seen": last_seen_dt.isoformat() if last_seen_dt else None
+                "first_seen": first_seen_dt.isoformat() if hasattr(first_seen_dt, 'isoformat') else (str(first_seen_dt) if first_seen_dt else None),
+                "last_seen": last_seen_dt.isoformat() if hasattr(last_seen_dt, 'isoformat') else (str(last_seen_dt) if last_seen_dt else None)
             })
 
         # Sort results by risk_score desc then total_events desc
