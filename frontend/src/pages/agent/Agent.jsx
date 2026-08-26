@@ -52,6 +52,9 @@ export default function Agent() {
   const [activeWafRulesCount, setActiveWafRulesCount] = useState(0);
 
   const messagesEndRef = useRef(null);
+  const activeReaderRef = useRef(null);
+  const activeAbortControllerRef = useRef(null);
+  const streamIdRef = useRef(0);
 
   // Scroll to bottom
   const scrollToBottom = (instant = false) => {
@@ -63,6 +66,25 @@ export default function Agent() {
   useEffect(() => {
     scrollToBottom(loading);
   }, [messages, loading]);
+
+  // Clean up active stream reader & abort controller on unmount
+  useEffect(() => {
+    return () => {
+      streamIdRef.current++;
+      if (activeAbortControllerRef.current) {
+        try {
+          activeAbortControllerRef.current.abort();
+        } catch {}
+        activeAbortControllerRef.current = null;
+      }
+      if (activeReaderRef.current) {
+        try {
+          activeReaderRef.current.cancel();
+        } catch {}
+        activeReaderRef.current = null;
+      }
+    };
+  }, []);
 
   // Fetch Groq models & Provider status
   const fetchModelsAndStatus = async () => {
@@ -171,6 +193,19 @@ export default function Agent() {
 
   // Start new blank conversation
   const handleNewConversation = () => {
+    streamIdRef.current++;
+    if (activeAbortControllerRef.current) {
+      try {
+        activeAbortControllerRef.current.abort();
+      } catch {}
+      activeAbortControllerRef.current = null;
+    }
+    if (activeReaderRef.current) {
+      try {
+        activeReaderRef.current.cancel();
+      } catch {}
+      activeReaderRef.current = null;
+    }
     setCurrentConversation(null);
     setMessages([]);
     setSelectedAttack(null);
@@ -179,6 +214,7 @@ export default function Agent() {
     setSelectedSandboxId(null);
     setSearchParams({});
     setInputValue('');
+    setLoading(false);
   };
 
   // Send Chat message
@@ -189,6 +225,26 @@ export default function Agent() {
     if (!textToSend) {
       setInputValue('');
     }
+
+    // Assign unique generation ID to supersede any previous stream
+    const streamId = ++streamIdRef.current;
+
+    // Abort and cancel any previous stream request and reader if still active
+    if (activeAbortControllerRef.current) {
+      try {
+        activeAbortControllerRef.current.abort();
+      } catch {}
+      activeAbortControllerRef.current = null;
+    }
+    if (activeReaderRef.current) {
+      try {
+        await activeReaderRef.current.cancel();
+      } catch {}
+      activeReaderRef.current = null;
+    }
+
+    const controller = new AbortController();
+    activeAbortControllerRef.current = controller;
 
     const responseMode = modeOverride || (actionName ? 'investigator_action' : 'general_chat');
     const convId = currentConversation?.conversation_key || null;
@@ -203,6 +259,7 @@ export default function Agent() {
       const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
       const response = await fetch(`${apiBase}/agent/chat/stream`, {
         method: 'POST',
+        signal: controller.signal,
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
@@ -222,19 +279,27 @@ export default function Agent() {
         })
       });
 
+      if (streamIdRef.current !== streamId) return;
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const reader = response.body.getReader();
+      activeReaderRef.current = reader;
+
       const decoder = new TextDecoder('utf-8');
       let finished = false;
       let accumulatedText = '';
       let leftover = '';
+      let lastPublishTime = 0;
+      const THROTTLE_MS = 50; // ~20 FPS throttled state publication
 
       while (!finished) {
+        if (streamIdRef.current !== streamId) break;
+
         const { value, done } = await reader.read();
-        if (done) {
+        if (done || streamIdRef.current !== streamId) {
           finished = true;
           break;
         }
@@ -245,6 +310,8 @@ export default function Agent() {
         leftover = lines.pop() || '';
 
         for (const line of lines) {
+          if (streamIdRef.current !== streamId) break;
+
           const trimmed = line.trim();
           if (!trimmed) continue;
 
@@ -257,31 +324,40 @@ export default function Agent() {
                 if (data.latency !== undefined) {
                   setLastLatency(data.latency);
                 }
-                setMessages(prev => {
-                  const updated = [...prev];
-                  updated[assistantMsgIndex] = {
-                    role: 'assistant',
-                    content: accumulatedText || data.text,
-                    model: data.model || modelName,
-                    latency: data.latency,
-                    isStreaming: false,
-                    created_at: new Date()
-                  };
-                  return updated;
-                });
+                // Immediate synchronous final flush on stream completion
+                if (streamIdRef.current === streamId) {
+                  setMessages(prev => {
+                    const updated = [...prev];
+                    updated[assistantMsgIndex] = {
+                      role: 'assistant',
+                      content: accumulatedText || data.text,
+                      model: data.model || modelName,
+                      latency: data.latency,
+                      isStreaming: false,
+                      created_at: new Date()
+                    };
+                    return updated;
+                  });
+                }
               } else {
                 accumulatedText += data.text;
-                setMessages(prev => {
-                  const updated = [...prev];
-                  updated[assistantMsgIndex] = {
-                    role: 'assistant',
-                    content: accumulatedText,
-                    model: modelName,
-                    isStreaming: true,
-                    created_at: new Date()
-                  };
-                  return updated;
-                });
+                const now = Date.now();
+                if (now - lastPublishTime >= THROTTLE_MS) {
+                  lastPublishTime = now;
+                  if (streamIdRef.current === streamId) {
+                    setMessages(prev => {
+                      const updated = [...prev];
+                      updated[assistantMsgIndex] = {
+                        role: 'assistant',
+                        content: accumulatedText,
+                        model: modelName,
+                        isStreaming: true,
+                        created_at: new Date()
+                      };
+                      return updated;
+                    });
+                  }
+                }
               }
             } catch (e) {
               console.error("Chunk parse error:", e);
@@ -289,21 +365,46 @@ export default function Agent() {
           }
         }
       }
+
+      // Safety final check: if stream finished without data.done event, ensure accumulated content is flushed
+      if (streamIdRef.current === streamId) {
+        setMessages(prev => {
+          if (prev[assistantMsgIndex]?.isStreaming) {
+            const updated = [...prev];
+            updated[assistantMsgIndex] = {
+              role: 'assistant',
+              content: accumulatedText,
+              model: modelName,
+              isStreaming: false,
+              created_at: new Date()
+            };
+            return updated;
+          }
+          return prev;
+        });
+      }
+
     } catch (err) {
-      console.error("Chat stream error:", err);
-      setMessages(prev => {
-        const updated = [...prev];
-        updated[assistantMsgIndex] = {
-          role: 'assistant',
-          content: `⚠️ Communication error: ${err.message || 'Failed to reach AI Copilot API'}. Please verify backend status and Groq Cloud connection.`,
-          isError: true,
-          isStreaming: false,
-          created_at: new Date()
-        };
-        return updated;
-      });
+      if (streamIdRef.current === streamId && err.name !== 'AbortError') {
+        console.error("Chat stream error:", err);
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[assistantMsgIndex] = {
+            role: 'assistant',
+            content: `⚠️ Communication error: ${err.message || 'Failed to reach AI Copilot API'}. Please verify backend status and Groq Cloud connection.`,
+            isError: true,
+            isStreaming: false,
+            created_at: new Date()
+          };
+          return updated;
+        });
+      }
     } finally {
-      setLoading(false);
+      if (streamIdRef.current === streamId) {
+        activeAbortControllerRef.current = null;
+        activeReaderRef.current = null;
+        setLoading(false);
+      }
     }
   };
 
