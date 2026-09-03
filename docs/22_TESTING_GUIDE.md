@@ -13,7 +13,7 @@ Run the backend automated integration test suite from the repository root:
 $env:PYTHONPATH="D:\Documents\SentinelAI"
 backend\.venv\Scripts\python.exe -m pytest backend\tests -q
 ```
-*Executes 19 test cases validating database models, API routers, WAF inspection rules, correlation logic, and report generation.*
+*Executes 45 test cases validating database models, API routers, WAF inspection rules, correlation logic, and report generation.*
 
 ### 2. Frontend Production Build Verification
 Verify React/Vite bundle compilation:

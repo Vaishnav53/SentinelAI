@@ -135,7 +135,7 @@ Orchestrates FastAPI backend, static Nginx reverse proxy, and PostgreSQL databas
 $env:PYTHONPATH="D:\Documents\SentinelAI"
 backend\.venv\Scripts\python.exe -m pytest backend\tests -q
 ```
-*Expected Result: All 19 unit tests pass cleanly.*
+*Expected Result: All 45 integration tests pass cleanly.*
 
 ### 2. Frontend Production Build Check
 ```powershell

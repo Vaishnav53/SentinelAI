@@ -16,7 +16,7 @@ backend/
 ├── models/           # SQLAlchemy ORM model definitions (models.py)
 ├── schemas/          # Pydantic validation schemas
 ├── services/         # Correlation engine, WAF defense, honeypots, AI adapters
-└── tests/            # Pytest test suite (19 test cases)
+└── tests/            # Pytest test suite (45 test cases)
 ```
 
 ## Layer Responsibilities
