@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Layers, ShieldAlert, Cpu, HardDrive, Shield, Search, Copy, Check, Trash2, ShieldX, Clock, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
+import { formatLocalDateTime } from '../../utils/dateUtils';
 import './SandboxDashboard.css';
 
 export default function SandboxDashboard() {
@@ -251,7 +252,7 @@ export default function SandboxDashboard() {
                               {f.status}
                             </span>
                           </td>
-                          <td className="font-mono text-muted text-xxs">{new Date(f.created_at).toLocaleString()}</td>
+                          <td className="font-mono text-muted text-xxs">{formatLocalDateTime(f.created_at)}</td>
                           <td><ChevronRight size={14} className="chevron-row" /></td>
                         </tr>
                       );

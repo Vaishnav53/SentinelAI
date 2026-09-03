@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Radio, Power, AlertTriangle, ShieldCheck, Activity, Eye, Cpu, Copy, Check, FileText, Lock, ChevronRight } from 'lucide-react';
 import apiClient from '../../api/client';
 import HoneypotEventDrawer from '../../components/honeypot/HoneypotEventDrawer';
+import { formatLocalTime } from '../../utils/dateUtils';
 import './HoneypotLab.css';
 
 export default function HoneypotLab() {
@@ -22,12 +23,6 @@ export default function HoneypotLab() {
   const [statusNotice, setStatusNotice] = useState(null);
   const [selectedDrawerEvent, setSelectedDrawerEvent] = useState(null);
   const [serviceStartTime, setServiceStartTime] = useState(null);
-
-  const formatLocalTime = (utcString) => {
-    if (!utcString) return '';
-    const cleanStr = (utcString.endsWith('Z') || utcString.includes('+')) ? utcString : utcString + 'Z';
-    return new Date(cleanStr).toLocaleTimeString();
-  };
 
   const filteredActivity = liveActivity.filter(activity => {
     const isSimulator = activity.sensor_id === 'Simulated Sensor Node' || activity.external_id?.startsWith('SIM-');

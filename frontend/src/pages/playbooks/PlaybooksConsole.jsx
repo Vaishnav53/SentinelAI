@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Sliders, Plus, Terminal, Workflow, Trash2, CheckCircle, AlertTriangle, RefreshCw, Layers } from 'lucide-react';
 import apiClient from '../../api/client';
+import { formatLocalDateTime } from '../../utils/dateUtils';
 import './PlaybooksConsole.css';
 
 export default function PlaybooksConsole() {
@@ -251,7 +252,7 @@ export default function PlaybooksConsole() {
                   
                   <div className="ex-meta">
                     <span className="lbl text-muted">Launched At:</span>
-                    <span className="val"> {new Date(ex.created_at).toLocaleString()}</span>
+                    <span className="val"> {formatLocalDateTime(ex.created_at)}</span>
                   </div>
 
                   {/* Logs details */}

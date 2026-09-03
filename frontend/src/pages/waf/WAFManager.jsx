@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { formatLocalTime } from '../../utils/dateUtils';
 import './WAFManager.css';
 
 const ATTACKER_ITEM_HEIGHT = 88; // 80px card + 8px gap
@@ -760,7 +761,7 @@ export default function WAFManager() {
                         <span className="hit-ip text-white">{hit.ip_address}</span>
                       </div>
                       <span className="hit-time text-muted text-xxs">
-                        {new Date(hit.created_at).toLocaleTimeString()}
+                        {formatLocalTime(hit.created_at)}
                       </span>
                     </div>
 

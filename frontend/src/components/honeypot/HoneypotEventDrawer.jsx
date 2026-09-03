@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, ShieldAlert, Cpu, Clock, Globe, Server, Terminal, Code, ChevronDown, ChevronRight, AlertTriangle, ExternalLink, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { formatLocalDateTime } from '../../utils/dateUtils';
 
 /**
  * Sanitizes headers, payloads, and strings to redact potential secrets, tokens, or credentials.
@@ -120,7 +121,7 @@ export default function HoneypotEventDrawer({ event, onClose }) {
                 EVENT #{event.id} ({event.external_id || `HON-${event.id}`})
               </h4>
               <span className="font-mono text-xxs text-muted">
-                Captured {event.created_at ? new Date(event.created_at.endsWith('Z') ? event.created_at : event.created_at + 'Z').toLocaleString() : ''}
+                Captured {formatLocalDateTime(event.created_at)}
               </span>
             </div>
           </div>

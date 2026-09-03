@@ -2086,7 +2086,7 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
 
                     activity_rows += f"""
                     <tr>
-                        <td class="text-muted" style="white-space: nowrap;">{a.timestamp.strftime("%Y-%m-%d %H:%M:%S") if a.timestamp else ""}</td>
+                        <td class="text-muted timestamp-cell" data-utc="{a.timestamp.isoformat() + 'Z' if a.timestamp else ''}" style="white-space: nowrap;">{a.timestamp.strftime("%Y-%m-%d %H:%M:%S") + ' UTC' if a.timestamp else ""}</td>
                         <td style="color:#ffffff; font-weight:600;">{html.escape(a.source_ip or "")}</td>
                         <td style="font-weight:600;"><span class="badge {b_cls}">{html.escape(a.action_type or "")}</span></td>
                         <td>{html.escape(a.username_or_email or "N/A")}</td>
@@ -2258,6 +2258,21 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                     .replace(/'/g, '&#039;');
             }}
 
+            function localizeTimestamps() {{
+                document.querySelectorAll('.timestamp-cell[data-utc]').forEach(function(el) {{
+                    var raw = el.getAttribute('data-utc');
+                    if (raw) {{
+                        try {{
+                            var d = new Date(raw);
+                            if (!isNaN(d.getTime())) {{
+                                el.textContent = d.toLocaleString();
+                            }}
+                        }} catch (e) {{}}
+                    }}
+                }});
+            }}
+            localizeTimestamps();
+
             async function refreshAdminData() {{
                 if (isFetchingAdminData) return;
                 isFetchingAdminData = true;
@@ -2290,7 +2305,7 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                             else if (act.includes('PROFILE') || act.includes('UPLOAD') || act.includes('FEEDBACK') || act.includes('REGISTER')) badgeCls = 'badge-indigo';
 
                             return `<tr>
-                                <td class="text-muted" style="white-space: nowrap;">${{escapeHtml(a.timestamp)}}</td>
+                                <td class="text-muted timestamp-cell" data-utc="${{escapeHtml(a.timestamp).replace(' ', 'T')}}Z" style="white-space: nowrap;">${{escapeHtml(a.timestamp)}} UTC</td>
                                 <td style="color:#ffffff; font-weight:600;">${{escapeHtml(a.source_ip)}}</td>
                                 <td style="font-weight:600;"><span class="badge ${{badgeCls}}">${{escapeHtml(a.action_type)}}</span></td>
                                 <td>${{escapeHtml(a.username_or_email)}}</td>
@@ -2299,6 +2314,17 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                                 <td class="text-muted" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${{escapeHtml(a.user_agent)}}">${{escapeHtml(a.user_agent)}}</td>
                             </tr>`;
                         }}).join('');
+                        actTbody.querySelectorAll('.timestamp-cell[data-utc]').forEach(function(el) {{
+                            var raw = el.getAttribute('data-utc');
+                            if (raw) {{
+                                try {{
+                                    var d = new Date(raw);
+                                    if (!isNaN(d.getTime())) {{
+                                        el.textContent = d.toLocaleString();
+                                    }}
+                                }} catch (e) {{}}
+                            }}
+                        }});
                     }}
 
                     const usrTbody = document.getElementById('tbl-users');
@@ -2385,7 +2411,7 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
 
                     rows += f"""
                     <tr>
-                        <td class="text-muted" style="white-space: nowrap;">{log.timestamp.strftime("%Y-%m-%d %H:%M:%S") if log.timestamp else ""}</td>
+                        <td class="text-muted timestamp-cell" data-utc="{log.timestamp.isoformat() + 'Z' if log.timestamp else ''}" style="white-space: nowrap;">{log.timestamp.strftime("%Y-%m-%d %H:%M:%S") + ' UTC' if log.timestamp else ""}</td>
                         <td style="color: #ffffff; font-weight: 600;">{html.escape(log.source_ip or "")}</td>
                         <td><span class="badge {badge_cls}">{html.escape(log.action_type or "")}</span></td>
                         <td><code>{html.escape(log.request_path or "")}</code></td>
@@ -2437,6 +2463,20 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                     </table>
                 </div>
             </div>
+
+            <script>
+            document.querySelectorAll('.timestamp-cell[data-utc]').forEach(function(el) {{
+                var raw = el.getAttribute('data-utc');
+                if (raw) {{
+                    try {{
+                        var d = new Date(raw);
+                        if (!isNaN(d.getTime())) {{
+                            el.textContent = d.toLocaleString();
+                        }}
+                    }} catch (e) {{}}
+                }}
+            }});
+            </script>
             """
             self.send_response(200)
             self.send_header("Content-Type", "text/html")

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Layers } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { formatLocalTime, parseUtcDate } from '../../utils/dateUtils';
 
 export default function AttackFeed({ attacks = [] }) {
   const navigate = useNavigate();
@@ -25,7 +26,7 @@ export default function AttackFeed({ attacks = [] }) {
   }
 
   // Sort: newest first
-  displayFeed.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  displayFeed.sort((a, b) => (parseUtcDate(b.created_at)?.getTime() || 0) - (parseUtcDate(a.created_at)?.getTime() || 0));
 
   const severityColors = {
     CRITICAL: 'rgba(255, 51, 102, 0.25)',
@@ -53,7 +54,7 @@ export default function AttackFeed({ attacks = [] }) {
               onClick={() => navigate(`/agent?analyze_attack=${attack.id}`)}
             >
               <div className="event-row-top font-mono text-xxs">
-                <span className="event-time">{new Date(attack.created_at).toLocaleTimeString()}</span>
+                <span className="event-time">{formatLocalTime(attack.created_at)}</span>
                 <span className="event-country-flag text-cyan" style={{ marginLeft: '8px' }}>
                   {attack.target_service}
                 </span>

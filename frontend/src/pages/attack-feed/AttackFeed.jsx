@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Shield, Search, ChevronRight, RefreshCw, AlertOctagon, Cpu, User, AlertTriangle, Play, MessageSquare, ShieldAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
+import { formatLocalTime, formatLocalDateTime, isRecentEvent } from '../../utils/dateUtils';
 import './AttackFeed.css';
 
 // Loading skeleton loader matching layout columns
@@ -236,7 +237,7 @@ export default function AttackFeed() {
                   const isSelected = selectedAttack?.id === attack.id;
                   
                   // Highlight events less than 20 seconds old
-                  const isNew = (new Date() - new Date(attack.created_at)) < 20000;
+                  const isNew = isRecentEvent(attack.created_at, 20000);
                   
                   return (
                     <tr 
@@ -248,7 +249,7 @@ export default function AttackFeed() {
                         setAssignedAnalyst(meta.assigned_analyst || '');
                       }}
                     >
-                      <td className="font-mono">{new Date(attack.created_at).toLocaleTimeString()}</td>
+                      <td className="font-mono">{formatLocalTime(attack.created_at)}</td>
                       <td className="font-mono">{attack.source_ip}</td>
                       <td className={attack.severity === 'CRITICAL' ? 'text-red font-bold' : ''}>{attack.attack_type}</td>
                       <td><span className="service-tag font-mono">{attack.target_service}</span></td>
@@ -337,7 +338,7 @@ export default function AttackFeed() {
                     <h5 className="section-title">Telemetry Info</h5>
                     <div className="info-grid font-mono">
                       <div className="info-label">Timestamp:</div>
-                      <div className="info-value">{new Date(selectedAttack.created_at).toLocaleString()}</div>
+                      <div className="info-value">{formatLocalDateTime(selectedAttack.created_at)}</div>
                       <div className="info-label">Source IP:</div>
                       <div className="info-value">{selectedAttack.source_ip}:{selectedAttack.source_port || 'N/A'}</div>
                       <div className="info-label">Geo Location:</div>
@@ -468,7 +469,7 @@ export default function AttackFeed() {
                       <div className="soc-timeline-item">
                         <div className={`soc-timeline-badge ${selectedAttack.severity.toLowerCase()}`}></div>
                         <div className="soc-timeline-header">
-                          <span className="soc-timeline-time">{new Date(selectedAttack.created_at).toLocaleTimeString()}</span>
+                          <span className="soc-timeline-time">{formatLocalTime(selectedAttack.created_at)}</span>
                           <span className="soc-timeline-state">NEW</span>
                         </div>
                         <div className="soc-timeline-desc">Telemetry event ingested from honeypot sensor.</div>

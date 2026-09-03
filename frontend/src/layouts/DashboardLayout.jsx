@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import apiClient from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { formatLocalTime } from '../utils/dateUtils';
 import './DashboardLayout.css';
 
 
@@ -390,7 +391,7 @@ export default function DashboardLayout() {
                       >
                         <span className="notif-item-title">{notif.attack_type}</span>
                         <span className="notif-item-desc">IP: {notif.source_ip} | Severity: {notif.severity}</span>
-                        <span className="notif-item-time">{new Date(notif.created_at).toLocaleTimeString()}</span>
+                        <span className="notif-item-time">{formatLocalTime(notif.created_at)}</span>
                       </div>
                     ))
                   )}
@@ -455,7 +456,7 @@ export default function DashboardLayout() {
                     Intrusion signature detected from {toast.source_ip}. Severity: <strong>{toast.severity}</strong> (Score: {toast.threat_score}/10).
                   </div>
                   <div className="toast-footer">
-                    <span className="toast-time">{new Date(toast.created_at).toLocaleTimeString()}</span>
+                    <span className="toast-time">{formatLocalTime(toast.created_at)}</span>
                     <span
                       className="toast-view-link"
                       onClick={() => {
