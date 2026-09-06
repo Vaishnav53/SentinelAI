@@ -19,6 +19,7 @@ import {
 import apiClient from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { formatLocalTime } from '../utils/dateUtils';
+import { getAttackWebSocketUrl } from '../utils/wsUtils';
 import './DashboardLayout.css';
 
 
@@ -126,17 +127,7 @@ export default function DashboardLayout() {
 
   // WebSocket live alerts alerts connector
   useEffect(() => {
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    let wsUrl = import.meta.env.VITE_WS_BASE_URL;
-    if (wsUrl) {
-      if (!wsUrl.endsWith('/api/attacks/ws')) {
-        wsUrl = wsUrl.replace(/\/+$/, '') + '/api/attacks/ws';
-      }
-    } else {
-      wsUrl = window.location.port === '5173'
-        ? `${wsProtocol}//127.0.0.1:8000/api/attacks/ws`
-        : `${wsProtocol}//${window.location.host}/api/attacks/ws`;
-    }
+    const wsUrl = getAttackWebSocketUrl();
     const socket = new WebSocket(wsUrl);
 
     socket.onmessage = (event) => {

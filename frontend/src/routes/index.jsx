@@ -1,5 +1,5 @@
 import React from 'react';
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import DashboardLayout from '../layouts/DashboardLayout';
 import Dashboard from '../pages/dashboard/Dashboard';
 import AttackFeed from '../pages/attack-feed/AttackFeed';
@@ -35,6 +35,34 @@ const router = createBrowserRouter([
       {
         path: '',
         element: <Dashboard />
+      },
+      {
+        path: 'dashboard',
+        element: <Dashboard />
+      },
+      {
+        path: 'honeypot',
+        element: <Navigate to="/sensors" replace />
+      },
+      {
+        path: 'threat-intelligence',
+        element: <Navigate to="/attackers" replace />
+      },
+      {
+        path: 'admin',
+        element: <Navigate to="/" replace />
+      },
+      {
+        path: 'admin/dashboard',
+        element: <Navigate to="/" replace />
+      },
+      {
+        path: 'admin/logs',
+        element: <Navigate to="/attacks" replace />
+      },
+      {
+        path: 'admin/reports',
+        element: <Navigate to="/reports" replace />
       },
       {
         path: 'attacks',

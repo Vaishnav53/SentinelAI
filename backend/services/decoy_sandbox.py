@@ -16,7 +16,7 @@ class DecoySandboxService:
     def __init__(self, db: Session):
         self.db = db
         # Sandbox storage dir in project workspace
-        self.sandbox_dir = "d:/Documents/SentinelAI/decoy_sandbox"
+        self.sandbox_dir = os.path.abspath(settings.SANDBOX_STORAGE)
         if not os.path.exists(self.sandbox_dir):
             os.makedirs(self.sandbox_dir)
 

@@ -265,14 +265,18 @@ def get_attack_stats(
     type_distribution = [AttackTypeCount(attack_type=row[0], count=row[1]) for row in type_rows]
     
     # Simple Mock Timeline metrics for Recharts
-    # In production, this pulls count of events grouped by date/hour.
-    # For now, build a series from database events or fallback
+    # Dialect-portable timeline query (PostgreSQL to_char vs SQLite strftime)
+    if db.bind and db.bind.dialect.name == "postgresql":
+        date_col = func.to_char(AttackEvent.created_at, "YYYY-MM-DD")
+    else:
+        date_col = func.strftime("%Y-%m-%d", AttackEvent.created_at)
+
     timeline_rows = db.query(
-        func.strftime("%Y-%m-%d", AttackEvent.created_at),
+        date_col,
         func.count(AttackEvent.id)
-    ).group_by(func.strftime("%Y-%m-%d", AttackEvent.created_at)).order_by(AttackEvent.created_at.asc()).all()
+    ).group_by(date_col).order_by(date_col.asc()).all()
     
-    timeline = [TimelineMetric(time=row[0], count=row[1]) for row in timeline_rows]
+    timeline = [TimelineMetric(time=str(row[0]), count=row[1]) for row in timeline_rows]
     
     # Fallback/Dummy timeline values if database has very sparse entries
     if not timeline:

@@ -32,11 +32,16 @@ services:
       - TRUSTED_HOSTS=localhost,127.0.0.1,backend
     volumes:
       - reports_data:/app/storage/reports
+      - sandbox_data:/app/decoy_sandbox
     depends_on:
       db:
         condition: service_healthy
+    ports:
+      - "8000:8000"
+      - "8088:8088"
     expose:
       - "8000"
+      - "8088"
 
   frontend:
     build:
@@ -52,3 +57,4 @@ services:
 volumes:
   pgdata:
   reports_data:
+  sandbox_data:

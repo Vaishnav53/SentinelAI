@@ -4,6 +4,7 @@ import { Radio, Power, AlertTriangle, ShieldCheck, Activity, Eye, Cpu, Copy, Che
 import apiClient from '../../api/client';
 import HoneypotEventDrawer from '../../components/honeypot/HoneypotEventDrawer';
 import { formatLocalTime } from '../../utils/dateUtils';
+import { getAttackWebSocketUrl } from '../../utils/wsUtils';
 import './HoneypotLab.css';
 
 export default function HoneypotLab() {
@@ -92,17 +93,7 @@ export default function HoneypotLab() {
       }
     }, 3000);
 
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    let wsUrl = import.meta.env.VITE_WS_BASE_URL;
-    if (wsUrl) {
-      if (!wsUrl.endsWith('/api/attacks/ws')) {
-        wsUrl = wsUrl.replace(/\\+$/, '') + '/api/attacks/ws';
-      }
-    } else {
-      wsUrl = window.location.port === '5173'
-        ? `${wsProtocol}//127.0.0.1:8000/api/attacks/ws`
-        : `${wsProtocol}//${window.location.host}/api/attacks/ws`;
-    }
+    const wsUrl = getAttackWebSocketUrl();
     const socket = new WebSocket(wsUrl);
     socket.onopen = () => console.log('Honeypot Lab WebSocket listener connected.');
     socket.onmessage = (event) => {

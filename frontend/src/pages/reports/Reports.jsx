@@ -146,7 +146,8 @@ export default function Reports() {
   };
 
   const handleExportCsv = () => {
-    let url = `${import.meta.env.VITE_API_BASE_URL || '/api'}/reports/export-period-csv?range=${encodeURIComponent(timeRange)}`;
+    const apiBase = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/+$/, '');
+    let url = `${apiBase}/reports/export-period-csv?range=${encodeURIComponent(timeRange)}`;
     if (timeRange === 'custom' && startDate && endDate) {
       url += `&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`;
     }

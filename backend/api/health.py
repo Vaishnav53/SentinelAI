@@ -1,5 +1,4 @@
-import os
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import text
 from backend.schemas.health import HealthStatus, ServiceHealthStatus, ServiceStatusDetail
@@ -8,17 +7,41 @@ from backend.core.config import settings
 
 router = APIRouter(prefix="/health", tags=["Health"])
 
+def check_db_readiness(response: Response, db: Session):
+    try:
+        db.execute(text("SELECT 1"))
+        return {
+            "status": "READY",
+            "database": "CONNECTED",
+            "environment": settings.APP_ENV,
+            "version": "0.1.0"
+        }
+    except Exception as e:
+        response.status_code = 503
+        return {
+            "status": "NOT_READY",
+            "database": "DISCONNECTED",
+            "error": str(e),
+            "environment": settings.APP_ENV,
+            "version": "0.1.0"
+        }
+
 @router.get("", response_model=HealthStatus)
 async def get_health():
-    """Basic platform health check."""
+    """Basic platform process liveness check."""
     return HealthStatus(
         status="ONLINE",
         version="0.1.0",
         environment=settings.APP_ENV
     )
 
+@router.get("/ready")
+def get_readiness(response: Response, db: Session = Depends(get_db)):
+    """Readiness check probe. Verifies database connectivity and returns 503 if unavailable."""
+    return check_db_readiness(response, db)
+
 @router.get("/services", response_model=ServiceHealthStatus)
-def get_services_health(db: Session = Depends(get_db)):
+def get_services_health(response: Response, db: Session = Depends(get_db)):
     """Detailed services health check. Verifies database connectivity dynamically."""
     
     # 1. Database Check
@@ -27,6 +50,7 @@ def get_services_health(db: Session = Depends(get_db)):
         db.execute(text("SELECT 1"))
         db_status = ServiceStatusDetail(status="ONLINE", details="Connected successfully")
     except Exception as e:
+        response.status_code = 503
         db_status = ServiceStatusDetail(status="OFFLINE", details=f"Database unreachable: {str(e)}")
         
     # 2. Groq AI Status Check

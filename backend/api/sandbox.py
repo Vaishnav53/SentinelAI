@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from backend.database.session import get_db
 from backend.models.models import DecoySandboxFile, WAFRule, AuditLog
+from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sandbox", tags=["Sandbox Analysis"])
@@ -52,7 +53,7 @@ async def get_sandbox_status(db: Session = Depends(get_db)):
     
     # Calculate storage footprint
     storage = 0
-    sandbox_dir = "d:/Documents/SentinelAI/decoy_sandbox"
+    sandbox_dir = os.path.abspath(settings.SANDBOX_STORAGE)
     if os.path.exists(sandbox_dir):
         for f in os.listdir(sandbox_dir):
             fp = os.path.join(sandbox_dir, f)
