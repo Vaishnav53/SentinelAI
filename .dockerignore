@@ -1,0 +1,43 @@
+# Version control
+.git
+.gitignore
+
+# Python virtual environments and caches
+**/.venv
+**/venv
+**/__pycache__
+**/*.py[cod]
+**/*.pyo
+**/.pytest_cache
+**/.mypy_cache
+
+# Local configuration and credentials
+**/.env
+**/.env.*
+!**/.env.example
+
+# Frontend build context exclusions (for backend image)
+frontend/node_modules
+frontend/dist
+
+# Storage, database, and sandbox artifacts
+storage/*.db
+storage/*.sqlite
+storage/reports/*
+backend/storage/*.db
+backend/storage/*.sqlite
+backend/storage/reports/*
+decoy_sandbox/*
+!decoy_sandbox/.gitkeep
+
+# IDE and OS metadata
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Documentation, diffs, and temporary artifacts
+docs
+*.diff
+*.patch
+demo_walkthrough.md
