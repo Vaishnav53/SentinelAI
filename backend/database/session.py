@@ -16,7 +16,8 @@ if db_url.startswith("sqlite:///"):
         abs_db_path = os.path.abspath(os.path.join(project_root, db_path))
         db_dir = os.path.dirname(abs_db_path)
         os.makedirs(db_dir, exist_ok=True)
-        db_url = f"sqlite:///{abs_db_path.replace('\\', '/')}"
+        normalized_path = abs_db_path.replace("\\", "/")
+        db_url = f"sqlite:///{normalized_path}"
 
 
 # Configure connection parameters and pool based on database dialect
