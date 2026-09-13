@@ -121,7 +121,7 @@ graph TB
     end
 
     subgraph Backend ["Persistent Application Service Tier (Railway Container)"]
-        FastAPI["FastAPI ASGI Core Engine<br/>(Uvicorn on Port $PORT)"]
+        FastAPI["FastAPI ASGI Core Engine<br/>(Uvicorn Application Server)"]
         Auth_RBAC["Session Auth & RBAC Service<br/>(Argon2id + SHA-256 Tokens)"]
         WS_Manager["WebSocket In-Memory Broadcast Manager<br/>(/api/attacks/ws)"]
         WAF_Service["Active Defense WAF Engine<br/>(Rules, Blocklists, Quarantine)"]
@@ -138,8 +138,8 @@ graph TB
         Sandbox_FS[("Decoy Sandbox Storage<br/>(./decoy_sandbox/)")]
     end
 
-    Vite_React -->|REST API Requests (Axios)| CORS
-    Vite_React -->|Persistent WebSockets (WSS)| CORS
+    Vite_React -->|REST API Requests| CORS
+    Vite_React -->|Persistent WebSockets| CORS
     Vite_React -->|Streaming SSE Responses| CORS
     CORS --> TrustedHost
     TrustedHost --> FastAPI
@@ -154,7 +154,7 @@ graph TB
 
     Auth_RBAC -->|Session Persistence| PG_DB
     Correlation_Engine -->|Event Logging| PG_DB
-    WAF_Service -->|Rule State & Blocks| PG_DB
+    WAF_Service -->|Rule State and Blocks| PG_DB
     Readiness -->|SELECT 1 Ping| PG_DB
 
     Auth_RBAC -.->|Local Dev Fallback| SQLite_DB
