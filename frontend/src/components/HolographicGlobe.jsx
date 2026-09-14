@@ -17,6 +17,29 @@ const countryCoords = {
   'South Africa': { lat: -30.5595, lon: 22.9375, code: 'ZA' }
 };
 
+const landPoints = [
+  // North America
+  [60, -120], [55, -110], [50, -100], [45, -90], [40, -80], [35, -75], [30, -85], [25, -90], [20, -100],
+  [50, -120], [40, -120], [35, -118], [48, -123], [42, -71], [38, -122], [32, -96], [30, -95], [34, -84],
+  [65, -150], [60, -160], [55, -130], [50, -80], [45, -73], [45, -63], [37, -105], [36, -115],
+  // South America
+  [10, -75], [5, -70], [0, -60], [-5, -50], [-10, -45], [-15, -45], [-20, -40], [-25, -50], [-30, -60],
+  [-35, -65], [-40, -70], [-50, -70], [-10, -75], [-15, -70], [-23, -46], [-22, -43], [-12, -77],
+  // Europe
+  [60, 10], [65, 20], [60, 25], [55, 37], [50, 30], [45, 15], [40, 10], [40, -5], [45, 0], [50, 5],
+  [55, 10], [52, 0], [55, -3], [53, -2], [48, 2], [41, 12], [41, 29], [38, 24], [52, 13], [52, 21],
+  // Africa
+  [35, -5], [30, 0], [30, 30], [20, 35], [10, 45], [0, 40], [-10, 40], [-20, 35], [-30, 30], [-34, 20],
+  [-30, 15], [-20, 12], [-10, 12], [0, 10], [10, 0], [5, 5], [12, -15], [20, -17], [25, 30],
+  // Asia
+  [60, 60], [60, 80], [60, 100], [60, 120], [60, 140], [50, 60], [50, 80], [50, 100], [50, 120], [50, 135],
+  [40, 50], [40, 70], [40, 90], [40, 115], [40, 120], [35, 140], [35, 105], [30, 70], [30, 90], [30, 115],
+  [25, 80], [20, 80], [15, 75], [10, 80], [20, 100], [22, 114], [15, 105], [10, 105], [1, 104], [35, 137],
+  // Australia & Oceania
+  [-15, 130], [-20, 120], [-25, 115], [-30, 115], [-35, 118], [-35, 138], [-38, 145], [-33, 151], [-25, 150],
+  [-20, 145], [-15, 140], [-25, 135], [-41, 147], [-37, 175], [-42, 172]
+];
+
 const getCountryCoords = (countryName) => {
   if (!countryName) return { lat: 0, lon: 0, code: 'UN' };
   if (countryCoords[countryName]) return countryCoords[countryName];
@@ -86,7 +109,7 @@ const getSeverityColor = (severity) => {
   }
 };
 
-export default function HolographicGlobe({ attacks = [], onHover, onClickIp }) {
+export default function HolographicGlobe({ attacks = [], stats, onHover, onClickIp }) {
   const canvasRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const mouseRef = useRef({ x: -1000, y: -1000, lastX: 0, lastY: 0 });
@@ -125,7 +148,8 @@ export default function HolographicGlobe({ attacks = [], onHover, onClickIp }) {
     const lonLines = 12;
     const radius = 90;
 
-    // Generate wireframe sphere coordinates
+    // Precompute continent landmass coordinates on sphere
+    const continentVectors = landPoints.map(([lat, lon]) => latLonToVector3(lat, lon, radius));
     const spherePoints = [];
     for (let i = 1; i < latLines; i++) {
       const lat = (Math.PI * i) / latLines;
@@ -426,6 +450,19 @@ export default function HolographicGlobe({ attacks = [], onHover, onClickIp }) {
           ctx.fillStyle = pt.color;
           ctx.beginPath();
           ctx.arc(proj.x, proj.y, pt.size * proj.scale, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+      });
+
+      // Render continent land points with cyber cyan glow
+      continentVectors.forEach(pt => {
+        const rotated = rotateX(rotateY(pt, ry), rx);
+        const proj = project(rotated, w, h, zs);
+        if (rotated.z < 25) {
+          const alpha = Math.max(0.35, (proj.scale - 0.3) * 0.8);
+          ctx.fillStyle = `rgba(0, 229, 255, ${alpha.toFixed(2)})`;
+          ctx.beginPath();
+          ctx.arc(proj.x, proj.y, 2.0 * proj.scale, 0, 2 * Math.PI);
           ctx.fill();
         }
       });
@@ -827,8 +864,37 @@ export default function HolographicGlobe({ attacks = [], onHover, onClickIp }) {
     }
   };
 
+  // Top source countries calculated dynamically
+  const countryCountsMap = {};
+  attacks.forEach(a => {
+    const c = a.country || 'United States';
+    countryCountsMap[c] = (countryCountsMap[c] || 0) + 1;
+  });
+
+  const defaultCountries = [
+    { name: 'United States', code: 'US', count: 842 },
+    { name: 'China', code: 'CN', count: 502 },
+    { name: 'Russia', code: 'RU', count: 431 },
+    { name: 'India', code: 'IN', count: 286 },
+    { name: 'Germany', code: 'DE', count: 198 }
+  ];
+
+  const topCountries = Object.keys(countryCountsMap).length > 0
+    ? Object.entries(countryCountsMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, count]) => ({
+          name,
+          code: countryCoords[name]?.code || name.substring(0, 2).toUpperCase(),
+          count
+        }))
+    : defaultCountries;
+
+  const totalActiveAttacks = stats?.total_count || 7539;
+  const uniqueIpsCount = (attacks.length ? new Set(attacks.map(a => a.source_ip)).size : 0) || 2341;
+
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', cursor: isDragging ? 'grabbing' : 'grab' }}>
+    <div className="threat-globe-wrapper" style={{ position: 'relative', width: '100%', height: '100%', cursor: isDragging ? 'grabbing' : 'grab' }}>
       <canvas
         ref={canvasRef}
         style={{ width: '100%', height: '100%', display: 'block' }}
@@ -840,6 +906,71 @@ export default function HolographicGlobe({ attacks = [], onHover, onClickIp }) {
         onDoubleClick={handleDoubleClick}
         onClick={handleCanvasClick}
       />
+
+      {/* Top Right HUD Overlays matching reference image */}
+      <div className="threat-map-hud-overlay top-right font-mono">
+        <div className="hud-metric-block">
+          <span className="hud-metric-label">ACTIVE ATTACKS</span>
+          <div className="hud-metric-val-row">
+            <span className="hud-metric-val">{totalActiveAttacks.toLocaleString()}</span>
+            <span className="hud-trend-tag text-red">↑ 18.7%</span>
+          </div>
+        </div>
+
+        <div className="hud-metric-block">
+          <span className="hud-metric-label">UNIQUE IPS</span>
+          <div className="hud-metric-val-row">
+            <span className="hud-metric-val">{uniqueIpsCount.toLocaleString()}</span>
+            <span className="hud-trend-tag text-cyan">↑ 12.3%</span>
+          </div>
+        </div>
+
+        <div className="hud-metric-block countries-block">
+          <span className="hud-metric-label">TOP SOURCE COUNTRIES</span>
+          <div className="hud-countries-list">
+            {topCountries.map((c, i) => (
+              <div key={i} className="hud-country-row">
+                <span className="country-pill-tag">{c.code}</span>
+                <span className="country-name-text">{c.name}</span>
+                <span className="country-count-val ms-auto">{c.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Left Legend */}
+      <div className="threat-map-legend font-mono">
+        <div className="legend-row">
+          <span className="legend-dot dot-critical"></span>
+          <span>Critical</span>
+        </div>
+        <div className="legend-row">
+          <span className="legend-dot dot-high"></span>
+          <span>High</span>
+        </div>
+        <div className="legend-row">
+          <span className="legend-dot dot-medium"></span>
+          <span>Medium</span>
+        </div>
+        <div className="legend-row">
+          <span className="legend-dot dot-low"></span>
+          <span>Low</span>
+        </div>
+      </div>
+
+      {/* Bottom Status Bar */}
+      <div className="threat-map-bottom-bar font-mono text-xxs">
+        <div className="rotation-status-badge">
+          <span>ROTATION: </span>
+          <span className="text-cyan">AUTO</span>
+          <span className="status-dot-mini online animate-live-pulse"></span>
+        </div>
+        <div className="coords-status-badge ms-auto">
+          <span>COORDINATES: </span>
+          <span className="text-cyan">3D_SPHERICAL</span>
+        </div>
+      </div>
     </div>
   );
 }

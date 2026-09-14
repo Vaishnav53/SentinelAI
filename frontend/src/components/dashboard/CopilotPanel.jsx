@@ -1,104 +1,178 @@
 import React, { useState, useEffect } from 'react';
-import { Terminal } from 'lucide-react';
+import { Bot, Shield, Check, ShieldAlert, Cpu, ArrowRight, Layers } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function CopilotPanel({ latestAttack }) {
   const navigate = useNavigate();
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState(64);
 
-  // Animate the progress bar dynamically
+  // Dynamic progress animation
   useEffect(() => {
-    setProgress(0);
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 88) {
-          clearInterval(interval);
-          return 88;
-        }
-        return prev + 2;
-      });
-    }, 40);
-    return () => clearInterval(interval);
+    setProgress(20);
+    const timer = setTimeout(() => setProgress(64), 300);
+    return () => clearTimeout(timer);
   }, [latestAttack]);
 
-  const targetIp = latestAttack?.source_ip || '192.168.1.105';
+  const targetIp = latestAttack?.source_ip || '127.0.0.1';
+  const attackType = latestAttack?.attack_type || 'Path Traversal';
 
   return (
-    <div className="copilot-controls-row mt-3">
-      {/* Left: AI Security Copilot Status & Progress */}
-      <div className="card-cyber ai-advisor-box-v2 flex-1">
-        <div className="ai-advisor-header">
-          <Terminal className="text-purple" size={14} />
-          <h3 className="chart-title text-purple text-glow">AI SECURITY COPILOT</h3>
-          <div className="ai-status-pulse ms-auto"></div>
+    <div className="copilot-twin-row">
+      {/* 1. Left Card: AI Security Copilot */}
+      <div className="copilot-subcard ai-copilot-card">
+        <div className="copilot-subcard-header">
+          <div className="copilot-header-title">
+            <Bot className="text-purple" size={16} />
+            <h4 className="copilot-title-text font-mono">AI SECURITY COPILOT</h4>
+          </div>
+          <div className="copilot-cloud-badge font-mono">
+            <span className="cloud-diamond text-purple">◇</span>
+            <span>Groq Cloud</span>
+            <span className="badge-status-pill online">ONLINE</span>
+          </div>
         </div>
-        
-        <div className="ai-advisor-content mt-2 flex gap-3">
-          {/* Animated AI Brain Orb */}
-          <div className="ai-brain-viz-v2 relative shrink-0" style={{ width: '60px', height: '60px', margin: 0 }}>
-            <span className="brain-core-pulse"></span>
-            <span className="brain-orbit-path orbit-1"></span>
-            <span className="brain-orbit-path orbit-2"></span>
-            <span className="brain-orbit-path orbit-3"></span>
-            <span className="brain-scan-sweep"></span>
+
+        <div className="copilot-subcard-body">
+          <div className="ai-status-headline font-mono">
+            <span>AI STATUS: </span>
+            <span className="text-purple font-bold">ANALYZING THREATS</span>
           </div>
 
-          <div className="ai-reasoning-details font-mono text-xxs flex-1">
-            <div className="text-purple font-bold">AI STATUS: ANALYZING_THREATS<span className="blinking-cursor">_</span></div>
-            <ul className="ai-bullets-list mt-2 text-muted">
-              <li>• Scanning Honeypot Telemetry</li>
-              <li>• Correlating Threat Patterns</li>
-              <li>• Evaluating Risk Level</li>
-              <li>• Generating Recommendations</li>
-            </ul>
-            
-            {/* Progress Bar */}
-            <div className="ai-progress-container mt-2">
-              <div className="ai-progress-bar-bg">
-                <div className="ai-progress-bar-fill bg-purple" style={{ width: `${progress}%` }}></div>
+          <div className="ai-checklist-grid">
+            <div className="ai-checklist-col">
+              <div className="ai-check-item font-mono">
+                <span className="check-disc"><Check size={11} /></span>
+                <span>Scanning Honeypot Telemetry</span>
               </div>
-              <div className="ai-progress-label text-purple text-right mt-1">{progress}%</div>
+              <div className="ai-check-item font-mono">
+                <span className="check-disc"><Check size={11} /></span>
+                <span>Correlating Threat Patterns</span>
+              </div>
+              <div className="ai-check-item font-mono">
+                <span className="check-disc"><Check size={11} /></span>
+                <span>Evaluating Risk Level</span>
+              </div>
+              <div className="ai-check-item font-mono">
+                <span className="check-disc"><Check size={11} /></span>
+                <span>Generating Recommendations</span>
+              </div>
+            </div>
+
+            {/* Glowing Holographic Brain Orb */}
+            <div className="ai-brain-orb-wrapper shrink-0">
+              <div className="ai-brain-orb">
+                <div className="orb-ring ring-1"></div>
+                <div className="orb-ring ring-2"></div>
+                <div className="orb-ring ring-3"></div>
+                <Cpu size={22} className="orb-core-icon text-purple animate-live-pulse" />
+              </div>
             </div>
           </div>
+
+          {/* Progress Bar Row */}
+          <div className="ai-progress-row">
+            <div className="ai-progress-track">
+              <div 
+                className="ai-progress-bar"
+                style={{ width: `${progress}%` }}
+              ></div>
+            </div>
+            <span className="ai-progress-num font-mono">{progress}%</span>
+          </div>
+        </div>
+
+        <div className="copilot-subcard-footer">
+          <button 
+            className="btn-copilot-action font-mono purple-theme"
+            onClick={() => navigate('/agent')}
+          >
+            <span>Open AI Assistant</span>
+            <ArrowRight size={13} />
+          </button>
         </div>
       </div>
 
-      {/* Right: Recommended actions panel */}
-      <div className="card-cyber recommended-actions-box flex-1">
-        <div className="ai-advisor-header">
-          <h3 className="chart-title text-cyan">RECOMMENDED ACTIONS</h3>
+      {/* 2. Right Card: Recommended Actions */}
+      <div className="copilot-subcard recommended-actions-card">
+        <div className="copilot-subcard-header">
+          <div className="copilot-header-title">
+            <Shield className="text-cyan" size={16} />
+            <h4 className="copilot-title-text font-mono">RECOMMENDED ACTIONS</h4>
+          </div>
+          <span className="copilot-auto-pill font-mono">Auto</span>
         </div>
-        
-        <div className="actions-buttons-grid font-mono text-xxs mt-3 flex flex-col gap-2">
-          <button 
-            className="act-btn-cyber btn-critical"
-            onClick={() => navigate(`/waf`)}
-          >
-            <span>BLOCK IP: {targetIp}</span>
-            <span className="badge-critical ml-auto">CRITICAL</span>
-          </button>
-          
-          <button 
-            className="act-btn-cyber btn-orange"
-            onClick={() => navigate('/waf')}
-          >
-            <span>ENABLE WAF PROTECTION</span>
-            <span className="badge-high ml-auto">HIGH</span>
-          </button>
-          
-          <button 
-            className="act-btn-cyber btn-yellow"
-            onClick={() => navigate('/sensors')}
-          >
-            <span>INCREASE HONEYPOT INTERACTION</span>
-            <span className="badge-medium ml-auto">MEDIUM</span>
-          </button>
 
+        <div className="copilot-subcard-body">
+          <div className="recommended-action-list">
+            {/* Action Item 1 */}
+            <div 
+              className="action-item-card action-critical"
+              onClick={() => navigate('/waf')}
+              title="Click to apply WAF containment rule"
+            >
+              <div className="action-icon-circle bg-red-dim">
+                <ShieldAlert size={14} className="text-red" />
+              </div>
+              <div className="action-text-block font-mono">
+                <div className="action-title-row">
+                  <span className="action-main-title">BLOCK IP: {targetIp}</span>
+                  <span className="action-sev-badge sev-critical">CRITICAL</span>
+                </div>
+                <div className="action-desc-text">
+                  Repeated {attackType.toLowerCase()} attempts detected.
+                </div>
+              </div>
+            </div>
+
+            {/* Action Item 2 */}
+            <div 
+              className="action-item-card action-high"
+              onClick={() => navigate('/waf')}
+              title="Click to update WAF security rules"
+            >
+              <div className="action-icon-circle bg-orange-dim">
+                <Shield size={14} className="text-orange" />
+              </div>
+              <div className="action-text-block font-mono">
+                <div className="action-title-row">
+                  <span className="action-main-title">ENABLE WAF PROTECTION</span>
+                  <span className="action-sev-badge sev-high">HIGH</span>
+                </div>
+                <div className="action-desc-text">
+                  Increase rules for /api and vulnerable endpoints.
+                </div>
+              </div>
+            </div>
+
+            {/* Action Item 3 */}
+            <div 
+              className="action-item-card action-medium"
+              onClick={() => navigate('/sensors')}
+              title="Click to manage honeypot sensor network"
+            >
+              <div className="action-icon-circle bg-blue-dim">
+                <Layers size={14} className="text-blue" />
+              </div>
+              <div className="action-text-block font-mono">
+                <div className="action-title-row">
+                  <span className="action-main-title">INCREASE HONEYPOT INTERACTION</span>
+                  <span className="action-sev-badge sev-medium">MEDIUM</span>
+                </div>
+                <div className="action-desc-text">
+                  More decoy resources detected for this pattern.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="copilot-subcard-footer">
           <button 
-            className="btn-copilot-dashboard mt-2 py-1.5"
+            className="btn-copilot-action font-mono cyan-theme"
             onClick={() => navigate('/agent')}
           >
-            VIEW FULL ANALYSIS →
+            <span>View Full Analysis</span>
+            <ArrowRight size={13} />
           </button>
         </div>
       </div>

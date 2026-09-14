@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldAlert, Radio, Activity, Cpu, Compass, Clock, AlertTriangle } from 'lucide-react';
+import { 
+  ShieldAlert, 
+  Activity, 
+  Radio, 
+  Cpu, 
+  Clock, 
+  AlertTriangle, 
+  Globe 
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { getAttackWebSocketUrl } from '../../utils/wsUtils';
 
-// Import Reusable Dashboard Components
+// Import Dashboard Child Components
 import BackgroundEffects from '../../components/dashboard/BackgroundEffects';
-import StatusRibbon from '../../components/dashboard/StatusRibbon';
 import KPICard from '../../components/dashboard/KPICard';
 import AttackFeed from '../../components/dashboard/AttackFeed';
 import HolographicGlobe from '../../components/HolographicGlobe';
@@ -15,19 +22,19 @@ import AnalyticsPanel from '../../components/dashboard/AnalyticsPanel';
 import StatusStrip from '../../components/dashboard/StatusStrip';
 import './Dashboard.css';
 
-// Skeleton Loader component matching V2 layout
+// Skeleton Loader component
 function DashboardSkeleton() {
   return (
     <div className="dashboard-root skeleton-root">
-      <div className="telemetry-cards">
-        {[1, 2, 3, 4].map(i => (
-          <div key={i} className="telemetry-card skeleton-card animate-skeleton" style={{ height: '76px' }}></div>
+      <div className="kpi-row-grid">
+        {[1, 2, 3, 4, 5, 6].map(i => (
+          <div key={i} className="kpi-card-cyber skeleton-card animate-skeleton" style={{ height: '78px' }}></div>
         ))}
       </div>
-      <div className="dashboard-grid-layout command-center-v2">
-        <div className="dashboard-column event-feed-v2 skeleton-card animate-skeleton" style={{ height: '400px' }}></div>
-        <div className="centerpiece-globe-v2 skeleton-card animate-skeleton" style={{ height: '400px' }}></div>
-        <div className="dashboard-column right-analytics-column skeleton-card animate-skeleton" style={{ height: '400px' }}></div>
+      <div className="soc-command-grid">
+        <div className="left-feed-column skeleton-card animate-skeleton" style={{ height: '520px' }}></div>
+        <div className="center-map-column skeleton-card animate-skeleton" style={{ height: '520px' }}></div>
+        <div className="right-analytics-column skeleton-card animate-skeleton" style={{ height: '520px' }}></div>
       </div>
     </div>
   );
@@ -39,28 +46,41 @@ export default function Dashboard() {
   const [error, setError] = useState(null);
   const [stats, setStats] = useState(null);
   const [metrics, setMetrics] = useState(null);
-  const [sensorCount, setSensorCount] = useState(0);
+  const [sensors, setSensors] = useState([]);
+  const [sensorCount, setSensorCount] = useState(4);
   const [recentAttacks, setRecentAttacks] = useState([]);
+  const [wafStatus, setWafStatus] = useState(null);
+  const [attackers, setAttackers] = useState([]);
   
-  // Track hovered node coordinates from globe
-  const [hoveredGlobeNode, setHoveredGlobeNode] = useState(null);
-
-
+  // Track hovered node from globe
+  const [, setHoveredGlobeNode] = useState(null);
 
   const fetchData = async (isSilent = false) => {
     try {
       if (!isSilent) setLoading(true);
-      const [statsData, metricsData, sensorsData, attacksList] = await Promise.all([
+      const [statsRes, metricsRes, sensorsRes, attacksRes, wafRes, attackersRes] = await Promise.allSettled([
         apiClient.get('/attacks/stats'),
         apiClient.get('/monitoring/current'),
         apiClient.get('/sensors'),
-        apiClient.get('/attacks?page_size=6')
+        apiClient.get('/attacks?page_size=10'),
+        apiClient.get('/waf/status'),
+        apiClient.get('/attacker/profiles')
       ]);
-      
-      setStats(statsData);
-      setMetrics(metricsData);
-      setSensorCount(sensorsData.length);
-      setRecentAttacks(attacksList);
+
+      if (statsRes.status === 'fulfilled') setStats(statsRes.value);
+      if (metricsRes.status === 'fulfilled') setMetrics(metricsRes.value);
+      if (sensorsRes.status === 'fulfilled' && Array.isArray(sensorsRes.value)) {
+        setSensors(sensorsRes.value);
+        setSensorCount(sensorsRes.value.length);
+      }
+      if (attacksRes.status === 'fulfilled' && Array.isArray(attacksRes.value)) {
+        setRecentAttacks(attacksRes.value);
+      }
+      if (wafRes.status === 'fulfilled') setWafStatus(wafRes.value);
+      if (attackersRes.status === 'fulfilled' && Array.isArray(attackersRes.value)) {
+        setAttackers(attackersRes.value);
+      }
+
       setError(null);
     } catch (err) {
       setError(err.message || 'Failed to fetch dashboard data');
@@ -71,43 +91,37 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
-    // Real-time background data sync polling
     const interval = setInterval(() => fetchData(true), 5000);
-    
-    // Connect to backend WebSocket threat stream on port 8000
+
     const wsUrl = getAttackWebSocketUrl();
     const socket = new WebSocket(wsUrl);
-    
+
     socket.onopen = () => {
       console.log('Dashboard WebSocket threat stream connected.');
     };
-    
+
     socket.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
         if (payload.type === 'new_attack') {
           const attack = payload.data;
-          
-          // Prepend new attack to feed list (limiting to 6 items to match UI constraints)
           setRecentAttacks(prev => {
             if (prev.some(a => a.id === attack.id)) return prev;
-            return [attack, ...prev].slice(0, 6);
+            return [attack, ...prev].slice(0, 10);
           });
-          
-          // Increment total stats counters live
           setStats(prev => {
             if (!prev) return prev;
             return {
               ...prev,
-              total_count: prev.total_count + 1
+              total_count: (prev.total_count || 0) + 1
             };
           });
         }
       } catch (err) {
-        console.error('Failed to parse dynamic threat feed WebSocket payload:', err);
+        console.error('Failed to parse threat feed WebSocket payload:', err);
       }
     };
-    
+
     return () => {
       clearInterval(interval);
       socket.close();
@@ -119,12 +133,17 @@ export default function Dashboard() {
   }
 
   if (error && !stats) {
-    return <div className="error-state">Error loading SOC metrics: {error}</div>;
+    return (
+      <div className="error-state font-mono text-xs">
+        <AlertTriangle size={24} className="text-red mb-2" />
+        <div>Error loading SOC telemetry: {error}</div>
+        <button className="btn-retry font-mono mt-3" onClick={() => fetchData()}>RETRY CONNECTION</button>
+      </div>
+    );
   }
 
   const latestCritical = recentAttacks.find(a => a.severity === 'CRITICAL');
 
-  // Calculate dynamic threat index level based on ingested signals
   const getSystemThreatState = () => {
     if (latestCritical) return 'CRITICAL';
     const highAlert = recentAttacks.some(a => a.severity === 'HIGH');
@@ -133,149 +152,141 @@ export default function Dashboard() {
   };
   const threatLevel = getSystemThreatState();
 
+  const totalThreatsVal = stats?.total_count || 7539;
+  const blockedAttacksVal = wafStatus?.blocked_count || Math.round(totalThreatsVal * 0.36) || 2714;
+  const onlineSensors = sensors.filter(s => s.state?.toUpperCase() === 'ONLINE').length || 4;
+  const totalSensors = sensors.length || 4;
+
   return (
-    <div className="command-center-scale-wrapper">
+    <div className="dashboard-root animate-fade-in">
       <BackgroundEffects />
-      <div className="command-center-scale">
-        <div className="command-center-inner">
-          <div className="dashboard-root viewport-fixed-height animate-fade-in">
-            
-            {/* Dynamic Critical Alert Banner */}
-            {latestCritical && (
-              <div className="critical-alert-banner animate-glow-critical">
-                <div className="alert-content font-mono">
-                  <ShieldAlert size={15} className="text-red pulse" />
-                  <span>
-                    <strong className="text-red">CRITICAL THREAT INGESTION:</strong> {latestCritical.attack_type} from IP {latestCritical.source_ip}
-                  </span>
-                </div>
-                <button 
-                  className="btn-alert-action font-mono text-xxs"
-                  onClick={() => navigate(`/agent?analyze_attack=${latestCritical.id}`)}
-                >
-                  MITIGATE WITH COPILOT →
-                </button>
+
+      {/* Row 1: Top KPI Cards Grid (6 Cards Across) */}
+      <section className="kpi-row-grid" aria-label="Key Performance Indicators">
+        <KPICard 
+          title="TOTAL THREATS"
+          value={totalThreatsVal}
+          change="↑ +18.7% (24h)"
+          changeType="red"
+          icon={ShieldAlert}
+          colorClass="red"
+          sparklinePoints="M 0 20 Q 20 6 40 18 T 60 8 T 80 12"
+          onClick={() => navigate('/attacks')}
+        />
+
+        <KPICard 
+          title="BLOCKED ATTACKS"
+          value={blockedAttacksVal}
+          change="↑ +22.1% (24h)"
+          changeType="blue"
+          icon={Activity}
+          colorClass="blue"
+          sparklinePoints="M 0 18 Q 20 18 35 10 T 55 20 T 80 8"
+          onClick={() => navigate('/waf')}
+        />
+
+        <KPICard 
+          title="SENSORS ONLINE"
+          value={`${onlineSensors}/${totalSensors}`}
+          change="↑ 100%"
+          changeType="green"
+          icon={Radio}
+          colorClass="green"
+          sparklinePoints="M 0 12 L 80 12"
+          onClick={() => navigate('/sensors')}
+        />
+
+        <KPICard 
+          title="AI CONFIDENCE"
+          value="98.4"
+          suffix="%"
+          change="↑ +2.6% (24h)"
+          changeType="purple"
+          icon={Cpu}
+          colorClass="purple"
+          sparklinePoints="M 0 20 Q 25 6 50 15 T 80 10"
+          onClick={() => navigate('/agent')}
+        />
+
+        <KPICard 
+          title="RESPONSE TIME"
+          value="124"
+          suffix=" ms"
+          change="↓ -15.3% (24h)"
+          changeType="orange"
+          icon={Clock}
+          colorClass="orange"
+          sparklinePoints="M 0 8 Q 25 18 50 12 T 80 22"
+        />
+
+        <KPICard 
+          title="THREAT LEVEL"
+          value={threatLevel}
+          isAlert={true}
+          subtitle="Elevated attack activity detected"
+          icon={AlertTriangle}
+          colorClass="red"
+          onClick={() => navigate('/attacks')}
+        />
+      </section>
+
+      {/* Row 2: Main SOC Command Center 3-Column Grid */}
+      <section className="soc-command-grid" aria-label="Command Center Operations">
+        
+        {/* Left Column: Live Attack Feed */}
+        <div className="left-feed-column">
+          <AttackFeed attacks={recentAttacks} />
+        </div>
+
+        {/* Center Column: 3D Threat Map + Copilot & Actions */}
+        <div className="center-map-column">
+          {/* 3D Global Threat Map Card */}
+          <div className="threat-map-card">
+            <div className="threat-map-header">
+              <div className="threat-map-title">
+                <Globe size={15} className="text-cyan animate-live-pulse" />
+                <h3 className="map-title-text font-mono">3D GLOBAL THREAT MAP</h3>
               </div>
-            )}
-
-            {/* 1. Top status ribbon */}
-            <StatusRibbon uptimeSecs={metrics?.uptime_seconds} threatLevel={threatLevel} />
-
-            {/* 3. Top KPI cards row */}
-            <div className="telemetry-cards">
-              <KPICard 
-                title="Total Threats" 
-                value={stats?.total_count || 24532} 
-                change="+18.7% (24h)" 
-                changeType="green" 
-                icon={ShieldAlert} 
-                colorClass="red"
-                sparklinePoints="M 0 22 Q 20 8 40 18 T 80 5 T 100 12"
-              />
-              <KPICard 
-                title="Blocked Attacks" 
-                value={Math.round((stats?.total_count || 24532) * 0.36) || 8746} 
-                change="+21.3% (24h)" 
-                changeType="green" 
-                icon={Activity} 
-                colorClass="cyan"
-                sparklinePoints="M 0 15 L 20 15 L 40 5 L 60 25 L 80 15 L 100 15"
-              />
-              <KPICard 
-                title="Sensors Online" 
-                value={sensorCount || 12} 
-                change="12/12 ACTIVE" 
-                changeType="green" 
-                icon={Radio} 
-                colorClass="green"
-                sparklinePoints="M 0 10 H 100"
-              />
-              <KPICard 
-                title="AI Confidence" 
-                value={98.4} 
-                change="+2.6% (24h)" 
-                changeType="purple" 
-                icon={Cpu} 
-                colorClass="purple"
-                sparklinePoints="M 0 20 Q 25 5 50 15 T 100 10"
-              />
-              <KPICard 
-                title="Response Time" 
-                value={124} 
-                change="+12% (24h)" 
-                changeType="orange" 
-                icon={Clock} 
-                colorClass="orange"
-                sparklinePoints="M 0 5 L 30 15 L 60 8 L 100 22"
-              />
-              <KPICard 
-                title="Incidents Today" 
-                value={243} 
-                change="+15.2% (24h)" 
-                changeType="red" 
-                icon={AlertTriangle} 
-                colorClass="red"
-                sparklinePoints="M 0 25 L 25 20 L 50 25 L 75 10 L 100 15"
-              />
+              <span className="map-realtime-pill font-mono">
+                <span className="status-dot-mini online animate-live-pulse"></span>
+                <span>Real-time</span>
+              </span>
             </div>
 
-            {/* 4. Main content columns grid */}
-            <div className="dashboard-grid-layout command-center-v2">
-              
-              {/* Left Column: live event feed cards */}
-              <AttackFeed attacks={recentAttacks} />
-
-              {/* Center Column: Main globe interactive centerpiece */}
-              <div className="radar-visualization-card card-cyber centerpiece-globe-v2">
-                <div className="radar-card-header">
-                  <Compass className="text-cyan animate-pulse" size={14} />
-                  <h3 className="chart-title text-cyan">3D GLOBAL THREAT MAP</h3>
-                  <div className="radar-status-badge font-mono text-xxs">MAP_ROTATING</div>
-                </div>
-                
-                <div className="globe-viewport-row flex-1 flex relative">
-                  <div className="radar-svg-container flex-1">
-                    <HolographicGlobe 
-                      attacks={recentAttacks} 
-                      onHover={setHoveredGlobeNode} 
-                      onClickIp={(ip) => navigate(`/agent?enrich_ip=${ip}`)}
-                    />
-                  </div>
-
-                  {/* Target HUD hover info panel overlay on the right side of globe */}
-                  {hoveredGlobeNode && (
-                    <div className="absolute right-3 top-3 glass-hud-target-overlay font-mono text-xxs animate-fade-in">
-                      <div className="hud-title text-cyan border-bottom pb-1 mb-1">TARGET DETECTED</div>
-                      <div>IP: <span className="text-white">{hoveredGlobeNode.ip}</span></div>
-                      <div>LOC: <span className="text-white">{hoveredGlobeNode.country}</span></div>
-                      <div>TYPE: <span className="text-white">{hoveredGlobeNode.type}</span></div>
-                      <div>SEV: <span className="text-red font-bold">{hoveredGlobeNode.severity}</span></div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="radar-telemetry-metrics font-mono text-xxs text-muted mt-2 border-top pt-2">
-                  <div className="metric-row">
-                    <span>ROTATION: <span className="text-cyan">AUTO</span></span>
-                    <span>COORDINATES: <span className="text-cyan">3D_SPHERICAL</span></span>
-                  </div>
-                </div>
-                
-                {/* AI Security Copilot & Recommended Actions rows below globe centerpiece */}
-                <CopilotPanel latestAttack={latestCritical || recentAttacks[0]} />
-              </div>
-
-              {/* Right Column: lower analytics panels */}
-              <AnalyticsPanel stats={stats} totalCount={stats?.total_count || 1248} />
-
+            <div className="threat-map-canvas-area">
+              <HolographicGlobe 
+                attacks={recentAttacks}
+                stats={stats}
+                onHover={setHoveredGlobeNode}
+                onClickIp={(ip) => navigate(`/agent?enrich_ip=${ip}`)}
+              />
             </div>
+          </div>
 
-            {/* 5. Bottom mission strip */}
-            <StatusStrip />
-
+          {/* Subcard Row Below Map: AI Security Copilot & Recommended Actions */}
+          <div className="threat-copilot-row">
+            <CopilotPanel latestAttack={latestCritical || recentAttacks[0]} />
           </div>
         </div>
-      </div>
+
+        {/* Right Column: Analytics Stack */}
+        <div className="right-analytics-column">
+          <AnalyticsPanel 
+            stats={stats}
+            totalCount={totalThreatsVal}
+            sensors={sensors}
+            attackers={attackers}
+          />
+        </div>
+
+      </section>
+
+      {/* Row 3: Bottom Full-Width System Status Footer */}
+      <StatusStrip 
+        sensorCount={sensorCount}
+        totalThreats={totalThreatsVal}
+        isDegraded={metrics?.error || false}
+      />
     </div>
   );
 }

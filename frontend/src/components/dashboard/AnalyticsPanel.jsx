@@ -1,179 +1,351 @@
 import React from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, RadarChart, PolarGrid, PolarAngleAxis, Radar } from 'recharts';
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  ResponsiveContainer, 
+  PieChart, 
+  Pie, 
+  Cell 
+} from 'recharts';
+import { TrendingUp, PieChart as PieIcon, BarChart3, Radio, Globe, ArrowUpRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-export default function AnalyticsPanel({ stats, totalCount = 1248 }) {
+export default function AnalyticsPanel({ stats, totalCount = 7539, sensors = [], attackers = [] }) {
+  const navigate = useNavigate();
+
   const severityColors = {
-    CRITICAL: '#ff3860',
+    CRITICAL: '#ff3366',
     HIGH: '#ff9f43',
     MEDIUM: '#ffd32a',
     LOW: '#00ff88',
-    INFO: '#38a3a5'
+    INFO: '#00e5ff'
   };
 
-  // Severity Donut Chart data
-  const severityPieData = stats?.severity_distribution?.map(item => ({
-    name: item.severity,
-    value: item.count
-  })) || [
-    { name: 'CRITICAL', value: 342 },
-    { name: 'HIGH', value: 412 },
-    { name: 'MEDIUM', value: 298 },
-    { name: 'LOW', value: 154 },
-    { name: 'INFO', value: 42 }
+  // 1. Timeline Data for 24H Threat Trend
+  const timelineData = stats?.timeline && stats.timeline.length > 0
+    ? stats.timeline.map(t => ({
+        time: t.time.includes('-') ? t.time.split('-').slice(1).join('/') : t.time,
+        count: t.count
+      }))
+    : [
+        { time: '00:00', count: 18 },
+        { time: '04:00', count: 24 },
+        { time: '08:00', count: 48 },
+        { time: '12:00', count: 36 },
+        { time: '16:00', count: 62 },
+        { time: '20:00', count: 42 },
+        { time: '24:00', count: 28 }
+      ];
+
+  // 2. Severity Distribution for Donut Chart
+  const rawSev = stats?.severity_distribution || [];
+  const sevTotal = rawSev.reduce((acc, curr) => acc + curr.count, 0) || totalCount || 7539;
+  
+  const defaultSevData = [
+    { name: 'Critical', key: 'CRITICAL', value: 728, percent: 9.7 },
+    { name: 'High', key: 'HIGH', value: 2460, percent: 32.6 },
+    { name: 'Medium', key: 'MEDIUM', value: 2893, percent: 38.4 },
+    { name: 'Low', key: 'LOW', value: 1458, percent: 19.4 }
   ];
 
-  // Top Attack Types horizontal bar data
-  const attackTypesData = [
-    { name: 'SQL Injection', count: 482 },
-    { name: 'XSS Attempts', count: 328 },
-    { name: 'Admin Probes', count: 243 },
-    { name: 'Brute Force', count: 198 },
-    { name: 'File Inclusion', count: 124 }
+  const severityPieData = rawSev.length > 0
+    ? rawSev.map(item => {
+        const pct = sevTotal > 0 ? ((item.count / sevTotal) * 100).toFixed(1) : '0.0';
+        const formattedName = item.severity ? item.severity.charAt(0).toUpperCase() + item.severity.slice(1).toLowerCase() : 'Unknown';
+        return {
+          name: formattedName,
+          key: (item.severity || '').toUpperCase(),
+          value: item.count,
+          percent: parseFloat(pct)
+        };
+      })
+    : defaultSevData;
+
+  // 3. Top Attack Types horizontal bars
+  const rawTypes = stats?.type_distribution || [];
+  const typeTotal = rawTypes.reduce((acc, curr) => acc + curr.count, 0) || 1000;
+  
+  const typeColorPalette = ['#ff3366', '#ff9f43', '#9b5cff', '#2f8cff', '#00e5ff'];
+
+  const defaultAttackTypes = [
+    { name: 'Path Traversal', count: 2140, percent: 28.4 },
+    { name: 'SQL Injection', count: 1665, percent: 22.1 },
+    { name: 'XSS', count: 1409, percent: 18.7 },
+    { name: 'Brute Force', count: 927, percent: 12.3 },
+    { name: 'DDoS', count: 648, percent: 8.6 }
   ];
 
-  // Sensor Activity radar data
-  const sensorRadarData = [
-    { subject: 'Active', value: 12 },
-    { subject: 'Idle', value: 0 },
-    { subject: 'Warning', value: 0 },
-    { subject: 'Offline', value: 0 }
+  const attackTypesList = rawTypes.length > 0
+    ? rawTypes.slice(0, 5).map((item, idx) => ({
+        name: item.attack_type,
+        count: item.count,
+        percent: typeTotal > 0 ? parseFloat(((item.count / typeTotal) * 100).toFixed(1)) : 10.0,
+        color: typeColorPalette[idx % typeColorPalette.length]
+      }))
+    : defaultAttackTypes.map((item, idx) => ({
+        ...item,
+        color: typeColorPalette[idx % typeColorPalette.length]
+      }));
+
+  // 4. Sensor Activity
+  const defaultSensors = [
+    { name: 'HTTP', port: 8088, state: 'ONLINE' },
+    { name: 'SSH', port: 2222, state: 'ONLINE' },
+    { name: 'FTP', port: 2121, state: 'ONLINE' },
+    { name: 'Telnet', port: 2323, state: 'ONLINE' }
   ];
 
-  // Top Attacker IPs list data
-  const topIps = [
-    { ip: '203.0.113.45', percentage: 92 },
-    { ip: '198.51.100.23', percentage: 78 },
-    { ip: '192.0.2.78', percentage: 60 },
-    { ip: '203.0.113.10', percentage: 48 },
-    { ip: '198.51.100.99', percentage: 35 }
+  const displaySensors = sensors.length > 0 
+    ? sensors.map(s => ({
+        name: s.type || s.name.replace(' Honeypot', ''),
+        port: s.port,
+        state: s.state || 'ONLINE'
+      }))
+    : defaultSensors;
+
+  const onlineSensorsCount = displaySensors.filter(s => s.state.toUpperCase() === 'ONLINE').length;
+  const totalSensorsCount = displaySensors.length || 4;
+
+  // 5. Top Attacker IPs
+  const defaultAttackers = [
+    { ip: '202.211.12.42', attacks: 32, time: '12:06 PM' },
+    { ip: '103.15.88.77', attacks: 28, time: '11:49 AM' },
+    { ip: '192.168.1.50', attacks: 24, time: '11:32 AM' },
+    { ip: '45.33.12.90', attacks: 18, time: '11:21 AM' },
+    { ip: '88.74.23.16', attacks: 15, time: '10:58 AM' }
   ];
+
+  const displayAttackers = attackers.length > 0
+    ? attackers.slice(0, 5).map(a => ({
+        ip: a.ip_address,
+        attacks: a.total_attacks || a.event_count || a.attacks || 12,
+        time: a.last_seen ? new Date(a.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '12:00 PM'
+      }))
+    : defaultAttackers;
 
   return (
-    <div className="dashboard-column right-analytics-column">
+    <div className="analytics-sidebar-column">
       
       {/* 1. THREAT TREND (24H) */}
-      <div className="card-cyber analytics-card-v2">
-        <h3 className="chart-title text-cyan">THREAT TREND (24H)</h3>
-        <div className="chart-wrapper mt-2">
-          <ResponsiveContainer width="100%" height={80}>
-            <AreaChart data={stats?.timeline || [
-              { time: '12AM', count: 12 },
-              { time: '04AM', count: 25 },
-              { time: '08AM', count: 42 },
-              { time: '12PM', count: 31 },
-              { time: '04PM', count: 56 },
-              { time: '08PM', count: 48 }
-            ]}>
+      <div className="analytics-widget-card">
+        <div className="analytics-widget-header">
+          <div className="widget-header-title">
+            <TrendingUp size={14} className="text-purple" />
+            <span className="widget-title-text font-mono">THREAT TREND (24H)</span>
+          </div>
+          <span className="widget-trend-badge font-mono text-purple">↑ 18.7%</span>
+        </div>
+
+        <div className="analytics-widget-body chart-body">
+          <ResponsiveContainer width="100%" height={75}>
+            <AreaChart data={timelineData} margin={{ top: 6, right: 4, left: -25, bottom: 0 }}>
               <defs>
-                <linearGradient id="colorCountV2" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#00e5ff" stopOpacity={0.4}/>
-                  <stop offset="95%" stopColor="#00e5ff" stopOpacity={0}/>
+                <linearGradient id="threatTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#9b5cff" stopOpacity={0.45} />
+                  <stop offset="100%" stopColor="#9b5cff" stopOpacity={0.0} />
                 </linearGradient>
-                <filter id="neonGlowV2" x="-20%" y="-20%" width="140%" height="140%">
-                  <feGaussianBlur stdDeviation="2.5" result="blur" />
-                  <feMerge>
-                    <feMergeNode in="blur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
               </defs>
-              <XAxis dataKey="time" stroke="#5f748d" fontSize={8} tickLine={false} />
-              <YAxis stroke="#5f748d" fontSize={8} tickLine={false} hide />
-              <Tooltip 
-                contentStyle={{ backgroundColor: 'rgba(6, 14, 28, 0.95)', borderColor: 'rgba(0, 229, 255, 0.25)', color: '#f0f7ff', fontSize: 9 }} 
+              <XAxis 
+                dataKey="time" 
+                stroke="#556c86" 
+                fontSize={8} 
+                tickLine={false} 
+                axisLine={{ stroke: 'rgba(255, 255, 255, 0.05)' }} 
               />
-              <Area type="monotone" dataKey="count" stroke="#00e5ff" strokeWidth={1.5} fillOpacity={1} fill="url(#colorCountV2)" filter="url(#neonGlowV2)" />
+              <YAxis stroke="#556c86" fontSize={8} tickLine={false} axisLine={false} />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'rgba(6, 12, 24, 0.95)', 
+                  borderColor: 'rgba(155, 92, 255, 0.3)', 
+                  borderRadius: '6px',
+                  fontSize: '9px',
+                  color: '#f0f7ff',
+                  boxShadow: '0 4px 14px rgba(0, 0, 0, 0.6)'
+                }} 
+              />
+              <Area 
+                type="monotone" 
+                dataKey="count" 
+                stroke="#9b5cff" 
+                strokeWidth={2} 
+                fillOpacity={1} 
+                fill="url(#threatTrendGrad)" 
+              />
             </AreaChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* 2. ATTACKS BY SEVERITY Donut Chart */}
-      <div className="card-cyber analytics-card-v2">
-        <h3 className="chart-title text-cyan">ATTACKS BY SEVERITY</h3>
-        <div className="pie-wrapper mt-2 flex items-center justify-between" style={{ height: '90px' }}>
-          <div className="pie-chart-container relative" style={{ width: '90px', height: '90px' }}>
+      {/* 2. ATTACKS BY SEVERITY */}
+      <div className="analytics-widget-card">
+        <div className="analytics-widget-header">
+          <div className="widget-header-title">
+            <PieIcon size={14} className="text-cyan" />
+            <span className="widget-title-text font-mono">ATTACKS BY SEVERITY</span>
+          </div>
+        </div>
+
+        <div className="analytics-widget-body flex items-center justify-between">
+          <div className="pie-donut-wrapper relative" style={{ width: '85px', height: '85px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={severityPieData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={28}
+                  innerRadius={26}
                   outerRadius={38}
                   paddingAngle={2}
                   dataKey="value"
                 >
                   {severityPieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={severityColors[entry.name] || '#5f748d'} />
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={severityColors[entry.key] || '#556c86'} 
+                      stroke="rgba(6, 12, 24, 0.8)"
+                      strokeWidth={1.5}
+                    />
                   ))}
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
-            {/* Center Total label */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center font-mono" style={{ pointerEvents: 'none' }}>
-              <span className="text-xxs text-muted">TOTAL</span>
-              <span className="text-xs font-bold text-cyan" style={{ fontSize: '9px' }}>{totalCount}</span>
+            {/* Center Total Readout */}
+            <div className="pie-donut-center font-mono">
+              <span className="pie-center-val">{sevTotal.toLocaleString()}</span>
+              <span className="pie-center-label">Total</span>
             </div>
           </div>
-          
-          <div className="pie-legend font-mono text-xxs flex-1" style={{ fontSize: '8px', marginLeft: '12px' }}>
-            {severityPieData.slice(0, 4).map((entry) => (
-              <div key={entry.name} className="legend-item py-0.5" style={{ background: 'none', border: 'none', padding: 0 }}>
-                <span className="legend-dot" style={{ backgroundColor: severityColors[entry.name] }}></span>
-                <span className="legend-label text-muted" style={{ marginRight: '6px' }}>{entry.name}:</span>
-                <span className="legend-value font-bold">{entry.value}</span>
+
+          <div className="severity-legend-list font-mono">
+            {severityPieData.slice(0, 4).map((item) => (
+              <div key={item.name} className="severity-legend-row">
+                <span 
+                  className="sev-legend-dot" 
+                  style={{ backgroundColor: severityColors[item.key] || '#556c86' }}
+                ></span>
+                <span className="sev-legend-name">{item.name}</span>
+                <span className="sev-legend-count">{item.value.toLocaleString()}</span>
+                <span className="sev-legend-percent">({item.percent}%)</span>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* 3. TOP ATTACK TYPES horizontal bar chart */}
-      <div className="card-cyber analytics-card-v2">
-        <h3 className="chart-title text-cyan">TOP ATTACK TYPES</h3>
-        <div className="chart-wrapper mt-2">
-          <ResponsiveContainer width="100%" height={90}>
-            <BarChart layout="vertical" data={attackTypesData} margin={{ left: -10, right: 10, top: 0, bottom: 0 }}>
-              <XAxis type="number" hide />
-              <YAxis dataKey="name" type="category" stroke="#5f748d" fontSize={8} width={65} tickLine={false} />
-              <Bar dataKey="count" fill="rgba(155, 92, 255, 0.65)" radius={[0, 3, 3, 0]}>
-                {attackTypesData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={index % 2 === 0 ? 'var(--purple)' : 'var(--cyan-primary)'} opacity={0.8} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+      {/* 3. TOP ATTACK TYPES */}
+      <div className="analytics-widget-card">
+        <div className="analytics-widget-header">
+          <div className="widget-header-title">
+            <BarChart3 size={14} className="text-cyan" />
+            <span className="widget-title-text font-mono">TOP ATTACK TYPES</span>
+          </div>
         </div>
-      </div>
 
-      {/* 4. SENSOR ACTIVITY Radar Chart */}
-      <div className="card-cyber analytics-card-v2">
-        <h3 className="chart-title text-cyan">SENSOR ACTIVITY</h3>
-        <div className="chart-wrapper mt-2">
-          <ResponsiveContainer width="100%" height={90}>
-            <RadarChart cx="50%" cy="50%" outerRadius="75%" data={sensorRadarData}>
-              <PolarGrid stroke="rgba(255, 255, 255, 0.05)" />
-              <PolarAngleAxis dataKey="subject" stroke="#5f748d" fontSize={8} />
-              <Radar name="Sensors" dataKey="value" stroke="var(--cyan-primary)" fill="rgba(0, 229, 255, 0.2)" fillOpacity={0.6} />
-            </RadarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* 5. TOP ATTACKER IPS progress bars list */}
-      <div className="card-cyber analytics-card-v2">
-        <h3 className="chart-title text-cyan">TOP ATTACKER IPS</h3>
-        <div className="attacker-ips-list font-mono text-xxs mt-2 flex flex-col gap-1.5">
-          {topIps.map(item => (
-            <div key={item.ip} className="ip-row-v2 flex items-center justify-between">
-              <span className="ip-text text-secondary" style={{ fontSize: '8px' }}>{item.ip}</span>
-              <div className="progress-bar-v2 flex-1 mx-3" style={{ background: 'rgba(255, 255, 255, 0.03)', height: '4px', borderRadius: '2px', overflow: 'hidden' }}>
-                <div className="progress-bar-fill-v2" style={{ background: 'var(--critical-red)', width: `${item.percentage}%`, height: '100%' }}></div>
+        <div className="analytics-widget-body attack-types-body font-mono">
+          {attackTypesList.map((type, idx) => (
+            <div key={idx} className="attack-type-row">
+              <span className="attack-type-label">{type.name}</span>
+              <div className="attack-type-track">
+                <div 
+                  className="attack-type-fill" 
+                  style={{ width: `${Math.min(100, Math.max(8, type.percent * 2.5))}%`, backgroundColor: type.color }}
+                ></div>
               </div>
-              <span className="ip-percent text-red font-bold" style={{ fontSize: '8px' }}>{item.percentage}%</span>
+              <span className="attack-type-pct">{type.percent}%</span>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* 4. SENSOR ACTIVITY */}
+      <div className="analytics-widget-card">
+        <div className="analytics-widget-header">
+          <div className="widget-header-title">
+            <Radio size={14} className="text-cyan" />
+            <span className="widget-title-text font-mono">SENSOR ACTIVITY</span>
+          </div>
+        </div>
+
+        <div className="analytics-widget-body flex items-center justify-between">
+          <div className="sensor-ring-wrapper">
+            <svg viewBox="0 0 70 70" width="70" height="70">
+              <circle 
+                cx="35" cy="35" r="28" 
+                fill="none" 
+                stroke="rgba(0, 229, 255, 0.1)" 
+                strokeWidth="5" 
+              />
+              <circle 
+                cx="35" cy="35" r="28" 
+                fill="none" 
+                stroke="var(--green)" 
+                strokeWidth="5" 
+                strokeDasharray={`${(onlineSensorsCount / totalSensorsCount) * 175} 175`}
+                strokeLinecap="round"
+                transform="rotate(-90 35 35)"
+              />
+            </svg>
+            <div className="sensor-ring-center font-mono">
+              <span className="sensor-center-count">{onlineSensorsCount}/{totalSensorsCount}</span>
+              <span className="sensor-center-text">Online</span>
+            </div>
+          </div>
+
+          <div className="sensor-status-list font-mono">
+            {displaySensors.map((s, idx) => (
+              <div key={idx} className="sensor-status-row">
+                <span className="sensor-status-dot online"></span>
+                <span className="sensor-name-port">{s.name} ({s.port})</span>
+                <span className="sensor-state-label text-green ms-auto">Online</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 5. TOP ATTACKER IPS */}
+      <div className="analytics-widget-card">
+        <div className="analytics-widget-header">
+          <div className="widget-header-title">
+            <Globe size={14} className="text-cyan" />
+            <span className="widget-title-text font-mono">TOP ATTACKER IPS</span>
+          </div>
+        </div>
+
+        <div className="analytics-widget-body font-mono">
+          <div className="attacker-table-header">
+            <span>IP Address</span>
+            <span className="text-center">Attacks</span>
+            <span className="text-right">Last Seen</span>
+          </div>
+
+          <div className="attacker-table-rows">
+            {displayAttackers.map((item, idx) => (
+              <div 
+                key={idx} 
+                className="attacker-table-row"
+                onClick={() => navigate(`/agent?enrich_ip=${item.ip}`)}
+                title="Click to view IP dossier"
+              >
+                <span className="attacker-ip text-cyan">{item.ip}</span>
+                <span className="attacker-count text-center">{item.attacks}</span>
+                <span className="attacker-time text-right text-muted">{item.time}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="attacker-table-footer">
+            <button 
+              className="btn-view-all-attackers ms-auto font-mono"
+              onClick={() => navigate('/attackers')}
+            >
+              <span>View All</span>
+              <ArrowUpRight size={11} />
+            </button>
+          </div>
         </div>
       </div>
 
