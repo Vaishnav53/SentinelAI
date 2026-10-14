@@ -291,23 +291,7 @@ Here are genuine captures of the actual, running SentinelAI platform:
 
 ---
 
-### 7. Decoy Malware Sandbox
-*Cryptographic hash computation (MD5, SHA-1, SHA-256), static heuristic scoring, and quarantine status evaluation.*
-<p align="center">
-  <img src="docs/screenshots/sandbox.png" alt="SentinelAI Decoy Sandbox" width="100%">
-</p>
-
----
-
-### 8. Automated Remediation Playbooks Console
-*Pre-configured defensive orchestration workflows with real-time step execution auditing.*
-<p align="center">
-  <img src="docs/screenshots/playbooks.png" alt="SentinelAI Playbooks Console" width="100%">
-</p>
-
----
-
-### 9. Executive Compliance & Incident Reports
+### 7. Executive Compliance & Incident Reports
 *Audit documentation generator providing executive PDF incident briefs and raw CSV telemetry exports.*
 <p align="center">
   <img src="docs/screenshots/reports.png" alt="SentinelAI Reports Console" width="100%">
@@ -315,7 +299,7 @@ Here are genuine captures of the actual, running SentinelAI platform:
 
 ---
 
-### 10. SOC Analyst Authentication Portal
+### 8. SOC Analyst Authentication Portal
 *Secure authentication interface enforcing Argon2id password verification and HttpOnly session cookies.*
 <p align="center">
   <img src="docs/screenshots/login.png" alt="SentinelAI Authentication Portal" width="100%">
@@ -582,6 +566,6 @@ While SentinelAI offers a fully functional cyber defense lab and SOC simulator, 
 
 ## 📄 License & Maintainer
 
-* **Author & Lead Developer**: **[Vaishnav Kumar (Vaishnav53)](https://github.com/Vaishnav53)**
+* **Author & Lead Developer**: **[G Vaishnav Kumar (Vaishnav53)](https://github.com/Vaishnav53)**
 * **Repository**: [https://github.com/Vaishnav53/SentinelAI](https://github.com/Vaishnav53/SentinelAI)
 * **License**: Open-source under the [MIT License](LICENSE).
