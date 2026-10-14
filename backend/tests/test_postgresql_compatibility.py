@@ -113,3 +113,68 @@ def test_portable_sandbox_storage(db):
     service = DecoySandboxService(db)
     assert service.sandbox_dir is not None
     assert not service.sandbox_dir.startswith("d:/Documents/SentinelAI/decoy_sandbox") or service.sandbox_dir.endswith("decoy_sandbox")
+
+
+def test_postgresql_observed_sources_aggregation_compilation():
+    """Verify that WAF observed sources aggregation query compiles to string_agg on PostgreSQL and avoids SQLite group_concat."""
+    from sqlalchemy import select
+    from backend.database.session import distinct_group_concat
+
+    pg_dialect = postgresql.dialect()
+
+    # Verify column expression compilation
+    col_expr = distinct_group_concat(AttackEvent.attack_type, is_postgres=True)
+    compiled_col = str(col_expr.compile(dialect=pg_dialect))
+    assert "string_agg" in compiled_col.lower()
+    assert "group_concat" not in compiled_col.lower()
+
+    # Verify full query compilation against PostgreSQL dialect
+    query = select(
+        AttackEvent.source_ip,
+        func.count(AttackEvent.id),
+        distinct_group_concat(AttackEvent.attack_type, is_postgres=True),
+        distinct_group_concat(AttackEvent.target_service, is_postgres=True),
+        distinct_group_concat(AttackEvent.severity, is_postgres=True)
+    ).group_by(AttackEvent.source_ip)
+
+    compiled_sql = str(query.compile(dialect=pg_dialect))
+    assert "string_agg" in compiled_sql.lower()
+    assert "group_concat" not in compiled_sql.lower()
+    assert "distinct" in compiled_sql.lower()
+
+
+def test_postgresql_attacker_profiling_aggregation_compilation():
+    """Verify that attacker profiling aggregation expressions compile cleanly to string_agg on PostgreSQL."""
+    from backend.database.session import distinct_group_concat
+
+    pg_dialect = postgresql.dialect()
+
+    profiling_cols = [
+        AttackEvent.attack_type,
+        AttackEvent.severity,
+        HoneypotActivityLog.action_type,
+        HoneypotActivityLog.severity,
+        WAFHit.action,
+        DecoySandboxFile.status
+    ]
+
+    for col in profiling_cols:
+        expr = distinct_group_concat(col, is_postgres=True)
+        compiled = str(expr.compile(dialect=pg_dialect))
+        assert "string_agg" in compiled.lower(), f"Expected string_agg for {col}"
+        assert "group_concat" not in compiled.lower(), f"Unexpected group_concat for {col}"
+        assert "distinct" in compiled.lower(), f"Expected distinct for {col}"
+
+
+def test_sqlite_aggregation_backward_compatibility(db):
+    """Verify that distinct_group_concat and attacker profiling execute cleanly on active SQLite test database."""
+    from backend.database.session import distinct_group_concat
+    from backend.services.attacker_profiling import AttackerProfilingService
+
+    # 1. Direct helper execution against SQLite session
+    res = db.query(distinct_group_concat(AttackEvent.attack_type, db)).scalar()
+
+    # 2. Attacker profiling service execution on SQLite session
+    service = AttackerProfilingService(db)
+    attackers = service.get_all_attackers()
+    assert isinstance(attackers, list)

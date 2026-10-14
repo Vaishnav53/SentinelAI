@@ -52,6 +52,26 @@ def get_db():
     finally:
         db.close()
 
+def is_postgres_session(db: Session) -> bool:
+    """Detect if the active session is bound to a PostgreSQL engine."""
+    bind = getattr(db, "bind", None) or (db.get_bind() if hasattr(db, "get_bind") else None)
+    return getattr(getattr(bind, "dialect", None), "name", "") == "postgresql"
+
+def distinct_group_concat(col, db_or_is_pg=False, is_postgres=None):
+    """Generate dialect-portable distinct concatenation.
+    Uses string_agg(DISTINCT col, ',') on PostgreSQL and group_concat(DISTINCT col) on SQLite.
+    """
+    from sqlalchemy import func
+    if is_postgres is not None:
+        is_pg = is_postgres
+    elif isinstance(db_or_is_pg, bool):
+        is_pg = db_or_is_pg
+    else:
+        is_pg = is_postgres_session(db_or_is_pg)
+    if is_pg:
+        return func.string_agg(func.distinct(col), ",")
+    return func.group_concat(func.distinct(col))
+
 def populate_demo_data(db: Session):
     """Seed initial application settings, sensors, and sample attack events if empty."""
     from backend.models.models import ApplicationSetting, HoneypotSensor, AttackEvent

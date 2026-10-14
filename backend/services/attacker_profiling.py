@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
+from backend.database.session import distinct_group_concat
 from backend.models.models import (
     AttackEvent,
     WAFHit,
@@ -96,8 +97,8 @@ class AttackerProfilingService:
             func.count(AttackEvent.id),
             func.min(AttackEvent.created_at),
             func.max(AttackEvent.created_at),
-            func.group_concat(func.distinct(AttackEvent.attack_type)),
-            func.group_concat(func.distinct(AttackEvent.severity))
+            distinct_group_concat(AttackEvent.attack_type, self.db),
+            distinct_group_concat(AttackEvent.severity, self.db)
         ).filter(AttackEvent.source_ip != None).group_by(AttackEvent.source_ip).all()
 
         # Geo lookup from AttackEvent (only for non-Unknown country)
@@ -118,8 +119,8 @@ class AttackerProfilingService:
             func.count(HoneypotActivityLog.id),
             func.min(HoneypotActivityLog.timestamp),
             func.max(HoneypotActivityLog.timestamp),
-            func.group_concat(func.distinct(HoneypotActivityLog.action_type)),
-            func.group_concat(func.distinct(HoneypotActivityLog.severity))
+            distinct_group_concat(HoneypotActivityLog.action_type, self.db),
+            distinct_group_concat(HoneypotActivityLog.severity, self.db)
         ).filter(HoneypotActivityLog.source_ip != None).group_by(HoneypotActivityLog.source_ip).all()
 
         # 4. WAFHit SQL aggregation
@@ -128,7 +129,7 @@ class AttackerProfilingService:
             func.count(WAFHit.id),
             func.min(WAFHit.created_at),
             func.max(WAFHit.created_at),
-            func.group_concat(func.distinct(WAFHit.action))
+            distinct_group_concat(WAFHit.action, self.db)
         ).filter(WAFHit.ip_address != None).group_by(WAFHit.ip_address).all()
 
         # 5. DecoySandboxFile SQL aggregation
@@ -137,7 +138,7 @@ class AttackerProfilingService:
             func.count(DecoySandboxFile.id),
             func.min(DecoySandboxFile.created_at),
             func.max(DecoySandboxFile.created_at),
-            func.group_concat(func.distinct(DecoySandboxFile.status))
+            distinct_group_concat(DecoySandboxFile.status, self.db)
         ).filter(DecoySandboxFile.ip_address != None).group_by(DecoySandboxFile.ip_address).all()
 
         # Consolidate per IP

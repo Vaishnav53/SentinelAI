@@ -6,7 +6,7 @@ from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
 
-from backend.database.session import get_db
+from backend.database.session import get_db, distinct_group_concat
 from backend.models.models import WAFRule, WAFHit, AuditLog, AttackEvent, HoneypotActivityLog
 from backend.api.dependencies import require_admin
 
@@ -233,9 +233,9 @@ def get_observed_sources(db: Session = Depends(get_db)):
         func.count(AttackEvent.id),
         func.min(AttackEvent.created_at),
         func.max(AttackEvent.created_at),
-        func.group_concat(func.distinct(AttackEvent.attack_type)),
-        func.group_concat(func.distinct(AttackEvent.target_service)),
-        func.group_concat(func.distinct(AttackEvent.severity))
+        distinct_group_concat(AttackEvent.attack_type, db),
+        distinct_group_concat(AttackEvent.target_service, db),
+        distinct_group_concat(AttackEvent.severity, db)
     ).filter(AttackEvent.source_ip != None).group_by(AttackEvent.source_ip).all()
 
     # 2. HoneypotActivityLog SQL aggregation
@@ -244,8 +244,8 @@ def get_observed_sources(db: Session = Depends(get_db)):
         func.count(HoneypotActivityLog.id),
         func.min(HoneypotActivityLog.timestamp),
         func.max(HoneypotActivityLog.timestamp),
-        func.group_concat(func.distinct(HoneypotActivityLog.action_type)),
-        func.group_concat(func.distinct(HoneypotActivityLog.severity))
+        distinct_group_concat(HoneypotActivityLog.action_type, db),
+        distinct_group_concat(HoneypotActivityLog.severity, db)
     ).filter(HoneypotActivityLog.source_ip != None).group_by(HoneypotActivityLog.source_ip).all()
 
     # 3. Active WAF block rules lookup

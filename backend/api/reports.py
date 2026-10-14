@@ -8,6 +8,7 @@ import logging
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import FileResponse, Response
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
@@ -40,7 +41,7 @@ class GenerateReportPayload(BaseModel):
     target_id: str
 
 class AIExecutiveSummaryPayload(BaseModel):
-    time_range: str = "7d"
+    time_range: str = "all"
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     custom_context: Optional[Dict[str, Any]] = None
@@ -120,7 +121,12 @@ def get_report_options(type: str, db: Session = Depends(get_db)):
                 options.append({"value": ip[0], "label": f"Attacker IP: {ip[0]}"})
     return options
 
-def _resolve_time_bounds(time_range: str, start_date: Optional[str] = None, end_date: Optional[str] = None):
+def _resolve_time_bounds(
+    time_range: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Optional[Session] = None
+):
     now = datetime.utcnow()
     if time_range == "24h":
         cur_start = now - timedelta(hours=24)
@@ -129,6 +135,7 @@ def _resolve_time_bounds(time_range: str, start_date: Optional[str] = None, end_
         prev_end = cur_start
         interval = "hourly"
         bucket_count = 24
+        range_label = "Last 24 Hours"
     elif time_range == "30d":
         cur_start = now - timedelta(days=30)
         cur_end = now
@@ -136,7 +143,29 @@ def _resolve_time_bounds(time_range: str, start_date: Optional[str] = None, end_
         prev_end = cur_start
         interval = "daily"
         bucket_count = 30
+        range_label = "Last 30 Days"
+    elif time_range == "all":
+        range_label = "All Available Data"
+        earliest = None
+        latest = None
+        if db is not None:
+            earliest = db.query(func.min(AttackEvent.created_at)).scalar()
+            latest = db.query(func.max(AttackEvent.created_at)).scalar()
+        if not earliest:
+            cur_start = now - timedelta(days=30)
+        else:
+            cur_start = earliest
+        cur_end = max(latest, now) if latest else now
+        duration = cur_end - cur_start
+        if duration.total_seconds() < 86400:
+            duration = timedelta(days=1)
+        prev_start = cur_start - duration
+        prev_end = cur_start
+        interval = "daily"
+        days_span = max(1, int(duration.total_seconds() / 86400))
+        bucket_count = min(30, max(7, days_span))
     elif time_range == "custom" and start_date and end_date:
+        range_label = "Custom Period"
         try:
             cur_start = datetime.fromisoformat(start_date.replace("Z", "+00:00")).replace(tzinfo=None)
             cur_end = datetime.fromisoformat(end_date.replace("Z", "+00:00")).replace(tzinfo=None)
@@ -158,8 +187,9 @@ def _resolve_time_bounds(time_range: str, start_date: Optional[str] = None, end_
         prev_end = cur_start
         interval = "daily"
         bucket_count = 7
+        range_label = "Last 7 Days"
 
-    return cur_start, cur_end, prev_start, prev_end, interval, bucket_count
+    return cur_start, cur_end, prev_start, prev_end, interval, bucket_count, range_label
 
 def _build_deterministic_executive_summary(summary_data: Dict[str, Any]) -> str:
     total = summary_data.get("total_events", 0)
@@ -172,10 +202,31 @@ def _build_deterministic_executive_summary(summary_data: Dict[str, Any]) -> str:
     top_types = summary_data.get("top_attack_types", [])
     top_sources = summary_data.get("top_attack_sources", [])
 
-    primary_attack = top_types[0]["name"] if top_types else "Suspicious Reconnaissance"
-    primary_source = top_sources[0]["source_ip"] if top_sources else "Distributed Sources"
+    if total == 0:
+        return (
+            f"### Executive Threat Briefing ({range_label})\n\n"
+            f"During the **{range_label}** monitoring window, SentinelAI recorded **0 security events** "
+            f"and **0 active threat sources**. The overall attack velocity is classified as **{trend_level.upper()}** "
+            f"({trend_desc}).\n\n"
+            f"#### Threat Posture & Critical Indicators\n"
+            f"* **Observed Vectors**: No attack events or malicious ingress vectors observed during this specific time window.\n"
+            f"* **Active Defense**: Defensive sensors and edge filters operated nominally with no active intrusions or anomalies registered.\n"
+            f"* **Telemetry Status**: All event listener channels remain online and monitoring for anomalous traffic signatures.\n\n"
+            f"#### Tactical Recommendations\n"
+            f"1. **Continuous Telemetry**: Ensure sensor listeners (WAF, HTTP decoy on port 8088, network collectors) remain active.\n"
+            f"2. **Expanded Time Window**: If auditing historical events, select 'All Available Data' or specify the relevant custom date window.\n"
+            f"3. **Health Validation**: Verify periodic heartbeat pings from upstream edge reverse proxies."
+        )
 
-    crit_pct = round((crit_high / max(total, 1)) * 100, 1) if total > 0 else 0
+    primary_attack = top_types[0]["name"] if top_types else "Unspecified Vector"
+    primary_source = top_sources[0]["source_ip"] if top_sources else "Unspecified Source"
+    crit_pct = round((crit_high / total) * 100, 1)
+
+    interception_clause = (
+        f"Active WAF filtering, honeypot decoys, and automated containment neutralized/intercepted **{blocked:,} malicious probes**."
+        if blocked > 0
+        else "No automated containment or block actions were triggered during this window."
+    )
 
     return (
         f"### Executive Threat Briefing ({range_label})\n\n"
@@ -186,7 +237,7 @@ def _build_deterministic_executive_summary(summary_data: Dict[str, Any]) -> str:
         f"* **High-Impact Vectors**: **{crit_high:,} events ({crit_pct}%)** met Critical or High severity thresholds, "
         f"with **{primary_attack}** emerging as the dominant vector.\n"
         f"* **Top Threat Actor**: Host **`{primary_source}`** generated the highest attack concentration, targeting exposed network services.\n"
-        f"* **Defensive Interceptions**: Active WAF filtering and HTTP honeypot decoys successfully neutralized/intercepted **{blocked:,} malicious probes**.\n\n"
+        f"* **Defensive Interceptions**: {interception_clause}\n\n"
         f"#### Tactical Recommendations\n"
         f"1. **Enforce WAF Rules**: Quarantine repeat offender IP addresses exhibiting persistent SQLi or path traversal signatures.\n"
         f"2. **Honeypot Decoy Telemetry**: Maintain active port 8088 decoy listeners to capture zero-day payloads before lateral network traversal.\n"
@@ -195,13 +246,13 @@ def _build_deterministic_executive_summary(summary_data: Dict[str, Any]) -> str:
 
 @router.get("/analytics")
 def get_reports_analytics(
-    time_range: str = Query("7d", alias="range", description="Time range (24h, 7d, 30d, custom)"),
+    time_range: str = Query("all", alias="range", description="Time range (all, 24h, 7d, 30d, custom)"),
     start_date: Optional[str] = Query(None, description="Custom range start ISO date"),
     end_date: Optional[str] = Query(None, description="Custom range end ISO date"),
     db: Session = Depends(get_db)
 ):
     """Retrieve consolidated, server-side aggregated security analytics for reporting."""
-    cur_start, cur_end, prev_start, prev_end, interval, bucket_count = _resolve_time_bounds(time_range, start_date, end_date)
+    cur_start, cur_end, prev_start, prev_end, interval, bucket_count, range_label = _resolve_time_bounds(time_range, start_date, end_date, db)
 
     # 1. Fetch current and previous events
     cur_attacks = db.query(AttackEvent).filter(
@@ -495,7 +546,7 @@ async def generate_ai_executive_summary(
     settings_service = Depends(get_settings_service)
 ):
     """Generate on-demand AI executive summary using Groq GPT-OSS 120B model."""
-    cur_start, cur_end, _, _, _, _ = _resolve_time_bounds(payload.time_range, payload.start_date, payload.end_date)
+    cur_start, cur_end, _, _, _, _, _ = _resolve_time_bounds(payload.time_range, payload.start_date, payload.end_date, db)
 
     # Extract live analytics context
     attacks = db.query(AttackEvent).filter(AttackEvent.created_at >= cur_start, AttackEvent.created_at <= cur_end).all()
@@ -582,7 +633,7 @@ def export_period_csv(
     db: Session = Depends(get_db)
 ):
     """Export all events matching the selected reporting period to CSV."""
-    cur_start, cur_end, _, _, _, _ = _resolve_time_bounds(time_range, start_date, end_date)
+    cur_start, cur_end, _, _, _, _, _ = _resolve_time_bounds(time_range, start_date, end_date, db)
     attacks = db.query(AttackEvent).filter(
         AttackEvent.created_at >= cur_start,
         AttackEvent.created_at <= cur_end
