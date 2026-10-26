@@ -6,7 +6,9 @@ import asyncio
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
+import time
+import uuid
 from typing import List, Optional, Dict, Any
 from backend.core.config import settings
 from backend.database.session import get_db
@@ -144,7 +146,7 @@ async def post_chat_stream(
     linked_attacker_ip = payload.context.attacker_ip if payload.context else None
     
     if not conv_key:
-        conv_key = f"conv_{int(datetime.utcnow().timestamp())}"
+        conv_key = f"conv_{int(time.time())}_{uuid.uuid4().hex[:8]}"
         
     conv = db.query(AIConversation).filter(AIConversation.conversation_key == conv_key).first()
     if not conv:
@@ -302,7 +304,7 @@ async def post_chat_stream(
     is_groq_online = bool(settings.GROQ_API_KEY)
 
     async def generate_response():
-        start_time = datetime.utcnow()
+        start_time = time.perf_counter()
         response_text = ""
         source = "groq"
 
@@ -467,13 +469,13 @@ async def post_chat_stream(
                         yield f"data: {json.dumps({'text': text_chunk, 'done': False, 'conversation_id': conv_key, 'model': model_name})}\n\n"
                         await asyncio.sleep(0.01)
                     
-                    latency = (datetime.utcnow() - start_time).total_seconds()
+                    latency = time.perf_counter() - start_time
                     yield f"data: {json.dumps({'text': '', 'done': True, 'conversation_id': conv_key, 'model': model_name, 'latency': latency, 'source': 'fallback'})}\n\n"
                 else:
                     yield f"data: {json.dumps({'text': f'\\n[Stream Interrupted: {error_name}]', 'done': True, 'error': True, 'conversation_id': conv_key, 'model': model_name, 'latency': 0.0, 'source': 'groq'})}\n\n"
                 return
         
-        latency = (datetime.utcnow() - start_time).total_seconds()
+        latency = time.perf_counter() - start_time
         
         # Save finished response in DB
         ai_msg = AIMessage(
@@ -505,7 +507,7 @@ async def post_chat(
     settings_service = Depends(get_settings_service)
 ):
     """Submit prompt to Copilot, persisting conversations in SQLite db."""
-    start_time = datetime.utcnow()
+    start_time = time.perf_counter()
     raw_model = payload.model or settings_service.get_setting(db, "default_groq_model", settings.DEFAULT_GROQ_MODEL)
     model_name = map_model_to_groq(raw_model)
     
@@ -517,7 +519,7 @@ async def post_chat(
     linked_attacker_ip = payload.context.attacker_ip if payload.context else None
     
     if not conv_key:
-        conv_key = f"conv_{int(datetime.utcnow().timestamp())}"
+        conv_key = f"conv_{int(time.time())}_{uuid.uuid4().hex[:8]}"
         
     conv = db.query(AIConversation).filter(AIConversation.conversation_key == conv_key).first()
     if not conv:
@@ -807,7 +809,7 @@ async def post_chat(
 
 
     # 6. Save AI Response in DB
-    latency = (datetime.utcnow() - start_time).total_seconds()
+    latency = time.perf_counter() - start_time
     ai_msg = AIMessage(
         conversation_id=conv.id,
         role="assistant",
@@ -822,7 +824,7 @@ async def post_chat(
         message=response_text,
         conversation_id=conv.conversation_key,
         model=model_name,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
         latency=latency,
         source=source
     )
@@ -834,7 +836,7 @@ async def analyze_attack(
     settings_service = Depends(get_settings_service)
 ):
     """Retrieve threat parameters, build dynamic prompt, and analyze log context."""
-    start_time = datetime.utcnow()
+    start_time = time.perf_counter()
     attack = db.query(AttackEvent).filter(AttackEvent.id == attack_id).first()
     if not attack:
         raise HTTPException(status_code=404, detail="Attack event not found")
@@ -1015,7 +1017,7 @@ Begin the analysis now:"""
 {parsed_json['references']}"""
 
     # 6. Save Assistant Response Message
-    latency = (datetime.utcnow() - start_time).total_seconds()
+    latency = time.perf_counter() - start_time
     ai_msg = AIMessage(
         conversation_id=conv_id,
         role="assistant",

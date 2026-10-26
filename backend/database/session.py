@@ -75,7 +75,7 @@ def distinct_group_concat(col, db_or_is_pg=False, is_postgres=None):
 def populate_demo_data(db: Session):
     """Seed initial application settings, sensors, and sample attack events if empty."""
     from backend.models.models import ApplicationSetting, HoneypotSensor, AttackEvent
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
 
     # 1. Seed Settings
     if db.query(ApplicationSetting).count() == 0:
@@ -96,10 +96,11 @@ def populate_demo_data(db: Session):
 
     # 2. Seed Honeypot Sensors
     if db.query(HoneypotSensor).count() == 0:
+        now_seed = datetime.now(timezone.utc).replace(tzinfo=None)
         default_sensors = [
-            HoneypotSensor(name="HTTP Honeypot", type="HTTP", host="127.0.0.1", port=8080, state="ONLINE", last_heartbeat=datetime.utcnow()),
-            HoneypotSensor(name="SSH Listener", type="SSH", host="127.0.0.1", port=2222, state="ONLINE", last_heartbeat=datetime.utcnow()),
-            HoneypotSensor(name="FTP Decoy", type="FTP", host="127.0.0.1", port=2121, state="IDLE", last_heartbeat=datetime.utcnow() - timedelta(minutes=10)),
+            HoneypotSensor(name="HTTP Honeypot", type="HTTP", host="127.0.0.1", port=8080, state="ONLINE", last_heartbeat=now_seed),
+            HoneypotSensor(name="SSH Listener", type="SSH", host="127.0.0.1", port=2222, state="ONLINE", last_heartbeat=now_seed),
+            HoneypotSensor(name="FTP Decoy", type="FTP", host="127.0.0.1", port=2121, state="IDLE", last_heartbeat=now_seed - timedelta(minutes=10)),
             HoneypotSensor(name="Telnet Port", type="TELNET", host="127.0.0.1", port=2323, state="OFFLINE", last_heartbeat=None),
         ]
         db.add_all(default_sensors)
@@ -129,9 +130,9 @@ def populate_demo_data(db: Session):
         db.add_all(default_feedback)
         db.commit()
 
-    # 3. Seed Sample Attack Events
-    if db.query(AttackEvent).count() == 0:
-        now = datetime.utcnow()
+    # 3. Seed Sample Attack Events (Strict development/test allowlist only)
+    if settings.APP_ENV in ("development", "test") and db.query(AttackEvent).count() == 0:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         sample_attacks = [
             AttackEvent(
                 external_id="ATT-001",

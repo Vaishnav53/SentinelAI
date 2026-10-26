@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional
 
@@ -10,11 +10,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/attacker", tags=["Attacker Profiling"])
 
 @router.get("/profiles")
-def get_attacker_profiles(db: Session = Depends(get_db)):
-    """Retrieve all unique attacking IPs with telemetry metrics aggregates."""
+def get_attacker_profiles(
+    limit: Optional[int] = Query(None, ge=1, le=10000, description="Optional maximum number of attacker profiles to return"),
+    db: Session = Depends(get_db)
+):
+    """Retrieve unique attacking IPs with telemetry metrics aggregates."""
     try:
         service = AttackerProfilingService(db)
-        return service.get_all_attackers()
+        return service.get_all_attackers(limit=limit)
     except Exception as e:
         logger.error(f"Failed to fetch attacker profiles: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from backend.database.session import get_db
 from backend.models.models import ThreatPlaybook, PlaybookExecution, AuditLog
@@ -30,8 +30,7 @@ class ThreatPlaybookRead(BaseModel):
     actions_data: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PlaybookExecutionRead(BaseModel):
     id: int
@@ -41,8 +40,7 @@ class PlaybookExecutionRead(BaseModel):
     logs_data: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PlaybookRunPayload(BaseModel):
     target_ip: str

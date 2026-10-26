@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 from sqlalchemy.orm import Session
@@ -84,14 +85,24 @@ class AuthService:
         ).first()
 
         if existing_user:
-            # Ensure existing account maintains administrator role and matching password hash
+            # Ensure existing account maintains administrator role and active status
             updated = False
             if existing_user.role != "admin":
                 existing_user.role = "admin"
                 updated = True
-            if not verify_password(admin_password, existing_user.password_hash):
+            if not existing_user.is_active:
+                existing_user.is_active = 1
+                updated = True
+
+            # Prevent unexpected credential replacement on ordinary container restarts.
+            # Only reset password if explicitly requested via SENTINEL_ADMIN_FORCE_RESET_PASSWORD=true.
+            force_reset = os.getenv("SENTINEL_ADMIN_FORCE_RESET_PASSWORD", "false").lower() in ("true", "1", "yes")
+            if force_reset and not verify_password(admin_password, existing_user.password_hash):
                 existing_user.password_hash = hash_password(admin_password)
                 updated = True
+                import logging
+                logging.info(f"Administrator password for '{admin_username}' reset via SENTINEL_ADMIN_FORCE_RESET_PASSWORD.")
+
             if updated:
                 db.commit()
                 db.refresh(existing_user)

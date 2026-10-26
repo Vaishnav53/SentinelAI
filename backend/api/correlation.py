@@ -3,8 +3,8 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
-from datetime import datetime
-from pydantic import BaseModel
+from datetime import datetime, timezone
+from pydantic import BaseModel, ConfigDict
 
 from backend.database.session import get_db
 from backend.models.models import CorrelatedIncident, NormalizedLog, AuditLog
@@ -25,8 +25,7 @@ class CorrelatedIncidentRead(BaseModel):
     timeline_data: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class IncidentActionPayload(BaseModel):
     action: str  # e.g., 'update_status', 'assign_analyst', 'add_comment'
@@ -47,8 +46,7 @@ class NormalizedLogRead(BaseModel):
     technique_id: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 @router.get("/incidents", response_model=List[CorrelatedIncidentRead])
 async def get_correlated_incidents(
@@ -87,7 +85,7 @@ async def perform_incident_action(
         raise HTTPException(status_code=404, detail="Correlated incident not found")
 
     action_type = payload.action.lower()
-    now_str = datetime.utcnow().isoformat()
+    now_str = datetime.now(timezone.utc).isoformat()
     
     # Load timeline data
     timeline = json.loads(incident.timeline_data or "[]")
@@ -164,6 +162,13 @@ async def get_normalized_logs(
 @router.post("/seed-demo", response_model=Dict[str, Any])
 async def seed_demo_incidents(db: Session = Depends(get_db)):
     """Seed sample failed and successful logon event logs, then execute correlation to spawn a demo incident graph."""
+    from backend.core.config import settings
+    if settings.APP_ENV in ("production", "prod"):
+        raise HTTPException(
+            status_code=403,
+            detail="Demo incident seeding is disabled in production environments."
+        )
+
     from backend.services.correlation_engine import CorrelationEngine
     
     # Clean old demo entries to prevent duplicate clutter
@@ -180,7 +185,7 @@ async def seed_demo_incidents(db: Session = Depends(get_db)):
         hostname="DEC-SERVER-01",
         message="An account failed to log on. Source Address: 10.99.99.99. User Name: admin",
         severity="MEDIUM",
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None)
     )
     db.add(failure1)
     
@@ -192,7 +197,7 @@ async def seed_demo_incidents(db: Session = Depends(get_db)):
         hostname="DEC-SERVER-01",
         message="An account failed to log on. Source Address: 10.99.99.99. User Name: admin",
         severity="MEDIUM",
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None)
     )
     db.add(failure2)
     db.commit()
@@ -206,7 +211,7 @@ async def seed_demo_incidents(db: Session = Depends(get_db)):
         hostname="DEC-SERVER-01",
         message="An account was successfully logged on. Source Address: 10.99.99.99. User Name: admin",
         severity="HIGH",
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None)
     )
     db.add(success)
     db.commit()

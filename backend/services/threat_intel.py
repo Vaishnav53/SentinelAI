@@ -1,4 +1,4 @@
-import hashlib
+import ipaddress
 import logging
 import urllib.request
 import urllib.parse
@@ -6,6 +6,9 @@ import json
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
+
+# RFC 6598 Carrier-Grade NAT (Shared Address Space)
+RFC6598_CGNAT_NET = ipaddress.ip_network("100.64.0.0/10")
 
 class ThreatIntelService:
     def __init__(self, db_session=None, settings_service=None):
@@ -75,35 +78,123 @@ class ThreatIntelService:
             except Exception as e:
                 logger.warning(f"Failed to fetch setting keys: {e}")
 
-        # Local network lookup exclusion
-        import ipaddress
+        # Comprehensive classification of non-globally-routable & special-purpose addresses
+        # Prevents sending internal/special IP traffic to external GeoIP lookups and avoids fabricated locations
         try:
             ip_obj = ipaddress.ip_address(ip)
-            if ip_obj.is_private or ip_obj.is_loopback:
-                return {
-                    "ip": ip,
-                    "country": "Loopback / Private Network",
-                    "country_code": "LAN",
-                    "city": "Loopback / Private Network",
-                    "asn": "Loopback / Private Network",
-                    "isp": "Loopback / Private Network",
-                    "threat_score": 0,
-                    "risk_level": "LOW",
-                    "confidence": 1.0,
-                    "reputation_summary": "This IP address belongs to the local loopback interface or a private network address space (RFC 1918). It is restricted to internal communications and contains no external public routing footprint.",
-                    "provider_statuses": {
-                        "AbuseIPDB": "N/A",
-                        "VirusTotal": "N/A",
-                        "Shodan": "N/A",
-                        "AlienVault_OTX": "N/A"
-                    },
-                    "latitude": 0.0,
-                    "longitude": 0.0
-                }
-        except ValueError:
-            pass
+        except (ValueError, TypeError):
+            return {
+                "ip": ip,
+                "country": "Unknown",
+                "country_code": "UN",
+                "city": "Unknown",
+                "asn": "Unknown",
+                "isp": "Unknown",
+                "threat_score": 0,
+                "risk_level": "LOW",
+                "confidence": 0.0,
+                "reputation_summary": "Invalid or unparseable IP address format.",
+                "provider_statuses": {
+                    "AbuseIPDB": "N/A",
+                    "VirusTotal": "N/A",
+                    "Shodan": "N/A",
+                    "AlienVault_OTX": "N/A"
+                },
+                "latitude": 0.0,
+                "longitude": 0.0
+            }
 
-        # Try to resolve live GeoIP coordinates & provider statuses
+        if ip_obj.is_loopback:
+            return {
+                "ip": ip,
+                "country": "Loopback / Private Network",
+                "country_code": "LAN",
+                "city": "Loopback / Private Network",
+                "asn": "Loopback / Private Network",
+                "isp": "Loopback / Private Network",
+                "threat_score": 0,
+                "risk_level": "LOW",
+                "confidence": 1.0,
+                "reputation_summary": "This IP address belongs to the local loopback interface. It is restricted to internal host communications and contains no external public routing footprint.",
+                "provider_statuses": {
+                    "AbuseIPDB": "N/A",
+                    "VirusTotal": "N/A",
+                    "Shodan": "N/A",
+                    "AlienVault_OTX": "N/A"
+                },
+                "latitude": 0.0,
+                "longitude": 0.0
+            }
+
+        if ip_obj.is_private:
+            return {
+                "ip": ip,
+                "country": "Loopback / Private Network",
+                "country_code": "LAN",
+                "city": "Loopback / Private Network",
+                "asn": "Loopback / Private Network",
+                "isp": "Loopback / Private Network",
+                "threat_score": 0,
+                "risk_level": "LOW",
+                "confidence": 1.0,
+                "reputation_summary": "This IP address belongs to a private network address space (RFC 1918). It is restricted to internal communications and contains no external public routing footprint.",
+                "provider_statuses": {
+                    "AbuseIPDB": "N/A",
+                    "VirusTotal": "N/A",
+                    "Shodan": "N/A",
+                    "AlienVault_OTX": "N/A"
+                },
+                "latitude": 0.0,
+                "longitude": 0.0
+            }
+
+        # RFC 6598 Shared Address Space (Carrier-Grade NAT / CGNAT, 100.64.0.0/10)
+        if ip_obj in RFC6598_CGNAT_NET:
+            return {
+                "ip": ip,
+                "country": "Unknown",
+                "country_code": "UN",
+                "city": "Unknown",
+                "asn": "RFC 6598",
+                "isp": "Shared Address Space (CGNAT)",
+                "threat_score": 0,
+                "risk_level": "LOW",
+                "confidence": 1.0,
+                "reputation_summary": "This IP address belongs to RFC 6598 Shared Address Space (Carrier-Grade NAT, 100.64.0.0/10). It is non-globally-routable and carries no public geolocation footprint.",
+                "provider_statuses": {
+                    "AbuseIPDB": "N/A",
+                    "VirusTotal": "N/A",
+                    "Shodan": "N/A",
+                    "AlienVault_OTX": "N/A"
+                },
+                "latitude": 0.0,
+                "longitude": 0.0
+            }
+
+        # Link-local, multicast, reserved, unspecified, or non-global addresses
+        if not ip_obj.is_global or ip_obj.is_link_local or ip_obj.is_multicast or ip_obj.is_reserved or ip_obj.is_unspecified:
+            return {
+                "ip": ip,
+                "country": "Unknown",
+                "country_code": "UN",
+                "city": "Unknown",
+                "asn": "Special-Purpose",
+                "isp": "Special-Purpose Address",
+                "threat_score": 0,
+                "risk_level": "LOW",
+                "confidence": 1.0,
+                "reputation_summary": "This IP address belongs to a special-purpose or reserved address block. It is non-globally-routable and carries no public geolocation footprint.",
+                "provider_statuses": {
+                    "AbuseIPDB": "N/A",
+                    "VirusTotal": "N/A",
+                    "Shodan": "N/A",
+                    "AlienVault_OTX": "N/A"
+                },
+                "latitude": 0.0,
+                "longitude": 0.0
+            }
+
+        # Resolve live GeoIP coordinates & provider statuses for public routable addresses
         geoip = self._query_free_geoip(ip)
         abuse_data = None
         if abuse_key:
@@ -116,42 +207,23 @@ class ThreatIntelService:
             "AlienVault_OTX": "MOCKED"
         }
 
-        # Resolve location details dynamically with mock fallbacks
-        hasher = hashlib.md5(ip.encode("utf-8"))
-        digest = hasher.hexdigest()
-        val = int(digest[:4], 16)
-
-        if geoip:
-            country = geoip.get("country", "Unknown")
-            country_code = geoip.get("countryCode", "UN")
-            city = geoip.get("city", "Unknown")
-            asn = geoip.get("as", "AS00000").split(" ")[0]
-            isp = geoip.get("isp", "Unknown ISP")
+        # Accurate GeoIP resolution with strict unknown fallbacks (never arbitrary hashing)
+        if geoip and geoip.get("status") == "success":
+            country = geoip.get("country") or "Unknown"
+            country_code = geoip.get("countryCode") or "UN"
+            city = geoip.get("city") or "Unknown"
+            asn = geoip.get("as", "AS00000").split(" ")[0] if geoip.get("as") else "Unknown"
+            isp = geoip.get("isp") or "Unknown ISP"
             latitude = float(geoip.get("lat", 0.0))
             longitude = float(geoip.get("lon", 0.0))
         else:
-            # Deterministic GeoIP selection fallback
-            countries = [
-                ("United States", "US", "San Francisco", "AS15169", "Google LLC"),
-                ("Germany", "DE", "Frankfurt", "AS13335", "Cloudflare, Inc."),
-                ("China", "CN", "Beijing", "AS4134", "Chinanet"),
-                ("India", "IN", "Mumbai", "AS55836", "Reliance Jio Infocomm"),
-                ("Russia", "RU", "Moscow", "AS12389", "Rostelecom"),
-                ("Netherlands", "NL", "Amsterdam", "AS16509", "Amazon.com, Inc.")
-            ]
-            geo_idx = val % len(countries)
-            country, country_code, city, asn, isp = countries[geo_idx]
-            
-            # Approximate fallback coords based on registry
-            coords = {
-                "US": (37.0902, -95.7129),
-                "DE": (51.1657, 10.4515),
-                "CN": (35.8617, 104.1954),
-                "IN": (20.5937, 78.9629),
-                "RU": (61.5240, 105.3188),
-                "NL": (52.1326, 5.2913)
-            }
-            latitude, longitude = coords.get(country_code, (0.0, 0.0))
+            country = "Unknown"
+            country_code = "UN"
+            city = "Unknown"
+            asn = "Unknown"
+            isp = "Unknown"
+            latitude = 0.0
+            longitude = 0.0
 
         # Resolve threat scores and risk classifications
         if abuse_data:
@@ -162,17 +234,9 @@ class ThreatIntelService:
                 f"Abuse score is {threat_score}%. Domain: {abuse_data.get('domain', 'Unknown')}."
             )
         else:
-            # Threat Score fallback (0 to 100)
-            threat_score = (val % 91) + 8  # 8 to 98
-            confidence = round(0.75 + (val % 25) * 0.01, 2)
-            summaries = [
-                f"IP address shows multiple malicious port scans targeting port 8088 and admin paths. Associated with recent dynamic command shell activities.",
-                f"Reputable public network node. Minimal suspicious indicators; likely general operator or routing infrastructure.",
-                f"Identified as a source of distributed denial-of-service (DDoS) probes and brute force credentials testing.",
-                f"Known hosting server node frequently executing anonymous proxies and web scraper configurations.",
-                f"Monitored by local honeypots. Exposing malicious HTTP injection patterns with known threat-actor signatures."
-            ]
-            reputation_summary = summaries[val % len(summaries)]
+            threat_score = 0
+            confidence = 0.5
+            reputation_summary = "Public IP address evaluated without external reputation provider enrichment."
 
         if threat_score < 25:
             risk_level = "LOW"

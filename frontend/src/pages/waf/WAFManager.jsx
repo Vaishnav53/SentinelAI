@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useDeferredValue } from 'react';
 import {
   Shield,
   ShieldAlert,
+  ShieldCheck,
   Plus,
   ToggleLeft,
   ToggleRight,
@@ -15,222 +16,35 @@ import {
   AlertTriangle,
   Lock,
   Unlock,
-  Clock,
   Activity,
   Radio,
   Layers,
-  Terminal,
-  FileText
+  ChevronRight,
+  ChevronLeft,
+  ExternalLink,
+  Sparkles,
+  Eye
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { formatLocalTime } from '../../utils/dateUtils';
 import './WAFManager.css';
 
-const ATTACKER_ITEM_HEIGHT = 88; // 80px card + 8px gap
-const OVERSCAN = 5;
-
-// Memoized Honeypot Attacker Row
-const HoneypotAttackerRow = React.memo(function HoneypotAttackerRow({
-  source,
-  isAdmin,
-  actionLoadingIp,
-  onBlock,
-  onUnblock,
-  onCopyIp,
-  copiedIp,
-  top
-}) {
-  const isActionLoading = actionLoadingIp === source.ip_address;
-  const sev = (source.severity || 'LOW').toUpperCase();
-
-  return (
-    <div
-      className="waf-attacker-card"
-      style={{
-        position: 'absolute',
-        top: `${top}px`,
-        left: 0,
-        right: 0,
-        height: '80px',
-        boxSizing: 'border-box'
-      }}
-    >
-      <div className="attacker-card-top">
-        <div className="attacker-ip-group">
-          <span className="attacker-ip font-mono">{source.ip_address}</span>
-          <button
-            className="btn-mini-copy"
-            onClick={() => onCopyIp(source.ip_address)}
-            title="Copy IP Address"
-          >
-            {copiedIp === source.ip_address ? <Check size={11} className="text-green" /> : <Copy size={11} />}
-          </button>
-          {source.is_local && <span className="badge-lan font-mono">LAN</span>}
-        </div>
-
-        <div className="attacker-badges-group font-mono">
-          <span className={`badge-sev sev-${sev.toLowerCase()}`}>
-            {sev}
-          </span>
-          <span className={`badge-contain ${source.is_blocked ? 'contain-blocked' : 'contain-monitored'}`}>
-            {source.is_blocked ? 'BLOCKED' : 'MONITORED'}
-          </span>
-        </div>
-      </div>
-
-      <div className="attacker-card-meta font-mono">
-        <div className="meta-left">
-          <div className="services-chips">
-            {(source.services && source.services.length > 0) ? (
-              source.services.slice(0, 2).map((svc, idx) => (
-                <span key={idx} className="chip-service font-mono">{svc}</span>
-              ))
-            ) : (source.threat_types && source.threat_types.length > 0) ? (
-              source.threat_types.slice(0, 2).map((t, idx) => (
-                <span key={idx} className="chip-service font-mono">{t}</span>
-              ))
-            ) : (
-              <span className="text-muted text-xxs">Honeypot Decoy</span>
-            )}
-          </div>
-          <span className="events-count">
-            <strong className="text-cyan">{source.event_count}</strong> events
-          </span>
-        </div>
-
-        <div className="meta-right">
-          <span className="last-seen-text text-muted" title={source.last_seen}>
-            <Clock size={10} className="inline mr-1" />
-            {source.last_seen ? source.last_seen.split(' ')[1] || source.last_seen : 'Recent'}
-          </span>
-
-          {source.is_blocked ? (
-            <button
-              className={`btn-waf-action btn-waf-unblock ${!isAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
-              onClick={() => onUnblock(source.rule_id, source.ip_address)}
-              disabled={!isAdmin || isActionLoading}
-              title={isAdmin ? "Remove WAF block rule" : "Administrator privileges required"}
-            >
-              {isActionLoading ? <RefreshCw size={11} className="animate-spin" /> : <Unlock size={11} />}
-              <span>{isActionLoading ? '...' : 'UNBLOCK'}</span>
-            </button>
-          ) : (
-            <button
-              className={`btn-waf-action btn-waf-block ${(!isAdmin || source.is_local) ? 'opacity-50 cursor-not-allowed' : ''}`}
-              onClick={() => onBlock(source.ip_address)}
-              disabled={!isAdmin || source.is_local || isActionLoading}
-              title={
-                source.is_local
-                  ? "Local RFC 1918 addresses cannot be blocked via perimeter WAF"
-                  : (isAdmin ? "Deploy immediate WAF containment block" : "Administrator privileges required")
-              }
-            >
-              {isActionLoading ? <RefreshCw size={11} className="animate-spin" /> : <Lock size={11} />}
-              <span>{isActionLoading ? '...' : (source.is_local ? 'LAN IP' : 'BLOCK')}</span>
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-});
-
-// Virtualized Honeypot Attackers List
-function VirtualHoneypotAttackerList({
-  items,
-  isAdmin,
-  actionLoadingIp,
-  onBlock,
-  onUnblock,
-  onCopyIp,
-  copiedIp
-}) {
-  const containerRef = useRef(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [containerHeight, setContainerHeight] = useState(500);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const el = containerRef.current;
-    setContainerHeight(el.clientHeight || 500);
-
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.contentRect.height > 0) {
-          setContainerHeight(entry.contentRect.height);
-        }
-      }
-    });
-
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  const handleScroll = (e) => {
-    setScrollTop(e.currentTarget.scrollTop);
-  };
-
-  const totalCount = items.length;
-  const totalHeight = totalCount * ATTACKER_ITEM_HEIGHT;
-
-  const startIndex = Math.max(0, Math.floor(scrollTop / ATTACKER_ITEM_HEIGHT) - OVERSCAN);
-  const endIndex = Math.min(totalCount, Math.ceil((scrollTop + containerHeight) / ATTACKER_ITEM_HEIGHT) + OVERSCAN);
-
-  const visibleSlice = useMemo(() => {
-    return items.slice(startIndex, endIndex).map((source, idx) => ({
-      source,
-      top: (startIndex + idx) * ATTACKER_ITEM_HEIGHT
-    }));
-  }, [items, startIndex, endIndex]);
-
-  return (
-    <div
-      className="waf-attackers-scroll"
-      ref={containerRef}
-      onScroll={handleScroll}
-      style={{ position: 'relative', overflowY: 'auto', flex: 1 }}
-    >
-      {totalCount === 0 ? (
-        <div className="empty-waf-state font-mono">
-          <AlertTriangle size={24} className="text-muted mb-2" />
-          <span className="text-white text-xs font-semibold">No Honeypot Attackers Detected</span>
-          <p className="text-muted text-xxs mt-1">
-            No source IPs matching the current criteria were captured in honeypot telemetry.
-          </p>
-        </div>
-      ) : (
-        <div style={{ height: `${totalHeight}px`, position: 'relative', width: '100%' }}>
-          {visibleSlice.map(({ source, top }) => (
-            <HoneypotAttackerRow
-              key={source.ip_address}
-              source={source}
-              isAdmin={isAdmin}
-              actionLoadingIp={actionLoadingIp}
-              onBlock={onBlock}
-              onUnblock={onUnblock}
-              onCopyIp={onCopyIp}
-              copiedIp={copiedIp}
-              top={top}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+const ITEMS_PER_PAGE = 15;
 
 export default function WAFManager() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
-  // Loading and Syncing States
+  // Loading and Synchronization States
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [actionLoadingIp, setActionLoadingIp] = useState(null);
   const [feedbackMessage, setFeedbackMessage] = useState(null);
 
-  // Status Stats
+  // Status Stats from /waf/status
   const [stats, setStats] = useState({
     blocked_count: 0,
     quarantined_count: 0,
@@ -241,21 +55,27 @@ export default function WAFManager() {
     blocked_attackers_count: 0
   });
 
-  // Core Data Lists
+  // Core Telemetry Data
   const [rules, setRules] = useState([]);
   const [hits, setHits] = useState([]);
   const [observedSources, setObservedSources] = useState([]);
 
-  // Right Panel Tab State: 'rules' | 'hits'
-  const [activeRightTab, setActiveRightTab] = useState('rules');
+  // Active Main Navigation Tab: 'attackers' | 'rules' | 'hits'
+  const [activeTab, setActiveTab] = useState('attackers');
 
-  // Search & Filter
-  const [attackerSearch, setAttackerSearch] = useState('');
-  const deferredAttackerSearch = useDeferredValue(attackerSearch);
+  // Search & Filter States
+  const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearch = useDeferredValue(searchQuery);
   const [severityFilter, setSeverityFilter] = useState('ALL');
-  const [ruleActionFilter, setRuleActionFilter] = useState('');
+  const [ruleActionFilter, setRuleActionFilter] = useState('ALL');
+  const [hitActionFilter, setHitActionFilter] = useState('ALL');
 
-  // Modal & Form State for Rule Management
+  // Pagination States per Tab
+  const [attackersPage, setAttackersPage] = useState(1);
+  const [rulesPage, setRulesPage] = useState(1);
+  const [hitsPage, setHitsPage] = useState(1);
+
+  // Modal State for Add / Edit Rule
   const [showAddModal, setShowAddModal] = useState(false);
   const [formIp, setFormIp] = useState('');
   const [formAction, setFormAction] = useState('BLOCK');
@@ -264,10 +84,14 @@ export default function WAFManager() {
   const [formAnalyst, setFormAnalyst] = useState('SOC Lead');
   const [editingRule, setEditingRule] = useState(null);
 
-  // Clipboard Feedback
+  // Inspection Drawer State
+  const [inspectedItem, setInspectedItem] = useState(null);
+  const [inspectedType, setInspectedType] = useState(null); // 'attacker' | 'hit' | 'rule'
+
+  // Clipboard State
   const [copiedIp, setCopiedIp] = useState(null);
 
-  // Fetch core WAF telemetry data
+  // Fetch Core Telemetry Data
   const fetchData = useCallback(async (isSilent = false) => {
     try {
       if (!isSilent) setLoading(true);
@@ -292,25 +116,30 @@ export default function WAFManager() {
     }
   }, []);
 
-  // Initial load and controlled 8-second background polling
+  // Initial Load and Visibility-Aware 10s Background Polling
   useEffect(() => {
     fetchData();
 
-    let isPolling = false;
-    const interval = setInterval(async () => {
-      if (isPolling) return;
-      isPolling = true;
-      try {
-        await fetchData(true);
-      } finally {
-        isPolling = false;
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        fetchData(true);
       }
     }, 8000);
 
-    return () => clearInterval(interval);
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        fetchData(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [fetchData]);
 
-  // Copy IP Address
+  // Copy IP Address Helper
   const handleCopyIp = useCallback((ip) => {
     if (!ip) return;
     navigator.clipboard.writeText(ip);
@@ -318,7 +147,7 @@ export default function WAFManager() {
     setTimeout(() => setCopiedIp(null), 2000);
   }, []);
 
-  // Block a honeypot attacker IP via WAF Rule API
+  // Block Observed Honeypot Attacker
   const handleBlockObservedSource = useCallback(async (ip) => {
     if (!isAdmin) {
       setFeedbackMessage({ type: 'error', text: 'Administrator privileges required to create WAF block rules.' });
@@ -329,7 +158,7 @@ export default function WAFManager() {
       await apiClient.post('/waf/rules', {
         ip_address: ip,
         action: 'BLOCK',
-        reason: 'Containment block deployed from WAF Honeypot Attackers console',
+        reason: 'Perimeter containment block deployed from WAF console',
         is_enabled: 1,
         analyst_attribution: user?.username || 'SOC Lead'
       });
@@ -344,7 +173,7 @@ export default function WAFManager() {
     }
   }, [isAdmin, user, fetchData]);
 
-  // Unblock a honeypot attacker IP via WAF Rule API
+  // Unblock Observed Honeypot Attacker
   const handleUnblockObservedSource = useCallback(async (ruleId, ip) => {
     if (!isAdmin) {
       setFeedbackMessage({ type: 'error', text: 'Administrator privileges required to remove WAF block rules.' });
@@ -374,7 +203,7 @@ export default function WAFManager() {
     }
   }, [isAdmin, rules, fetchData]);
 
-  // Toggle enable/disable on a WAF rule policy
+  // Toggle Rule Policy Enabled/Disabled State
   const handleToggleRule = async (rule) => {
     if (!isAdmin) return;
     try {
@@ -389,16 +218,19 @@ export default function WAFManager() {
     }
   };
 
-  // Delete a WAF rule policy
+  // Delete a Rule Policy
   const handleDeleteRule = async (id) => {
     if (!isAdmin) return;
-    if (!window.confirm("Are you sure you want to permanently delete this defensive containment rule?")) return;
+    if (!window.confirm("Permanently delete this defensive containment rule?")) return;
     try {
       await apiClient.delete(`/waf/rules/${id}`);
       setRules(prev => prev.filter(r => r.id !== id));
       const updatedStats = await apiClient.get('/waf/status');
       if (updatedStats) setStats(updatedStats);
       await fetchData(true);
+      if (inspectedItem?.id === id && inspectedType === 'rule') {
+        setInspectedItem(null);
+      }
     } catch (err) {
       console.error("Failed to delete rule:", err);
     }
@@ -440,9 +272,16 @@ export default function WAFManager() {
       setFormReason('');
       setFormExpiry('24');
 
+      setFeedbackMessage({
+        type: 'success',
+        text: editingRule ? 'WAF Rule updated successfully.' : 'New WAF policy rule deployed.'
+      });
       await fetchData(true);
     } catch (err) {
       console.error("Failed to save WAF rule:", err);
+      setFeedbackMessage({ type: 'error', text: err.message || 'Failed to save WAF rule.' });
+    } finally {
+      setTimeout(() => setFeedbackMessage(null), 4000);
     }
   };
 
@@ -458,20 +297,24 @@ export default function WAFManager() {
     setShowAddModal(true);
   };
 
-  // Memoized Filtered Honeypot Attackers
+  // Reset tab page on search or filter change
+  useEffect(() => {
+    setAttackersPage(1);
+    setRulesPage(1);
+    setHitsPage(1);
+  }, [deferredSearch, severityFilter, ruleActionFilter, hitActionFilter]);
+
+  // Filtered Observed Honeypot Attackers
   const filteredAttackers = useMemo(() => {
-    const q = deferredAttackerSearch.toLowerCase().trim();
+    const q = deferredSearch.toLowerCase().trim();
     return observedSources.filter(source => {
-      // 1. Severity filter
       if (severityFilter !== 'ALL') {
         if (severityFilter === 'BLOCKED' && !source.is_blocked) return false;
-        if (severityFilter === 'UNBLOCKED' && source.is_blocked) return false;
+        if (severityFilter === 'MONITORED' && source.is_blocked) return false;
         if (['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].includes(severityFilter)) {
           if ((source.severity || 'LOW').toUpperCase() !== severityFilter) return false;
         }
       }
-
-      // 2. Search query match
       if (!q) return true;
       const ipMatch = (source.ip_address || '').toLowerCase().includes(q);
       const sevMatch = (source.severity || '').toLowerCase().includes(q);
@@ -479,329 +322,892 @@ export default function WAFManager() {
       const servicesMatch = (source.services || []).some(s => s.toLowerCase().includes(q));
       return ipMatch || sevMatch || typesMatch || servicesMatch;
     });
-  }, [observedSources, deferredAttackerSearch, severityFilter]);
+  }, [observedSources, deferredSearch, severityFilter]);
 
-  // Memoized Filtered WAF Rules
+  // Paginated Attackers Slice
+  const totalAttackerPages = Math.max(1, Math.ceil(filteredAttackers.length / ITEMS_PER_PAGE));
+  const paginatedAttackers = useMemo(() => {
+    const start = (attackersPage - 1) * ITEMS_PER_PAGE;
+    return filteredAttackers.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredAttackers, attackersPage]);
+
+  // Filtered WAF Rules
   const filteredRules = useMemo(() => {
-    if (!ruleActionFilter) return rules;
-    return rules.filter(r => r.action === ruleActionFilter);
-  }, [rules, ruleActionFilter]);
+    const q = deferredSearch.toLowerCase().trim();
+    return rules.filter(r => {
+      if (ruleActionFilter !== 'ALL' && r.action !== ruleActionFilter) return false;
+      if (!q) return true;
+      const ipMatch = (r.ip_address || 'GLOBAL ANY').toLowerCase().includes(q);
+      const reasonMatch = (r.reason || '').toLowerCase().includes(q);
+      const analystMatch = (r.analyst_attribution || '').toLowerCase().includes(q);
+      const typeMatch = (r.rule_type || '').toLowerCase().includes(q);
+      return ipMatch || reasonMatch || analystMatch || typeMatch;
+    });
+  }, [rules, deferredSearch, ruleActionFilter]);
 
-  // Memoized Counts for KPI strip
-  const totalHoneypotAttackers = observedSources.length;
-  const blockedHoneypotCount = useMemo(() => {
-    return observedSources.filter(s => s.is_blocked).length;
-  }, [observedSources]);
+  // Paginated Rules Slice
+  const totalRulePages = Math.max(1, Math.ceil(filteredRules.length / ITEMS_PER_PAGE));
+  const paginatedRules = useMemo(() => {
+    const start = (rulesPage - 1) * ITEMS_PER_PAGE;
+    return filteredRules.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredRules, rulesPage]);
+
+  // Filtered WAF Hits
+  const filteredHits = useMemo(() => {
+    const q = deferredSearch.toLowerCase().trim();
+    return hits.filter(h => {
+      if (hitActionFilter !== 'ALL' && h.action !== hitActionFilter) return false;
+      if (!q) return true;
+      const ipMatch = (h.ip_address || '').toLowerCase().includes(q);
+      const pathMatch = (h.path || '').toLowerCase().includes(q);
+      const methodMatch = (h.method || '').toLowerCase().includes(q);
+      const payloadMatch = (h.payload || '').toLowerCase().includes(q);
+      return ipMatch || pathMatch || methodMatch || payloadMatch;
+    });
+  }, [hits, deferredSearch, hitActionFilter]);
+
+  // Paginated Hits Slice
+  const totalHitPages = Math.max(1, Math.ceil(filteredHits.length / ITEMS_PER_PAGE));
+  const paginatedHits = useMemo(() => {
+    const start = (hitsPage - 1) * ITEMS_PER_PAGE;
+    return filteredHits.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredHits, hitsPage]);
+
+  // Derived KPI Counts
+  const totalObservedCount = observedSources.length;
+  const blockedObservedCount = useMemo(() => observedSources.filter(s => s.is_blocked).length, [observedSources]);
+  const activeRulesCount = useMemo(() => rules.filter(r => r.is_enabled === 1).length, [rules]);
 
   return (
-    <div className="waf-root">
-      {/* 1. Header & Status Tag */}
-      <div className="waf-header-row">
-        <div>
-          <h2 className="waf-title font-mono title-cyber">
-            <Shield size={18} className="text-cyan inline mr-2" />
-            WEB APPLICATION FIREWALL (WAF)
-          </h2>
-          <div className="waf-subtitle font-mono">
-            Active perimeter defense, honeypot attacker containment, and rule policies
+    <div className="waf-soc-root animate-fade-in">
+      {/* 1. Header Bar with Security Posture Status */}
+      <div className="waf-soc-header">
+        <div className="header-left">
+          <div className="title-row">
+            <Shield className="text-cyan title-icon" size={22} />
+            <h1 className="waf-soc-title font-mono">WEB APPLICATION FIREWALL (WAF)</h1>
+            <span className="soc-engine-tag font-mono">
+              <span className="live-pulse-dot"></span>
+              ACTIVE PERIMETER DEFENSE
+            </span>
           </div>
+          <p className="waf-soc-subtitle font-mono">
+            Automated boundary inspection, honeypot telemetry containment, and policy enforcement
+          </p>
         </div>
 
-        <div className="waf-header-actions font-mono">
-          <span className="waf-status-indicator">
-            <Radio size={12} className="text-green animate-pulse" />
-            <span>ACTIVE DEFENSE</span>
-          </span>
+        <div className="header-right font-mono">
           <button
-            className="btn-waf-refresh"
+            className="btn-waf-action-outline"
             onClick={() => fetchData(false)}
             disabled={isSyncing}
-            title="Refresh WAF Telemetry & Rules"
+            title="Synchronize WAF telemetry"
           >
-            <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
+            <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
             <span>{isSyncing ? 'SYNCING...' : 'REFRESH'}</span>
           </button>
-        </div>
-      </div>
 
-      {/* 2. Compact 4-Card KPI Strip */}
-      <div className="waf-kpi-strip">
-        <div className="waf-kpi-card">
-          <span className="kpi-label font-mono">WAF ENGINE STATUS</span>
-          <div className="kpi-val-row font-mono">
-            <span className="kpi-val text-cyan">ACTIVE / ENFORCING</span>
-            <Shield size={15} className="text-cyan" />
-          </div>
-        </div>
-
-        <div className="waf-kpi-card">
-          <span className="kpi-label font-mono">HONEYPOT ATTACKERS</span>
-          <div className="kpi-val-row font-mono">
-            <span className="kpi-val text-white">{totalHoneypotAttackers.toLocaleString()}</span>
-            <ShieldAlert size={15} className="text-amber" />
-          </div>
-        </div>
-
-        <div className="waf-kpi-card">
-          <span className="kpi-label font-mono">CURRENTLY BLOCKED</span>
-          <div className="kpi-val-row font-mono">
-            <span className="kpi-val text-red">{blockedHoneypotCount.toLocaleString()}</span>
-            <Lock size={15} className="text-red" />
-          </div>
-        </div>
-
-        <div className="waf-kpi-card">
-          <span className="kpi-label font-mono">RECENT WAF EVENTS</span>
-          <div className="kpi-val-row font-mono">
-            <span className="kpi-val text-orange">{(stats.blocked_count + stats.quarantined_count).toLocaleString()}</span>
-            <Activity size={15} className="text-orange" />
-          </div>
-        </div>
-      </div>
-
-      {/* Feedback Toast Banner */}
-      {feedbackMessage && (
-        <div className={`waf-feedback-banner ${feedbackMessage.type} font-mono animate-slide-in`}>
-          {feedbackMessage.type === 'success' ? <Check size={14} /> : <AlertTriangle size={14} />}
-          <span>{feedbackMessage.text}</span>
-          <button className="btn-close-toast" onClick={() => setFeedbackMessage(null)}>
-            <X size={12} />
-          </button>
-        </div>
-      )}
-
-      {/* 3. Main Two-Panel Grid */}
-      <div className="waf-main-grid">
-        {/* LEFT PANEL: Honeypot Attacker Telemetry */}
-        <div className="waf-panel card-cyber attackers-panel">
-          <div className="panel-header">
-            <div className="flex items-center gap-2">
-              <ShieldAlert size={14} className="text-amber" />
-              <h5 className="panel-title font-mono">HONEYPOT ATTACKER TELEMETRY</h5>
-            </div>
-            <span className="badge-count font-mono">{filteredAttackers.length.toLocaleString()}</span>
-          </div>
-
-          {/* Search & Severity Filter Bar */}
-          <div className="attackers-filter-bar">
-            <div className="search-input-box">
-              <Search size={13} className="text-muted" />
-              <input
-                type="text"
-                placeholder="Search by IP, threat type, service, or severity..."
-                value={attackerSearch}
-                onChange={(e) => setAttackerSearch(e.target.value)}
-                className="font-mono text-xs"
-              />
-              {attackerSearch && (
-                <button className="clear-search-btn" onClick={() => setAttackerSearch('')}>
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-
-            <select
-              className="filter-select font-mono"
-              value={severityFilter}
-              onChange={(e) => setSeverityFilter(e.target.value)}
-            >
-              <option value="ALL">All Threat Levels</option>
-              <option value="CRITICAL">Critical Severity</option>
-              <option value="HIGH">High Severity</option>
-              <option value="MEDIUM">Medium Severity</option>
-              <option value="LOW">Low Severity</option>
-              <option value="BLOCKED">Blocked Only</option>
-              <option value="UNBLOCKED">Monitored Only</option>
-            </select>
-          </div>
-
-          {/* Virtualized Attacker List */}
-          <VirtualHoneypotAttackerList
-            items={filteredAttackers}
-            isAdmin={isAdmin}
-            actionLoadingIp={actionLoadingIp}
-            onBlock={handleBlockObservedSource}
-            onUnblock={handleUnblockObservedSource}
-            onCopyIp={handleCopyIp}
-            copiedIp={copiedIp}
-          />
-        </div>
-
-        {/* RIGHT PANEL: WAF Rule Policies & Intrusion Timeline */}
-        <div className="waf-panel card-cyber rules-timeline-panel">
-          {/* Panel Tab Navigation */}
-          <div className="panel-tab-header">
+          {isAdmin && (
             <button
-              className={`panel-tab-btn font-mono ${activeRightTab === 'rules' ? 'active' : ''}`}
-              onClick={() => setActiveRightTab('rules')}
+              className="btn-waf-primary"
+              onClick={() => {
+                setEditingRule(null);
+                setFormIp('');
+                setFormAction('BLOCK');
+                setFormReason('');
+                setFormExpiry('24');
+                setFormAnalyst(user?.username || 'SOC Lead');
+                setShowAddModal(true);
+              }}
+              title="Deploy a new perimeter containment rule"
             >
-              <Layers size={13} className="inline mr-1" />
-              <span>Active Policies ({rules.length})</span>
+              <Plus size={15} />
+              <span>DEPLOY POLICY RULE</span>
             </button>
-            <button
-              className={`panel-tab-btn font-mono ${activeRightTab === 'hits' ? 'active' : ''}`}
-              onClick={() => setActiveRightTab('hits')}
-            >
-              <Activity size={13} className="inline mr-1" />
-              <span>Intrusion Timeline ({hits.length})</span>
-            </button>
-          </div>
-
-          {activeRightTab === 'rules' ? (
-            <div className="rules-tab-content">
-              {/* Rules Toolbar */}
-              <div className="rules-toolbar">
-                <select
-                  className="filter-select font-mono"
-                  value={ruleActionFilter}
-                  onChange={(e) => setRuleActionFilter(e.target.value)}
-                >
-                  <option value="">All Rule Actions</option>
-                  <option value="BLOCK">Block Actions</option>
-                  <option value="QUARANTINE">Quarantine Actions</option>
-                  <option value="ALLOW">Allow Actions</option>
-                </select>
-
-                <button
-                  className={`btn-create-rule font-mono ${!isAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  onClick={() => {
-                    if (!isAdmin) return;
-                    setEditingRule(null);
-                    setFormIp('');
-                    setFormAction('BLOCK');
-                    setFormReason('');
-                    setFormExpiry('24');
-                    setShowAddModal(true);
-                  }}
-                  disabled={!isAdmin}
-                  title={isAdmin ? "Create new manual defensive rule" : "Administrator privileges required"}
-                >
-                  <Plus size={13} />
-                  <span>New Rule</span>
-                </button>
-              </div>
-
-              {/* Rules List */}
-              <div className="rules-list-scroll">
-                {filteredRules.map((rule) => (
-                  <div key={rule.id} className={`rule-card font-mono ${rule.is_enabled !== 1 ? 'rule-disabled' : ''}`}>
-                    <div className="rule-card-top">
-                      <div className="rule-target-group">
-                        <span className="rule-ip">{rule.ip_address || 'GLOBAL (ANY IP)'}</span>
-                        <span className={`badge-action badge-action-${rule.action.toLowerCase()}`}>
-                          {rule.action}
-                        </span>
-                        <span className="type-tag">{rule.rule_type}</span>
-                      </div>
-
-                      <div className="rule-controls">
-                        <button
-                          className="btn-toggle-rule"
-                          onClick={() => handleToggleRule(rule)}
-                          disabled={!isAdmin}
-                          title={rule.is_enabled === 1 ? 'Disable rule' : 'Enable rule'}
-                        >
-                          {rule.is_enabled === 1 ? (
-                            <ToggleRight size={18} className="text-cyan" />
-                          ) : (
-                            <ToggleLeft size={18} className="text-muted" />
-                          )}
-                        </button>
-                        <button
-                          className="btn-rule-icon text-cyan"
-                          onClick={() => handleOpenEdit(rule)}
-                          disabled={!isAdmin}
-                          title="Edit rule"
-                        >
-                          <Edit2 size={11} />
-                        </button>
-                        <button
-                          className="btn-rule-icon text-red"
-                          onClick={() => handleDeleteRule(rule.id)}
-                          disabled={!isAdmin}
-                          title="Delete rule"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="rule-card-body">
-                      <div className="rule-reason text-muted text-xxs">{rule.reason}</div>
-                      <div className="rule-meta-row text-xxxs text-muted mt-1">
-                        <span>Triggers: <strong className="text-white">{rule.trigger_count}</strong></span>
-                        <span className="divider">•</span>
-                        <span>Analyst: {rule.analyst_attribution || 'System'}</span>
-                        <span className="divider">•</span>
-                        <span>Expires: {rule.expires_at ? new Date(rule.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                {filteredRules.length === 0 && (
-                  <div className="empty-waf-state font-mono">
-                    <Layers size={24} className="text-muted mb-2" />
-                    <span className="text-white text-xs font-semibold">No WAF Policies Configured</span>
-                    <p className="text-muted text-xxs mt-1">
-                      {ruleActionFilter ? `No rules match action '${ruleActionFilter}'.` : 'Click "+ New Rule" to create a defensive containment rule.'}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="hits-tab-content">
-              <div className="hits-timeline-scroll">
-                {hits.map((hit) => (
-                  <div key={hit.id} className="hit-card font-mono">
-                    <div className="hit-top-row">
-                      <div className="flex items-center gap-2">
-                        <span className={`hit-dot bg-${hit.action.toLowerCase()}`}></span>
-                        <span className="hit-ip text-white">{hit.ip_address}</span>
-                      </div>
-                      <span className="hit-time text-muted text-xxs">
-                        {formatLocalTime(hit.created_at)}
-                      </span>
-                    </div>
-
-                    <div className="hit-desc text-xxs mt-1">
-                      <span className="text-muted">Intercept: </span>
-                      <strong className="text-cyan">{hit.method}</strong> <span className="text-white">{hit.path}</span>
-                      <span className={`badge-action ml-2 badge-action-${hit.action.toLowerCase()}`}>
-                        {hit.action}
-                      </span>
-                    </div>
-
-                    {hit.payload && (
-                      <pre className="hit-payload-box text-xxxs mt-2">{hit.payload}</pre>
-                    )}
-                  </div>
-                ))}
-
-                {hits.length === 0 && (
-                  <div className="empty-waf-state font-mono">
-                    <Activity size={24} className="text-muted mb-2" />
-                    <span className="text-white text-xs font-semibold">No WAF Intercepts Recorded</span>
-                    <p className="text-muted text-xxs mt-1">
-                      Active Defense Engine idle. Perimeter intrusion events will appear here in real time.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
           )}
         </div>
       </div>
 
-      {/* 4. Add / Edit Rule Modal */}
+      {/* 2. Cyber SOC 4-Card KPI Strip */}
+      <div className="waf-kpi-grid font-mono">
+        {/* Card 1: WAF Engine State */}
+        <div className="waf-kpi-box">
+          <div className="kpi-header">
+            <span className="kpi-label">DEFENSE POSTURE</span>
+            <ShieldCheck size={16} className="text-cyan" />
+          </div>
+          <div className="kpi-value text-cyan">ACTIVE / ENFORCING</div>
+          <div className="kpi-meta text-muted">
+            Perimeter Shield Active · {activeRulesCount} Rules Armed
+          </div>
+        </div>
+
+        {/* Card 2: Monitored Threat Actors */}
+        <div className="waf-kpi-box">
+          <div className="kpi-header">
+            <span className="kpi-label">MONITORED THREAT SOURCES</span>
+            <ShieldAlert size={16} className="text-amber" />
+          </div>
+          <div className="kpi-value text-white">{totalObservedCount.toLocaleString()}</div>
+          <div className="kpi-meta text-muted">
+            Derived from Honeypot & Attack Telemetry
+          </div>
+        </div>
+
+        {/* Card 3: Contained Threat Sources */}
+        <div className="waf-kpi-box">
+          <div className="kpi-header">
+            <span className="kpi-label">CONTAINMENT BLOCKS</span>
+            <Lock size={16} className="text-red" />
+          </div>
+          <div className="kpi-value text-red">{blockedObservedCount.toLocaleString()}</div>
+          <div className="kpi-meta text-muted">
+            Actively Drop Inbound Traffic
+          </div>
+        </div>
+
+        {/* Card 4: Intercepted Ingress Events */}
+        <div className="waf-kpi-box">
+          <div className="kpi-header">
+            <span className="kpi-label">INTERCEPTED INTRUSIONS</span>
+            <Activity size={16} className="text-orange" />
+          </div>
+          <div className="kpi-value text-orange">{(stats.blocked_count + stats.quarantined_count).toLocaleString()}</div>
+          <div className="kpi-meta text-muted">
+            {stats.blocked_count} Blocked · {stats.quarantined_count} Quarantined
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Feedback Banner */}
+      {feedbackMessage && (
+        <div className={`waf-toast-banner ${feedbackMessage.type} font-mono animate-slide-in`}>
+          <div className="flex items-center gap-2">
+            {feedbackMessage.type === 'success' ? <Check size={15} /> : <AlertTriangle size={15} />}
+            <span>{feedbackMessage.text}</span>
+          </div>
+          <button className="btn-close-banner" onClick={() => setFeedbackMessage(null)}>
+            <X size={13} />
+          </button>
+        </div>
+      )}
+
+      {/* 4. Navigation Segmented Control */}
+      <div className="waf-tabs-nav font-mono">
+        <button
+          className={`waf-tab-btn ${activeTab === 'attackers' ? 'active' : ''}`}
+          onClick={() => setActiveTab('attackers')}
+        >
+          <ShieldAlert size={15} />
+          <span>Threat Sources & Containment</span>
+          <span className="tab-badge">{filteredAttackers.length}</span>
+        </button>
+
+        <button
+          className={`waf-tab-btn ${activeTab === 'rules' ? 'active' : ''}`}
+          onClick={() => setActiveTab('rules')}
+        >
+          <Layers size={15} />
+          <span>Active Policy Rules</span>
+          <span className="tab-badge">{filteredRules.length}</span>
+        </button>
+
+        <button
+          className={`waf-tab-btn ${activeTab === 'hits' ? 'active' : ''}`}
+          onClick={() => setActiveTab('hits')}
+        >
+          <Activity size={15} />
+          <span>Live Intrusion Log</span>
+          <span className="tab-badge">{filteredHits.length}</span>
+        </button>
+      </div>
+
+      {/* 5. Search & Filter Toolbar */}
+      <div className="waf-toolbar font-mono">
+        <div className="search-box">
+          <Search size={14} className="text-muted search-icon" />
+          <input
+            type="text"
+            className="waf-search-input"
+            placeholder={
+              activeTab === 'attackers'
+                ? "Search threat sources by IP, vector, targeted service, or severity..."
+                : activeTab === 'rules'
+                ? "Search rules by IP, reason, analyst, or rule type..."
+                : "Search intrusion log by IP, URI path, method, or payload..."
+            }
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button className="clear-search" onClick={() => setSearchQuery('')}>
+              <X size={13} />
+            </button>
+          )}
+        </div>
+
+        {/* Tab-Specific Dropdown Filters */}
+        {activeTab === 'attackers' && (
+          <select
+            className="waf-select-filter"
+            value={severityFilter}
+            onChange={(e) => setSeverityFilter(e.target.value)}
+          >
+            <option value="ALL">All Threat Severities</option>
+            <option value="CRITICAL">Critical Severity</option>
+            <option value="HIGH">High Severity</option>
+            <option value="MEDIUM">Medium Severity</option>
+            <option value="LOW">Low Severity</option>
+            <option value="BLOCKED">Contained (Blocked Only)</option>
+            <option value="MONITORED">Monitored Only</option>
+          </select>
+        )}
+
+        {activeTab === 'rules' && (
+          <select
+            className="waf-select-filter"
+            value={ruleActionFilter}
+            onChange={(e) => setRuleActionFilter(e.target.value)}
+          >
+            <option value="ALL">All Rule Actions</option>
+            <option value="BLOCK">BLOCK Policy Only</option>
+            <option value="QUARANTINE">QUARANTINE Policy Only</option>
+            <option value="ALLOW">ALLOW (Whitelist) Only</option>
+          </select>
+        )}
+
+        {activeTab === 'hits' && (
+          <select
+            className="waf-select-filter"
+            value={hitActionFilter}
+            onChange={(e) => setHitActionFilter(e.target.value)}
+          >
+            <option value="ALL">All Intercept Actions</option>
+            <option value="BLOCK">Blocked Intercepts</option>
+            <option value="QUARANTINE">Quarantined Intercepts</option>
+            <option value="ALLOW">Allowed Traffic</option>
+          </select>
+        )}
+      </div>
+
+      {/* 6. Main Tab Content Views */}
+      <div className="waf-content-area">
+        {loading && !observedSources.length && !rules.length && !hits.length ? (
+          <div className="waf-card-table-wrap">
+            <div className="waf-empty-state font-mono">
+              <RefreshCw size={26} className="animate-spin text-cyan" />
+              <div className="empty-title">INITIALIZING WAF TELEMETRY</div>
+              <div className="empty-desc">Loading perimeter rules, observed sources, and intrusion logs...</div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* VIEW 1: Observed Threat Sources & Containment */}
+            {activeTab === 'attackers' && (
+          <div className="waf-card-table-wrap">
+            <div className="table-responsive">
+              <table className="waf-table font-mono">
+                <thead>
+                  <tr>
+                    <th>SOURCE IP</th>
+                    <th>SEVERITY</th>
+                    <th>OBSERVED VECTORS</th>
+                    <th>EVENT COUNT</th>
+                    <th>CONTAINMENT STATUS</th>
+                    <th>LAST DETECTED</th>
+                    <th className="text-right">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedAttackers.map((source) => {
+                    const isActionLoading = actionLoadingIp === source.ip_address;
+                    const sev = (source.severity || 'LOW').toUpperCase();
+
+                    return (
+                      <tr key={source.ip_address} className="waf-table-row">
+                        {/* Source IP */}
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <span className={`status-dot dot-${sev.toLowerCase()}`}></span>
+                            <span className="ip-text font-bold text-white">{source.ip_address}</span>
+                            <button
+                              className="btn-copy-sm"
+                              onClick={() => handleCopyIp(source.ip_address)}
+                              title="Copy IP"
+                            >
+                              {copiedIp === source.ip_address ? <Check size={11} className="text-green" /> : <Copy size={11} />}
+                            </button>
+                            {source.is_local && <span className="badge-lan">LAN</span>}
+                          </div>
+                        </td>
+
+                        {/* Severity */}
+                        <td>
+                          <span className={`badge-sev badge-${sev.toLowerCase()}`}>
+                            {sev}
+                          </span>
+                        </td>
+
+                        {/* Observed Vectors & Services */}
+                        <td>
+                          <div className="vectors-chip-wrap">
+                            {source.threat_types && source.threat_types.length > 0 ? (
+                              source.threat_types.slice(0, 2).map((t, i) => (
+                                <span key={i} className="chip-vector">{t}</span>
+                              ))
+                            ) : source.services && source.services.length > 0 ? (
+                              source.services.slice(0, 2).map((s, i) => (
+                                <span key={i} className="chip-vector">{s}</span>
+                              ))
+                            ) : (
+                              <span className="text-muted text-xs">Honeypot Decoy</span>
+                            )}
+                            {(source.threat_types?.length > 2 || source.services?.length > 2) && (
+                              <span className="chip-more">+{Math.max(source.threat_types?.length || 0, source.services?.length || 0) - 2}</span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Event Count */}
+                        <td>
+                          <span className="font-bold text-cyan">{source.event_count}</span>
+                          <span className="text-muted text-xs ml-1">events</span>
+                        </td>
+
+                        {/* Containment Status */}
+                        <td>
+                          {source.is_blocked ? (
+                            <span className="badge-status-blocked">
+                              <Lock size={12} />
+                              <span>BLOCKED</span>
+                            </span>
+                          ) : (
+                            <span className="badge-status-monitored">
+                              <Radio size={12} />
+                              <span>MONITORED</span>
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Last Detected */}
+                        <td className="text-muted text-xs">
+                          {source.last_seen ? source.last_seen.split(' ')[1] || source.last_seen : 'Recent'}
+                        </td>
+
+                        {/* Action Controls */}
+                        <td className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              className="btn-inspect-sm"
+                              onClick={() => {
+                                setInspectedItem(source);
+                                setInspectedType('attacker');
+                              }}
+                              title="Inspect threat source dossier"
+                            >
+                              <Eye size={12} />
+                              <span>INSPECT</span>
+                            </button>
+
+                            {source.is_blocked ? (
+                              <button
+                                className={`btn-waf-unblock-sm ${!isAdmin ? 'disabled' : ''}`}
+                                onClick={() => handleUnblockObservedSource(source.rule_id, source.ip_address)}
+                                disabled={!isAdmin || isActionLoading}
+                                title={isAdmin ? "Remove WAF block rule" : "Admin privileges required"}
+                              >
+                                {isActionLoading ? <RefreshCw size={12} className="animate-spin" /> : <Unlock size={12} />}
+                                <span>{isActionLoading ? '...' : 'UNBLOCK'}</span>
+                              </button>
+                            ) : (
+                              <button
+                                className={`btn-waf-block-sm ${(!isAdmin || source.is_local) ? 'disabled' : ''}`}
+                                onClick={() => handleBlockObservedSource(source.ip_address)}
+                                disabled={!isAdmin || source.is_local || isActionLoading}
+                                title={
+                                  source.is_local
+                                    ? "Local RFC 1918 addresses cannot be blocked via perimeter WAF"
+                                    : (isAdmin ? "Deploy immediate WAF containment block" : "Admin privileges required")
+                                }
+                              >
+                                {isActionLoading ? <RefreshCw size={12} className="animate-spin" /> : <Lock size={12} />}
+                                <span>{isActionLoading ? '...' : (source.is_local ? 'LAN' : 'BLOCK')}</span>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {paginatedAttackers.length === 0 && (
+                    <tr>
+                      <td colSpan="7" className="empty-table-cell">
+                        <div className="empty-state font-mono">
+                          <ShieldAlert size={28} className="text-muted mb-2" />
+                          <span className="text-white text-sm font-semibold">No Threat Sources Matched</span>
+                          <p className="text-muted text-xs mt-1">
+                            No source IPs matching the current search query or filter criteria were found.
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {totalAttackerPages > 1 && (
+              <div className="waf-pagination font-mono">
+                <span className="pagination-info text-muted text-xs">
+                  Showing Page <strong className="text-white">{attackersPage}</strong> of <strong className="text-white">{totalAttackerPages}</strong> ({filteredAttackers.length} total)
+                </span>
+                <div className="pagination-buttons">
+                  <button
+                    className="btn-page"
+                    onClick={() => setAttackersPage(p => Math.max(1, p - 1))}
+                    disabled={attackersPage === 1}
+                  >
+                    <ChevronLeft size={14} />
+                    <span>PREV</span>
+                  </button>
+                  <button
+                    className="btn-page"
+                    onClick={() => setAttackersPage(p => Math.min(totalAttackerPages, p + 1))}
+                    disabled={attackersPage === totalAttackerPages}
+                  >
+                    <span>NEXT</span>
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* VIEW 2: Active Policy Rules */}
+        {activeTab === 'rules' && (
+          <div className="waf-card-table-wrap">
+            <div className="table-responsive">
+              <table className="waf-table font-mono">
+                <thead>
+                  <tr>
+                    <th>TARGET IP</th>
+                    <th>POLICY ACTION</th>
+                    <th>RULE TYPE</th>
+                    <th>JUSTIFICATION</th>
+                    <th>TRIGGERS</th>
+                    <th>ATTRIBUTION</th>
+                    <th>EXPIRY</th>
+                    <th>STATUS</th>
+                    <th className="text-right">MANAGE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedRules.map((rule) => {
+                    const isEnabled = rule.is_enabled === 1;
+
+                    return (
+                      <tr key={rule.id} className={`waf-table-row ${!isEnabled ? 'row-disabled' : ''}`}>
+                        {/* Target IP */}
+                        <td>
+                          <span className="ip-text font-bold text-white">
+                            {rule.ip_address || 'GLOBAL (ANY IP)'}
+                          </span>
+                        </td>
+
+                        {/* Action */}
+                        <td>
+                          <span className={`badge-action badge-action-${rule.action.toLowerCase()}`}>
+                            {rule.action}
+                          </span>
+                        </td>
+
+                        {/* Rule Type */}
+                        <td>
+                          <span className="badge-rule-type">{rule.rule_type}</span>
+                        </td>
+
+                        {/* Reason */}
+                        <td className="rule-reason-cell">
+                          <span className="reason-text text-muted" title={rule.reason}>
+                            {rule.reason || 'Manual security configuration'}
+                          </span>
+                        </td>
+
+                        {/* Triggers */}
+                        <td>
+                          <span className="font-bold text-cyan">{rule.trigger_count}</span>
+                        </td>
+
+                        {/* Analyst Attribution */}
+                        <td className="text-muted text-xs">
+                          {rule.analyst_attribution || 'System'}
+                        </td>
+
+                        {/* Expiry */}
+                        <td className="text-muted text-xs">
+                          {rule.expires_at ? new Date(rule.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Permanent'}
+                        </td>
+
+                        {/* Status Toggle */}
+                        <td>
+                          <button
+                            className="btn-toggle-switch"
+                            onClick={() => handleToggleRule(rule)}
+                            disabled={!isAdmin}
+                            title={isEnabled ? "Disable Rule" : "Enable Rule"}
+                          >
+                            {isEnabled ? (
+                              <span className="toggle-label text-green flex items-center gap-1">
+                                <ToggleRight size={20} className="text-cyan" />
+                                <span>ARMED</span>
+                              </span>
+                            ) : (
+                              <span className="toggle-label text-muted flex items-center gap-1">
+                                <ToggleLeft size={20} />
+                                <span>MUTED</span>
+                              </span>
+                            )}
+                          </button>
+                        </td>
+
+                        {/* Manage Controls */}
+                        <td className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              className="btn-edit-sm"
+                              onClick={() => handleOpenEdit(rule)}
+                              disabled={!isAdmin}
+                              title="Edit rule"
+                            >
+                              <Edit2 size={12} />
+                            </button>
+                            <button
+                              className="btn-delete-sm"
+                              onClick={() => handleDeleteRule(rule.id)}
+                              disabled={!isAdmin}
+                              title="Delete rule"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {paginatedRules.length === 0 && (
+                    <tr>
+                      <td colSpan="9" className="empty-table-cell">
+                        <div className="empty-state font-mono">
+                          <Layers size={28} className="text-muted mb-2" />
+                          <span className="text-white text-sm font-semibold">No WAF Rules Configured</span>
+                          <p className="text-muted text-xs mt-1">
+                            {ruleActionFilter !== 'ALL'
+                              ? `No rules match action '${ruleActionFilter}'.`
+                              : 'Click "+ Deploy Policy Rule" to create a new perimeter defense rule.'}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {totalRulePages > 1 && (
+              <div className="waf-pagination font-mono">
+                <span className="pagination-info text-muted text-xs">
+                  Showing Page <strong className="text-white">{rulesPage}</strong> of <strong className="text-white">{totalRulePages}</strong> ({filteredRules.length} total)
+                </span>
+                <div className="pagination-buttons">
+                  <button
+                    className="btn-page"
+                    onClick={() => setRulesPage(p => Math.max(1, p - 1))}
+                    disabled={rulesPage === 1}
+                  >
+                    <ChevronLeft size={14} />
+                    <span>PREV</span>
+                  </button>
+                  <button
+                    className="btn-page"
+                    onClick={() => setRulesPage(p => Math.min(totalRulePages, p + 1))}
+                    disabled={rulesPage === totalRulePages}
+                  >
+                    <span>NEXT</span>
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* VIEW 3: Intrusion Timeline Logs (WAF Hits) */}
+        {activeTab === 'hits' && (
+          <div className="waf-card-table-wrap">
+            <div className="table-responsive">
+              <table className="waf-table font-mono">
+                <thead>
+                  <tr>
+                    <th>TIMESTAMP</th>
+                    <th>SOURCE IP</th>
+                    <th>HTTP METHOD</th>
+                    <th>INTERCEPT PATH</th>
+                    <th>WAF ACTION</th>
+                    <th>INSPECTED PAYLOAD</th>
+                    <th className="text-right">DETAILS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedHits.map((hit) => (
+                    <tr key={hit.id} className="waf-table-row">
+                      {/* Timestamp */}
+                      <td className="text-muted text-xs">
+                        {formatLocalTime(hit.created_at)}
+                      </td>
+
+                      {/* Source IP */}
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <span className="ip-text font-bold text-white">{hit.ip_address}</span>
+                          <button
+                            className="btn-copy-sm"
+                            onClick={() => handleCopyIp(hit.ip_address)}
+                            title="Copy IP"
+                          >
+                            {copiedIp === hit.ip_address ? <Check size={11} className="text-green" /> : <Copy size={11} />}
+                          </button>
+                        </div>
+                      </td>
+
+                      {/* Method */}
+                      <td>
+                        <span className="badge-method">{hit.method}</span>
+                      </td>
+
+                      {/* Path */}
+                      <td className="path-cell">
+                        <span className="text-cyan font-mono text-xs">{hit.path}</span>
+                      </td>
+
+                      {/* Action */}
+                      <td>
+                        <span className={`badge-action badge-action-${hit.action.toLowerCase()}`}>
+                          {hit.action}
+                        </span>
+                      </td>
+
+                      {/* Payload Snippet */}
+                      <td className="payload-cell">
+                        {hit.payload ? (
+                          <span className="payload-snippet font-mono text-xs text-muted" title={hit.payload}>
+                            {hit.payload.slice(0, 48)}{hit.payload.length > 48 ? '...' : ''}
+                          </span>
+                        ) : (
+                          <span className="text-muted text-xs italic">Header / Protocol probe</span>
+                        )}
+                      </td>
+
+                      {/* Details View */}
+                      <td className="text-right">
+                        <button
+                          className="btn-inspect-sm"
+                          onClick={() => {
+                            setInspectedItem(hit);
+                            setInspectedType('hit');
+                          }}
+                          title="View complete intrusion intercept payload"
+                        >
+                          <Eye size={12} />
+                          <span>DETAILS</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {paginatedHits.length === 0 && (
+                    <tr>
+                      <td colSpan="7" className="empty-table-cell">
+                        <div className="empty-state font-mono">
+                          <Activity size={28} className="text-muted mb-2" />
+                          <span className="text-white text-sm font-semibold">No WAF Intercepts Recorded</span>
+                          <p className="text-muted text-xs mt-1">
+                            {hitActionFilter !== 'ALL'
+                              ? `No intrusion events match action '${hitActionFilter}'.`
+                              : 'Perimeter active defense engine idle. Intrusion events will appear here live.'}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {totalHitPages > 1 && (
+              <div className="waf-pagination font-mono">
+                <span className="pagination-info text-muted text-xs">
+                  Showing Page <strong className="text-white">{hitsPage}</strong> of <strong className="text-white">{totalHitPages}</strong> ({filteredHits.length} total)
+                </span>
+                <div className="pagination-buttons">
+                  <button
+                    className="btn-page"
+                    onClick={() => setHitsPage(p => Math.max(1, p - 1))}
+                    disabled={hitsPage === 1}
+                  >
+                    <ChevronLeft size={14} />
+                    <span>PREV</span>
+                  </button>
+                  <button
+                    className="btn-page"
+                    onClick={() => setHitsPage(p => Math.min(totalHitPages, p + 1))}
+                    disabled={hitsPage === totalHitPages}
+                  >
+                    <span>NEXT</span>
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+          </>
+        )}
+      </div>
+
+      {/* 7. Slide-Out Inspection Drawer */}
+      {inspectedItem && (
+        <div className="waf-drawer-overlay animate-fade-in" onClick={() => setInspectedItem(null)}>
+          <div className="waf-drawer font-mono" onClick={(e) => e.stopPropagation()}>
+            <div className="drawer-header">
+              <div className="flex items-center gap-2">
+                <Shield className="text-cyan" size={16} />
+                <span className="font-bold text-white">
+                  {inspectedType === 'attacker' ? 'THREAT SOURCE DOSSIER' : 'INTRUSION INTERCEPT DETAILS'}
+                </span>
+              </div>
+              <button className="btn-close-drawer" onClick={() => setInspectedItem(null)}>
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="drawer-body">
+              {inspectedType === 'attacker' && (
+                <div className="drawer-section">
+                  <div className="detail-row">
+                    <span className="detail-key">Target IP:</span>
+                    <span className="detail-val font-bold text-white">{inspectedItem.ip_address}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-key">Severity Level:</span>
+                    <span className={`badge-sev badge-${(inspectedItem.severity || 'LOW').toLowerCase()}`}>
+                      {(inspectedItem.severity || 'LOW').toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-key">Containment:</span>
+                    <span className={inspectedItem.is_blocked ? 'text-red font-bold' : 'text-amber'}>
+                      {inspectedItem.is_blocked ? 'ACTIVE PERIMETER BLOCK' : 'MONITORED ONLY'}
+                    </span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-key">Total Ingress Events:</span>
+                    <span className="text-cyan font-bold">{inspectedItem.event_count}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-key">First Observed:</span>
+                    <span className="text-muted">{inspectedItem.first_seen || 'N/A'}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-key">Last Detected:</span>
+                    <span className="text-muted">{inspectedItem.last_seen || 'N/A'}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-key">Targeted Services:</span>
+                    <span className="text-white">{(inspectedItem.services || []).join(', ') || 'HTTP Honeypot'}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-key">Observed Threat Types:</span>
+                    <span className="text-white">{(inspectedItem.threat_types || []).join(', ') || 'General scanning'}</span>
+                  </div>
+
+                  <div className="drawer-actions mt-4">
+                    <button
+                      className="btn-drawer-nav"
+                      onClick={() => navigate(`/attackers?ip=${encodeURIComponent(inspectedItem.ip_address)}`)}
+                    >
+                      <ExternalLink size={13} />
+                      <span>Investigate in Threat Intelligence</span>
+                    </button>
+                    <button
+                      className="btn-drawer-nav"
+                      onClick={() => navigate(`/agent?analyze_attacker=${encodeURIComponent(inspectedItem.ip_address)}`)}
+                    >
+                      <Sparkles size={13} className="text-cyan" />
+                      <span>Analyze with AI Security Agent</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {inspectedType === 'hit' && (
+                <div className="drawer-section">
+                  <div className="detail-row">
+                    <span className="detail-key">Intercept ID:</span>
+                    <span className="text-white">{inspectedItem.id}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-key">Source IP:</span>
+                    <span className="text-white font-bold">{inspectedItem.ip_address}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-key">HTTP Request:</span>
+                    <span className="text-cyan font-bold">{inspectedItem.method} {inspectedItem.path}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-key">Action Enforced:</span>
+                    <span className={`badge-action badge-action-${inspectedItem.action.toLowerCase()}`}>
+                      {inspectedItem.action}
+                    </span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-key">Timestamp:</span>
+                    <span className="text-muted">{formatLocalTime(inspectedItem.created_at)}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-key">User-Agent:</span>
+                    <span className="text-muted text-xs break-all">{inspectedItem.user_agent || 'Unknown'}</span>
+                  </div>
+
+                  <div className="mt-3">
+                    <span className="detail-key block mb-1">Payload / Request Body:</span>
+                    <pre className="payload-full-box font-mono text-xs">
+                      {inspectedItem.payload || 'No request body attached (Header or query inspect)'}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. Add / Edit Rule Modal */}
       {showAddModal && (
         <div className="modal-backdrop animate-fade-in" onClick={() => setShowAddModal(false)}>
-          <div className="modal-content card-cyber font-mono" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content font-mono" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h5 className="modal-title font-mono title-cyber">
-                {editingRule ? "EDIT WAF POLICY RULE" : "CONFIGURE WAF POLICY RULE"}
-              </h5>
+              <div className="flex items-center gap-2">
+                <Shield className="text-cyan" size={16} />
+                <h5 className="modal-title font-mono text-white font-bold">
+                  {editingRule ? "EDIT WAF POLICY RULE" : "DEPLOY NEW WAF POLICY RULE"}
+                </h5>
+              </div>
               <button className="close-modal-btn" onClick={() => setShowAddModal(false)}>
                 <X size={15} />
               </button>
@@ -810,30 +1216,30 @@ export default function WAFManager() {
             <form onSubmit={handleSaveRule}>
               <div className="modal-body">
                 <div className="form-field-waf">
-                  <label>Target IP Address (or leave blank for all):</label>
+                  <label>Target IP Address (or leave blank for Global Rule):</label>
                   <input
                     type="text"
                     value={formIp}
-                    placeholder="e.g. 198.51.100.12"
+                    placeholder="e.g. 198.51.100.12 or leave empty"
                     onChange={(e) => setFormIp(e.target.value)}
                   />
                 </div>
 
                 <div className="form-field-waf">
-                  <label>Action Policy:</label>
+                  <label>Policy Action:</label>
                   <select value={formAction} onChange={(e) => setFormAction(e.target.value)}>
-                    <option value="BLOCK">BLOCK (Deny Connection)</option>
-                    <option value="QUARANTINE">QUARANTINE (Isolate Node)</option>
-                    <option value="ALLOW">ALLOW (Whitelist Exception)</option>
+                    <option value="BLOCK">BLOCK (Drop all inbound packets)</option>
+                    <option value="QUARANTINE">QUARANTINE (Redirect to sandbox)</option>
+                    <option value="ALLOW">ALLOW (Whitelist perimeter traffic)</option>
                   </select>
                 </div>
 
                 <div className="form-field-waf">
-                  <label>Rule Justification / Reason:</label>
+                  <label>Justification / Reason:</label>
                   <textarea
                     rows="3"
                     value={formReason}
-                    placeholder="Explain why this containment action has been initiated..."
+                    placeholder="Enter security justification for this containment policy..."
                     onChange={(e) => setFormReason(e.target.value)}
                   />
                 </div>
@@ -849,9 +1255,9 @@ export default function WAFManager() {
                 </div>
 
                 <div className="form-field-waf">
-                  <label>Rule Expiry Policy:</label>
+                  <label>Policy Expiration:</label>
                   <select value={formExpiry} onChange={(e) => setFormExpiry(e.target.value)}>
-                    <option value="never">Never Expire (Static Rule)</option>
+                    <option value="never">Permanent (Never Expire)</option>
                     <option value="1">Expire in 1 Hour</option>
                     <option value="24">Expire in 24 Hours</option>
                     <option value="168">Expire in 7 Days</option>
@@ -860,11 +1266,11 @@ export default function WAFManager() {
               </div>
 
               <div className="modal-footer">
-                <button type="button" className="btn-waf-secondary" onClick={() => setShowAddModal(false)}>
+                <button type="button" className="btn-modal-cancel" onClick={() => setShowAddModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn-waf-primary">
-                  {editingRule ? "Save Changes" : "Deploy Rule Policy"}
+                <button type="submit" className="btn-modal-submit">
+                  {editingRule ? "Save Rule Updates" : "Deploy Rule Policy"}
                 </button>
               </div>
             </form>

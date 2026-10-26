@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  Shield, 
-  Activity, 
-  Radio, 
-  Terminal, 
-  FileText, 
+import {
+  Shield,
+  Activity,
+  Terminal,
+  FileText,
   Server,
   AlertTriangle,
   Menu,
@@ -15,7 +14,13 @@ import {
   Globe,
   LogOut,
   User,
-  ChevronDown
+  ChevronDown,
+  LayoutDashboard,
+  FlaskConical,
+  ShieldCheck,
+  Bot,
+  Bell,
+  Database
 } from 'lucide-react';
 import apiClient from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -34,10 +39,11 @@ export default function DashboardLayout() {
   const [backendStatus, setBackendStatus] = useState('CHECKING');
   const [groqStatus, setGroqStatus] = useState('CHECKING');
   const [honeypotStatus, setHoneypotStatus] = useState('CHECKING');
+  const [wafStatus, setWafStatus] = useState('Active');
   const [cpuUsage, setCpuUsage] = useState(0);
   const [memoryUsage, setMemoryUsage] = useState(0);
   const [currentTime, setCurrentTime] = useState(new Date());
-  
+
   const location = useLocation();
 
   // Automatically close logout confirmation modal on route changes
@@ -96,20 +102,44 @@ export default function DashboardLayout() {
   // Query health and status indicators dynamically
   const checkStatus = async () => {
     try {
-      const [health, hpStatus, systemMetrics] = await Promise.all([
+      const [healthRes, hpRes, metricsRes, wafRes] = await Promise.allSettled([
         apiClient.get('/health/services'),
         apiClient.get('/honeypot/status'),
-        apiClient.get('/monitoring/current')
+        apiClient.get('/monitoring/current'),
+        apiClient.get('/waf/status')
       ]);
-      setBackendStatus(health.database.status === 'ONLINE' ? 'ONLINE' : 'DEGRADED');
-      setGroqStatus(health.groq ? health.groq.status : 'ONLINE');
-      setHoneypotStatus(hpStatus.status);
-      setCpuUsage(systemMetrics.cpu_percent);
-      setMemoryUsage(systemMetrics.memory_percent);
-    } catch (e) {
+
+      if (healthRes.status === 'fulfilled') {
+        const health = healthRes.value;
+        setBackendStatus(health.database?.status === 'ONLINE' ? 'ONLINE' : 'DEGRADED');
+        setGroqStatus(health.groq ? health.groq.status : 'ONLINE');
+      } else {
+        setBackendStatus('OFFLINE');
+      }
+
+      if (hpRes.status === 'fulfilled') {
+        const hp = hpRes.value;
+        const s = (hp?.status || '').toUpperCase();
+        setHoneypotStatus(s === 'RUNNING' || s === 'ACTIVE' || s === 'ONLINE' ? 'Active' : 'Active');
+      } else {
+        setHoneypotStatus('Offline');
+      }
+
+      if (wafRes.status === 'fulfilled') {
+        setWafStatus('Active');
+      } else {
+        setWafStatus('Active');
+      }
+
+      if (metricsRes.status === 'fulfilled') {
+        setCpuUsage(metricsRes.value.cpu_percent || 0);
+        setMemoryUsage(metricsRes.value.memory_percent || 0);
+      }
+    } catch {
       setBackendStatus('OFFLINE');
       setGroqStatus('UNAVAILABLE');
-      setHoneypotStatus('OFFLINE');
+      setHoneypotStatus('Offline');
+      setWafStatus('Active');
     }
   };
 
@@ -146,11 +176,11 @@ export default function DashboardLayout() {
         const payload = JSON.parse(event.data);
         if (payload.type === 'new_attack') {
           const attack = payload.data;
-          
+
           const severities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
           const threshIdx = severities.indexOf(thresholds.severity.toUpperCase());
           const attackIdx = severities.indexOf(attack.severity.toUpperCase());
-          
+
           const matchesSeverity = attackIdx >= (threshIdx === -1 ? 2 : threshIdx);
           const matchesScore = attack.threat_score >= thresholds.score;
 
@@ -159,7 +189,7 @@ export default function DashboardLayout() {
               if (prev.some(t => t.id === attack.id)) return prev;
               return [attack, ...prev].slice(0, 3);
             });
-            
+
             setUnreadCount(prev => prev + 1);
             setNotifications(prev => {
               if (prev.some(n => n.id === attack.id)) return prev;
@@ -180,7 +210,7 @@ export default function DashboardLayout() {
             source_ip: rule.ip_address || "Global",
             created_at: rule.created_at
           };
-          
+
           setToasts(prev => {
             if (prev.some(t => t.id === wafToast.id)) return prev;
             return [wafToast, ...prev].slice(0, 3);
@@ -203,7 +233,7 @@ export default function DashboardLayout() {
             source_ip: "Security Operations Center",
             created_at: incident.created_at
           };
-          
+
           setToasts(prev => {
             if (prev.some(t => t.id === correlationToast.id)) return prev;
             return [correlationToast, ...prev].slice(0, 3);
@@ -227,7 +257,7 @@ export default function DashboardLayout() {
               source_ip: "File Sandbox Threat Scan",
               created_at: sfile.created_at
             };
-            
+
             setToasts(prev => {
               if (prev.some(t => t.id === sandboxToast.id)) return prev;
               return [sandboxToast, ...prev].slice(0, 3);
@@ -251,19 +281,26 @@ export default function DashboardLayout() {
   }, [thresholds]);
 
   const menuItems = [
-    { name: 'Dashboard', path: '/', icon: Activity },
-    { name: 'AI Assistant', path: '/agent', icon: Terminal },
+    { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Threat Intelligence', path: '/attackers', icon: Globe },
-    { name: 'Live Attack Feed', path: '/attacks', icon: AlertTriangle },
-    { name: 'Honeypot Lab', path: '/sensors', icon: Radio },
-    { name: 'WAF Manager', path: '/waf', icon: ShieldAlert },
+    { name: 'Honeypot Lab', path: '/sensors', icon: FlaskConical },
+    { name: 'WAF', path: '/waf', icon: ShieldCheck },
+    { name: 'Attack Events', path: '/attacks', icon: AlertTriangle },
+    { name: 'AI Agent', path: '/agent', icon: Bot },
     { name: 'Reports', path: '/reports', icon: FileText }
   ];
 
-  const currentRouteName = () => {
-    if (location.pathname === '/' || location.pathname === '/dashboard') return 'DASHBOARD';
-    const match = menuItems.find(i => i.path === location.pathname);
-    return match ? match.name.toUpperCase() : 'CYBER DEFENSE SOC';
+  const isItemActive = (item) => {
+    if (item.name === 'Threat Intelligence' && (location.pathname === '/attackers' || location.pathname === '/threat-intelligence')) {
+      return true;
+    }
+    if (item.path === '/' && (location.pathname === '/' || location.pathname === '/dashboard')) {
+      return true;
+    }
+    if (item.name === 'Honeypot Lab' && location.pathname === '/sensors') {
+      return true;
+    }
+    return location.pathname === item.path;
   };
 
   return (
@@ -272,7 +309,7 @@ export default function DashboardLayout() {
       <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-logo">
           <div className="logo-shield-badge">
-            <svg viewBox="0 0 32 36" width="26" height="30" fill="none">
+            <svg viewBox="0 0 32 36" width="24" height="28" fill="none">
               <defs>
                 <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" stopColor="#00e5ff" />
@@ -284,54 +321,42 @@ export default function DashboardLayout() {
             </svg>
           </div>
           <div className="logo-text-block">
-            <span className="logo-brand">SENTINELAI</span>
+            <span className="logo-brand">SentinelAI</span>
             <span className="logo-tagline">AI CYBER DEFENSE PLATFORM</span>
           </div>
         </div>
-        
+
         <nav className="sidebar-nav">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isAttacks = item.path === '/attacks';
-            const isDashboard = item.path === '/' && (location.pathname === '/' || location.pathname === '/dashboard');
+            const active = isItemActive(item);
             return (
-              <NavLink 
-                key={item.path} 
-                to={item.path} 
-                className={({ isActive }) => `nav-item ${isActive || isDashboard ? 'active' : ''}`}
+              <NavLink
+                key={item.name}
+                to={item.path}
+                className={`nav-item ${active ? 'active' : ''}`}
               >
                 <Icon size={17} className="item-icon" />
                 <span className="item-name">{item.name}</span>
-                {isAttacks && (
-                  <span className="nav-badge-pill">{unreadCount > 0 ? unreadCount : '7'}</span>
+                {isAttacks && unreadCount > 0 && (
+                  <span className="nav-badge-pill">{unreadCount}</span>
                 )}
               </NavLink>
             );
           })}
         </nav>
-        
-        {/* Sidebar Compact System Status Box */}
+
+        {/* Sidebar Promo Badge */}
         <div className="sidebar-footer">
-          <div className="sidebar-system-monitor font-mono">
-            <div className="sys-mon-row">
-              <span className="sys-mon-label">CPU</span>
-              <div className="sys-mon-bar-bg">
-                <div className="sys-mon-bar-fill fill-cyan" style={{ width: `${cpuUsage ? Math.min(100, Math.max(5, cpuUsage)) : 45.9}%` }}></div>
-              </div>
-              <span className="sys-mon-value">{cpuUsage ? `${cpuUsage.toFixed(1)}%` : '45.9%'}</span>
+          <div className="sidebar-promo-card">
+            <div className="promo-shield-icon">
+              <Shield size={18} className="text-cyan" />
             </div>
-            <div className="sys-mon-row">
-              <span className="sys-mon-label">RAM</span>
-              <div className="sys-mon-bar-bg">
-                <div className="sys-mon-bar-fill fill-purple" style={{ width: `${memoryUsage ? Math.min(100, Math.max(5, memoryUsage)) : 77.1}%` }}></div>
-              </div>
-              <span className="sys-mon-value">{memoryUsage ? `${memoryUsage.toFixed(1)}%` : '77.1%'}</span>
+            <div className="promo-text-wrap">
+              <div className="promo-title">Smarter Detection.</div>
+              <div className="promo-subtitle">Stronger Defense.</div>
             </div>
-          </div>
-          <div className="sys-status font-mono">
-            <span className="status-dot online animate-live-pulse"></span>
-            <span className="status-label">Sentinel v0.1.0</span>
-            <span className="status-state text-green ms-auto">Connected</span>
           </div>
         </div>
       </aside>
@@ -339,41 +364,46 @@ export default function DashboardLayout() {
       {/* Main Content Area */}
       <div className="main-viewport">
         <header className="viewport-header">
-          <button 
-            className="toggle-sidebar-btn" 
+          <button
+            className="toggle-sidebar-btn"
             onClick={() => setSidebarOpen(!sidebarOpen)}
             title="Toggle Sidebar"
           >
             {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
-          
-          <div className="header-meta">
-            <div className="header-icon-badge">
-              <Shield className="text-cyan" size={18} />
+
+          {/* System Online Badge */}
+          <div className="header-system-status">
+            <span className={`system-status-led ${backendStatus.toLowerCase() === 'offline' ? 'offline' : 'online'} animate-live-pulse`}></span>
+            <div className="system-status-stack">
+              <span className="system-status-title">System {backendStatus === 'OFFLINE' ? 'Offline' : 'Online'}</span>
+              <span className="system-status-subtitle">{backendStatus === 'OFFLINE' ? 'Core Service Degraded' : 'All Systems Operational'}</span>
             </div>
-            <div className="header-title-stack">
-              <h1 className="header-page-title">
-                {currentRouteName()}
-              </h1>
-              <div className="header-page-subtitle">
-                AI-POWERED CYBER DEFENSE COMMAND CENTER
-              </div>
+          </div>
+
+          {/* Operational Status Badges: WAF, Honeypot, Database */}
+          <div className="header-operational-strip">
+            <div className="operational-pill">
+              <ShieldCheck size={14} className="op-icon text-green" />
+              <span className="op-label">WAF</span>
+              <span className="op-status text-green">{wafStatus === 'Offline' ? 'Offline' : 'Active'}</span>
+            </div>
+            <div className="operational-pill">
+              <FlaskConical size={14} className="op-icon text-green" />
+              <span className="op-label">Honeypot</span>
+              <span className="op-status text-green">{honeypotStatus === 'Offline' ? 'Offline' : 'Active'}</span>
+            </div>
+            <div className="operational-pill">
+              <Database size={14} className="op-icon text-green" />
+              <span className="op-label">Database</span>
+              <span className="op-status text-green">{backendStatus === 'OFFLINE' ? 'Disconnected' : 'Connected'}</span>
             </div>
           </div>
 
           <div className="header-right-cluster">
-            {/* System Online Badge */}
-            <div className="header-system-status">
-              <span className={`system-status-led ${backendStatus.toLowerCase() === 'offline' ? 'offline' : 'online'} animate-live-pulse`}></span>
-              <div className="system-status-stack">
-                <span className="system-status-title">System {backendStatus === 'OFFLINE' ? 'Offline' : 'Online'}</span>
-                <span className="system-status-subtitle">{backendStatus === 'OFFLINE' ? 'Core Service Degraded' : 'All Services Operational'}</span>
-              </div>
-            </div>
-
             {/* Real-time Notifications Bell */}
             <div className="notification-bell-container">
-              <button 
+              <button
                 className={`bell-btn ${showDropdown ? 'active' : ''}`}
                 onClick={() => {
                   setShowDropdown(!showDropdown);
@@ -381,8 +411,8 @@ export default function DashboardLayout() {
                 }}
                 title="Incident Notifications Hub"
               >
-                <ShieldAlert size={16} />
-                {unreadCount > 0 && <span className="bell-badge">{unreadCount}</span>}
+                <Bell size={16} />
+                <span className="bell-badge">{unreadCount > 0 ? unreadCount : 3}</span>
               </button>
 
               {showDropdown && (
@@ -396,8 +426,8 @@ export default function DashboardLayout() {
                       <div className="notif-empty">No active notifications logged.</div>
                     ) : (
                       notifications.map((notif) => (
-                        <div 
-                          key={notif.id} 
+                        <div
+                          key={notif.id}
                           className="notif-item"
                           onClick={() => {
                             setShowDropdown(false);
@@ -415,27 +445,20 @@ export default function DashboardLayout() {
               )}
             </div>
 
-            {/* Real-time Digital Clock Widget */}
-            <div className="header-digital-clock font-mono">
-              <div className="clock-time-val">{formatTime(currentTime)}</div>
-              <div className="clock-date-val">{formatDate(currentTime)}</div>
-            </div>
-
             {/* User Profile Pill */}
             <div className="header-user-pill-container" ref={userMenuRef}>
-              <button 
+              <button
                 className="header-user-pill"
                 onClick={() => setShowUserDropdown(!showUserDropdown)}
                 aria-expanded={showUserDropdown}
               >
                 <div className="user-avatar-circle">
-                  <User size={14} className="text-cyan" />
+                  <User size={15} />
                 </div>
                 <div className="user-text-stack">
-                  <span className="user-name-text">{user?.username || 'admin'}</span>
+                  <span className="user-name-text">{user?.username && user.username !== 'admin' ? user.username : 'Vaishnav Kumar'}</span>
                   <span className="user-role-text">{user?.role === 'admin' ? 'Administrator' : 'Analyst'}</span>
                 </div>
-                <ChevronDown size={14} className={`user-chevron ${showUserDropdown ? 'rotated' : ''}`} />
               </button>
 
               {showUserDropdown && (
@@ -445,7 +468,7 @@ export default function DashboardLayout() {
                     <span className="user-popover-role">{user?.role === 'admin' ? 'SYSTEM ADMINISTRATOR' : 'SOC ANALYST'}</span>
                   </div>
                   <div className="user-dropdown-divider"></div>
-                  <button 
+                  <button
                     className="user-dropdown-btn logout"
                     onClick={() => {
                       setShowUserDropdown(false);

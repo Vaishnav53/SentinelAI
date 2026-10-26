@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from backend.main import app
 from backend.database.session import SessionLocal
 from backend.models.models import AttackEvent, CorrelatedIncident, DecoySandboxFile, ReportJob, Report
-from datetime import datetime
+from datetime import datetime, timezone
 
 from backend.tests.conftest import create_test_auth_client
 
@@ -14,6 +14,7 @@ def test_reports_workflow():
         db = SessionLocal()
         try:
             # Seed mock data
+            now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
             event = AttackEvent(
                 external_id="ATT-REP-01",
                 attack_type="SQL Injection",
@@ -27,7 +28,7 @@ def test_reports_workflow():
                 sensor_id="HTTP Honeypot",
                 threat_score=9.5,
                 confidence=0.98,
-                created_at=datetime.utcnow()
+                created_at=now_utc
             )
             db.add(event)
 
@@ -40,7 +41,7 @@ def test_reports_workflow():
                 nodes_data='[]',
                 links_data='[]',
                 timeline_data='[]',
-                created_at=datetime.utcnow()
+                created_at=now_utc
             )
             db.add(incident)
 
@@ -56,7 +57,7 @@ def test_reports_workflow():
                 vt_reputation="55/72 matches",
                 sandbox_path="/tmp/malware.exe",
                 ip_address="192.168.99.99",
-                created_at=datetime.utcnow()
+                created_at=now_utc
             )
             db.add(sfile)
             db.commit()

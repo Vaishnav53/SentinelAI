@@ -10,10 +10,14 @@ if os.path.exists(ENV_PATH):
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+def _resolve_app_env() -> str:
+    raw = os.getenv("APP_ENV")
+    return "development" if raw is None else raw.strip().lower()
+
 class Settings(BaseModel):
     # App Settings
     APP_NAME: str = Field(default_factory=lambda: os.getenv("APP_NAME", "SentinelAI"))
-    APP_ENV: str = Field(default_factory=lambda: os.getenv("APP_ENV", "development"))
+    APP_ENV: str = Field(default_factory=_resolve_app_env)
     APP_HOST: str = Field(default_factory=lambda: os.getenv("APP_HOST", "127.0.0.1"))
     APP_PORT: int = Field(default_factory=lambda: int(os.getenv("APP_PORT", "8000")))
     
@@ -48,6 +52,9 @@ class Settings(BaseModel):
     
     # Logging Settings
     LOG_LEVEL: str = Field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
+
+    # Threat Attack Simulator Settings (disabled by default)
+    ENABLE_ATTACK_SIMULATOR: bool = Field(default_factory=lambda: os.getenv("ENABLE_ATTACK_SIMULATOR", "false").lower() in ("true", "1", "yes"))
 
     def get_cors_origins(self) -> List[str]:
         raw = f"{self.FRONTEND_ORIGIN},{os.getenv('FRONTEND_URL', '')}"

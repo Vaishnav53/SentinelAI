@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 from typing import Optional
 from datetime import datetime
 
@@ -28,8 +28,7 @@ class UserResponse(BaseModel):
     created_at: Optional[datetime] = None
     last_login_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class AuthMessageResponse(BaseModel):
     message: str

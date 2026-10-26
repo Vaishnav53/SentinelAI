@@ -1,7 +1,10 @@
 import logging
 import json
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 from typing import Tuple, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from backend.models.models import WAFRule, WAFHit, AuditLog, AttackEvent
@@ -224,7 +227,7 @@ class ActiveDefenseEngine:
         Intercept decoy requests and evaluate security rules.
         Returns: (is_blocked, action, reason)
         """
-        now = datetime.utcnow()
+        now = utc_now()
         
         # 1. Fetch active rules matching this IP or all IPs (ip_address is Null/empty)
         rules = self.db.query(WAFRule).filter(
@@ -292,7 +295,7 @@ class ActiveDefenseEngine:
             auto_enabled = self.get_setting("waf_auto_containment_enabled", "true").lower() == "true"
             if auto_enabled:
                 # Count recent attacks from this IP (last 5 minutes)
-                five_mins_ago = datetime.utcnow() - timedelta(minutes=5)
+                five_mins_ago = utc_now() - timedelta(minutes=5)
                 recent_attacks_count = self.db.query(AttackEvent).filter(
                     AttackEvent.source_ip == ip,
                     AttackEvent.created_at >= five_mins_ago
@@ -316,7 +319,7 @@ class ActiveDefenseEngine:
                         reason=reason,
                         is_enabled=1,
                         rule_type="AUTOMATIC",
-                        expires_at=datetime.utcnow() + timedelta(hours=24),
+                        expires_at=utc_now() + timedelta(hours=24),
                         analyst_attribution="SentinelAI WAF Engine",
                         trigger_count=1
                     )
@@ -412,5 +415,5 @@ class ActiveDefenseEngine:
         html = html.replace("{client_ip}", client_ip)
         html = html.replace("{action}", "CONNECTION BLOCKED" if action == "BLOCK" else "HOST QUARANTINED")
         html = html.replace("{reason}", reason)
-        html = html.replace("{timestamp}", datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"))
+        html = html.replace("{timestamp}", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"))
         return html

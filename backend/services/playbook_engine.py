@@ -1,7 +1,7 @@
 import logging
 import json
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List
 from sqlalchemy.orm import Session
 from backend.models.models import ThreatPlaybook, PlaybookExecution, WAFRule, CorrelatedIncident, AuditLog
@@ -40,7 +40,7 @@ class PlaybookEngine:
             for idx, act in enumerate(actions):
                 act_type = act.get("action", "").upper()
                 step_log = {
-                    "time": datetime.utcnow().isoformat(),
+                    "time": datetime.now(timezone.utc).isoformat(),
                     "step": act_type,
                     "status": "SUCCESS",
                     "message": ""
@@ -81,7 +81,7 @@ class PlaybookEngine:
                             status="NEW",
                             nodes_data=json.dumps([{"id": target_ip, "label": f"IP: {target_ip}", "type": "IP"}]),
                             links_data="[]",
-                            timeline_data=json.dumps([{"time": datetime.utcnow().isoformat(), "title": "Playbook Escalation", "details": "Incident opened dynamically."}])
+                            timeline_data=json.dumps([{"time": datetime.now(timezone.utc).isoformat(), "title": "Playbook Escalation", "details": "Incident opened dynamically."}])
                         )
                         self.db.add(incident)
                         self.db.flush()
@@ -110,7 +110,7 @@ class PlaybookEngine:
                         if inc:
                             timeline = json.loads(inc.timeline_data or "[]")
                             timeline.append({
-                                "time": datetime.utcnow().isoformat(),
+                                "time": datetime.now(timezone.utc).isoformat(),
                                 "title": "Playbook Update",
                                 "details": f"Executed response action playbook step '{playbook.name}' successfully."
                             })
@@ -149,7 +149,7 @@ class PlaybookEngine:
             logger.error(f"Playbook processing crash: {e}", exc_info=True)
             status = "FAILED"
             execution_logs.append({
-                "time": datetime.utcnow().isoformat(),
+                "time": datetime.now(timezone.utc).isoformat(),
                 "step": "SYSTEM_CRASH",
                 "status": "FAILED",
                 "message": f"Execution processing error: {str(e)}"

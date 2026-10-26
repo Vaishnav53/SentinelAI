@@ -8,7 +8,10 @@ import re
 import random
 import json
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 from typing import Dict, Any, Optional
 from backend.database.session import SessionLocal
 from backend.models.models import (
@@ -36,7 +39,7 @@ def record_honeypot_activity(
 ) -> Optional[HoneypotActivityLog]:
     try:
         act = HoneypotActivityLog(
-            timestamp=datetime.utcnow(),
+            timestamp=utc_now(),
             source_ip=ip or "127.0.0.1",
             action_type=action_type,
             username_or_email=username_or_email[:100] if username_or_email else None,
@@ -800,7 +803,7 @@ class HoneypotRequestHandler(http.server.BaseHTTPRequestHandler):
             intel = ThreatIntelService(db).enrich_ip(self.client_address[0])
 
             attack_event = AttackEvent(
-                external_id=f"HON-{int(datetime.utcnow().timestamp())}",
+                external_id=f"HON-{int(datetime.now(timezone.utc).timestamp())}",
                 attack_type=attack_type,
                 severity=severity,
                 status="NEW",
@@ -822,7 +825,7 @@ class HoneypotRequestHandler(http.server.BaseHTTPRequestHandler):
                     "latitude": intel.get("latitude", 0.0),
                     "longitude": intel.get("longitude", 0.0)
                 }),
-                created_at=datetime.utcnow()
+                created_at=utc_now()
             )
             db.add(attack_event)
             db.commit()
@@ -886,7 +889,7 @@ class HoneypotRequestHandler(http.server.BaseHTTPRequestHandler):
 
     def check_rate_limit(self) -> bool:
         ip = self.client_address[0]
-        now = datetime.utcnow().timestamp()
+        now = datetime.now(timezone.utc).timestamp()
 
         if ip not in self.rate_limits:
             self.rate_limits[ip] = []
@@ -1052,7 +1055,7 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
         # Logging request locally for the admin console
         user = self.get_session_user()
         request_log_entry = {
-            "time": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "time": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
             "ip": self.client_address[0],
             "method": self.command,
             "path": path,
@@ -1168,7 +1171,7 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                         succ_email = user_obj.email if user_obj else lab_match.get("email", "")
 
                         if user_obj:
-                            user_obj.last_login_at = datetime.utcnow()
+                            user_obj.last_login_at = utc_now()
                             user_obj.login_count += 1
                             db.commit()
 
@@ -1519,7 +1522,7 @@ drwxr-xr-x  2 www-data www-data  4096 Jul  3 12:00 uploads"""
                     </div>
                     <div style="display: flex; align-items: center; gap: 12px;">
                         <span class="badge badge-{role}">{role.upper()}</span>
-                        <span class="text-muted" style="font-size: 11px;">Active Session &bull; {datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")}</span>
+                        <span class="text-muted" style="font-size: 11px;">Active Session &bull; {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}</span>
                     </div>
                 </div>
             </div>
@@ -2731,7 +2734,7 @@ class HoneypotManager:
                 sensor.state = state
                 sensor.host = host_ip
                 if state == "ONLINE":
-                    sensor.last_heartbeat = datetime.utcnow()
+                    sensor.last_heartbeat = utc_now()
                 db.commit()
         except Exception as e:
             db.rollback()

@@ -106,3 +106,31 @@ def test_admin_bootstrap_idempotency(db, monkeypatch):
     
     count = db.query(SentinelUser).filter(SentinelUser.username == "dyn4m1t3").count()
     assert count == 1
+
+def test_admin_bootstrap_password_preservation_and_force_reset(db, monkeypatch):
+    from backend.core.security import hash_password, verify_password
+
+    monkeypatch.setattr(settings, "SENTINEL_ADMIN_USERNAME", "dyn4m1t3")
+    monkeypatch.setattr(settings, "SENTINEL_ADMIN_PASSWORD", "InitialAdminSecret123!")
+    monkeypatch.setattr(settings, "SENTINEL_ADMIN_EMAIL", "admin@sentinel.ai")
+
+    # 1. Initial bootstrap
+    admin = AuthService.bootstrap_admin_user(db)
+    assert verify_password("InitialAdminSecret123!", admin.password_hash)
+
+    # 2. Admin updates password in database
+    admin.password_hash = hash_password("ChangedInAppPassword456!")
+    db.commit()
+
+    # 3. Standard container restart with initial env var -> In-app password is preserved!
+    monkeypatch.delenv("SENTINEL_ADMIN_FORCE_RESET_PASSWORD", raising=False)
+    restarted = AuthService.bootstrap_admin_user(db)
+    assert verify_password("ChangedInAppPassword456!", restarted.password_hash)
+    assert not verify_password("InitialAdminSecret123!", restarted.password_hash)
+
+    # 4. Emergency force reset via SENTINEL_ADMIN_FORCE_RESET_PASSWORD=true
+    monkeypatch.setenv("SENTINEL_ADMIN_FORCE_RESET_PASSWORD", "true")
+    monkeypatch.setattr(settings, "SENTINEL_ADMIN_PASSWORD", "EmergencyRecoverySecret789!")
+    recovered = AuthService.bootstrap_admin_user(db)
+    assert verify_password("EmergencyRecoverySecret789!", recovered.password_hash)
+

@@ -5,13 +5,16 @@ import io
 import re
 import httpx
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import FileResponse, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from backend.database.session import get_db
 from backend.core.config import settings
@@ -33,8 +36,7 @@ class ReportJobRead(BaseModel):
     error_message: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class GenerateReportPayload(BaseModel):
     type: str
@@ -59,7 +61,7 @@ def create_report_job(payload: Dict[str, Any], db: Session = Depends(get_db)):
         status="completed",
         progress=100,
         filters=json.dumps(payload.get("filters", {})),
-        created_at=datetime.utcnow()
+        created_at=utc_now()
     )
     db.add(job)
     db.commit()
@@ -127,7 +129,7 @@ def _resolve_time_bounds(
     end_date: Optional[str] = None,
     db: Optional[Session] = None
 ):
-    now = datetime.utcnow()
+    now = utc_now()
     if time_range == "24h":
         cur_start = now - timedelta(hours=24)
         cur_end = now
@@ -498,7 +500,7 @@ def get_reports_analytics(
         "range_label": range_label,
         "start_time": cur_start.isoformat(),
         "end_time": cur_end.isoformat(),
-        "last_updated": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "last_updated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
         "kpis": {
             "total_events": {
                 "count": total_events,
@@ -622,7 +624,7 @@ async def generate_ai_executive_summary(
     return {
         "markdown": markdown_content,
         "model": model_name,
-        "generated_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     }
 
 @router.get("/export-period-csv")
@@ -813,7 +815,7 @@ async def generate_ai_summary(
 
     # Fallback to local markdown template if synthesis timed out/failed
     if not markdown_content:
-        timestamp_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        timestamp_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
         mitre_list = "* T1190 - Exploit Public-Facing Application\n* T1110 - Brute Force"
         remediations = "1. Enable active firewall blocking rules.\n2. Revoke and update session access keys.\n3. Keep decoy sandbox execution monitored."
@@ -866,7 +868,7 @@ High risk breach indicators. Probes, invalid authentications, or payload executi
         status="completed",
         progress=100,
         filters=json.dumps({"type": report_type, "target_id": target_id}),
-        created_at=datetime.utcnow()
+        created_at=utc_now()
     )
     db.add(report_job)
     db.commit()
@@ -886,7 +888,7 @@ High risk breach indicators. Probes, invalid authentications, or payload executi
         file_size=len(markdown_content.encode('utf-8')),
         format="markdown",
         generated_by="System AI Analyst",
-        created_at=datetime.utcnow()
+        created_at=utc_now()
     )
     db.add(report)
     db.commit()

@@ -1,6 +1,10 @@
 from sqlalchemy.orm import declarative_base
 from sqlalchemy import Column, Integer, DateTime
-from datetime import datetime
+from datetime import datetime, timezone
+
+def utc_now() -> datetime:
+    """Return current naive UTC datetime for standard DateTime column defaults."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 # Standard SQLAlchemy Declarative Base
 Base = declarative_base()
@@ -8,5 +12,5 @@ Base = declarative_base()
 class DBBaseModel:
     """Base class for SQLAlchemy models with audit columns."""
     id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)

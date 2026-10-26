@@ -3,8 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
-from datetime import datetime
-from pydantic import BaseModel
+from datetime import datetime, timezone
+from pydantic import BaseModel, ConfigDict
 
 from backend.database.session import get_db, distinct_group_concat
 from backend.models.models import WAFRule, WAFHit, AuditLog, AttackEvent, HoneypotActivityLog
@@ -49,8 +49,7 @@ class WAFRuleRead(BaseModel):
     trigger_count: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class WAFRuleCreate(BaseModel):
     ip_address: Optional[str] = None
@@ -80,8 +79,7 @@ class WAFHitRead(BaseModel):
     user_agent: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class WAFStatus(BaseModel):
     blocked_count: int
@@ -321,7 +319,7 @@ def get_observed_sources(db: Session = Depends(get_db)):
 
         observed_sources.append(ObservedSourceRead(
             ip_address=ip,
-            last_seen=ls.strftime("%Y-%m-%d %H:%M:%S UTC") if ls else datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+            last_seen=ls.strftime("%Y-%m-%d %H:%M:%S UTC") if ls else datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
             first_seen=fs.isoformat() if fs else None,
             event_count=entry["cnt"],
             threat_types=sorted(list(entry["types_set"])),

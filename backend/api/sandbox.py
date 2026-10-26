@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from backend.database.session import get_db
 from backend.models.models import DecoySandboxFile, WAFRule, AuditLog
@@ -28,8 +28,7 @@ class DecoySandboxFileRead(BaseModel):
     ip_address: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SandboxStatusResponse(BaseModel):
     total_scanned: int

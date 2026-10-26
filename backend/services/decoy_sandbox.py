@@ -3,7 +3,7 @@ import hashlib
 import os
 import re
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Tuple
 import httpx
 from sqlalchemy.orm import Session
@@ -136,7 +136,7 @@ class DecoySandboxService:
         # 6. Log Threat telemetry if malicious
         if status in ("SUSPICIOUS", "MALICIOUS"):
             attack = AttackEvent(
-                external_id=f"HON-{int(datetime.utcnow().timestamp())}",
+                external_id=f"HON-{int(datetime.now(timezone.utc).timestamp())}",
                 attack_type="Malicious File Upload",
                 severity="CRITICAL" if status == "MALICIOUS" else "HIGH",
                 threat_score=threat_score * 10.0,

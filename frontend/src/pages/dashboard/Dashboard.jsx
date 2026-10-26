@@ -64,7 +64,7 @@ export default function Dashboard() {
         apiClient.get('/sensors'),
         apiClient.get('/attacks?page_size=10'),
         apiClient.get('/waf/status'),
-        apiClient.get('/attacker/profiles')
+        apiClient.get('/attacker/profiles?limit=5')
       ]);
 
       if (statsRes.status === 'fulfilled') setStats(statsRes.value);
@@ -91,7 +91,20 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(() => fetchData(true), 5000);
+
+    // Controlled 10-second polling interval (active only when browser tab is visible)
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        fetchData(true);
+      }
+    }, 10000);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchData(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const wsUrl = getAttackWebSocketUrl();
     const socket = new WebSocket(wsUrl);
@@ -124,7 +137,12 @@ export default function Dashboard() {
 
     return () => {
       clearInterval(interval);
-      socket.close();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      try {
+        socket.close();
+      } catch {
+        // Ignore socket closure errors
+      }
     };
   }, []);
 

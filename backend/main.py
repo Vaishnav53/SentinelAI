@@ -2,6 +2,7 @@ import logging
 from fastapi import FastAPI, Depends, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 from sqlalchemy.orm import Session
 
@@ -26,8 +27,15 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Production Deployment Security Guards
-    if settings.APP_ENV.lower() in ("production", "prod"):
+    # Environment Validation & Production Security Guards
+    supported_envs = ("development", "test", "production", "prod")
+    if settings.APP_ENV not in supported_envs:
+        raise RuntimeError(
+            f"CRITICAL CONFIGURATION ERROR: Invalid APP_ENV '{settings.APP_ENV}'. "
+            f"Must be one of: {', '.join(supported_envs)}."
+        )
+
+    if settings.APP_ENV in ("production", "prod"):
         if not settings.SECRET_KEY or settings.SECRET_KEY == "placeholder_secret_key":
             raise RuntimeError("CRITICAL SECURITY ERROR: Production deployment requires a custom SECRET_KEY environment variable.")
         if settings.DATABASE_URL.startswith("sqlite"):
@@ -69,21 +77,27 @@ async def lifespan(app: FastAPI):
         finally:
             db.close()
             
-        # Start background threat simulator task
-        import asyncio
-        from backend.api.attacks import start_attack_simulator
-        app.state.simulator_task = asyncio.create_task(start_attack_simulator())
+        # Start background threat simulator task only if explicitly enabled
+        if settings.ENABLE_ATTACK_SIMULATOR:
+            import asyncio
+            from backend.api.attacks import start_attack_simulator
+            app.state.simulator_task = asyncio.create_task(start_attack_simulator())
+            logging.info("Threat attack simulator background task started.")
+        else:
+            app.state.simulator_task = None
+            logging.info("Threat attack simulator is disabled by default (ENABLE_ATTACK_SIMULATOR=False).")
+
         app.state.db_ready = True
     except Exception as e:
         app.state.db_ready = False
         app.state.db_error = str(e)
         logging.error(f"Failed to initialize database tables or populate demo data: {e}", exc_info=True)
-        if settings.APP_ENV.lower() in ("production", "prod"):
+        if settings.APP_ENV in ("production", "prod"):
             raise RuntimeError(f"CRITICAL STARTUP ERROR: Database initialization failed in production: {e}") from e
     yield
     # Cleanup tasks (if any) go here on Shutdown
     logging.info("Shutting down SentinelAI API backend...")
-    if hasattr(app.state, "simulator_task"):
+    if getattr(app.state, "simulator_task", None):
         app.state.simulator_task.cancel()
 
 app = FastAPI(
@@ -105,6 +119,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# GZip Compression Middleware (compresses JSON payloads > 1KB for faster network transfer)
+app.add_middleware(
+    GZipMiddleware,
+    minimum_size=1000
 )
 
 # Root Health and Readiness Endpoints (for cloud orchestrators and load balancers)

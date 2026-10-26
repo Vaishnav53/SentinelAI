@@ -1,6 +1,6 @@
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 from backend.database.session import distinct_group_concat
@@ -79,7 +79,7 @@ class AttackerProfilingService:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_all_attackers(self) -> List[Dict[str, Any]]:
+    def get_all_attackers(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """Retrieve all unique attacking IPs with telemetry metrics aggregates and real timestamps efficiently."""
         from sqlalchemy import func
 
@@ -303,7 +303,10 @@ class AttackerProfilingService:
             })
 
         # Sort results by risk_score desc then total_events desc
-        return sorted(results, key=lambda x: (x["risk_score"], x["total_events"]), reverse=True)
+        sorted_results = sorted(results, key=lambda x: (x["risk_score"], x["total_events"]), reverse=True)
+        if limit is not None:
+            return sorted_results[:limit]
+        return sorted_results
 
 
     def get_attacker_profile(self, ip: str) -> Optional[Dict[str, Any]]:
@@ -466,7 +469,7 @@ class AttackerProfilingService:
             })
 
         for hl in h_logs:
-            time_str = hl.timestamp.isoformat() if hl.timestamp else datetime.utcnow().isoformat()
+            time_str = hl.timestamp.isoformat() if hl.timestamp else datetime.now(timezone.utc).isoformat()
             user_str = f" (User: {hl.username_or_email})" if hl.username_or_email else ""
             timeline.append({
                 "time": time_str,

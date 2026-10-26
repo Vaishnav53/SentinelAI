@@ -74,3 +74,32 @@ def test_logs_ingestion_and_brute_force_correlation():
         db.query(CorrelatedIncident).filter(CorrelatedIncident.id == incident_id).delete()
         db.commit()
         db.close()
+
+def test_seed_demo_incidents_production_guard(monkeypatch):
+    from backend.core.config import settings
+
+    with create_test_auth_client() as client:
+        # 1. Under test environment -> seed-demo is permitted
+        res = client.post("/api/correlation/seed-demo")
+        assert res.status_code == 200
+        assert res.json()["status"] == "SUCCESS"
+
+        # 2. Under production -> seed-demo is blocked with HTTP 403
+        monkeypatch.setattr(settings, "APP_ENV", "production")
+        res_prod = client.post("/api/correlation/seed-demo")
+        assert res_prod.status_code == 403
+        assert "disabled in production" in res_prod.json()["error"]["message"]
+
+        # 3. Under prod alias -> seed-demo is also blocked with HTTP 403
+        monkeypatch.setattr(settings, "APP_ENV", "prod")
+        res_prod_alias = client.post("/api/correlation/seed-demo")
+        assert res_prod_alias.status_code == 403
+        assert "disabled in production" in res_prod_alias.json()["error"]["message"]
+
+        # Cleanup demo records
+        db = SessionLocal()
+        db.query(NormalizedLog).filter(NormalizedLog.source_ip == "10.99.99.99").delete()
+        db.query(CorrelatedIncident).filter(CorrelatedIncident.title.like("%10.99.99.99%")).delete()
+        db.commit()
+        db.close()
+

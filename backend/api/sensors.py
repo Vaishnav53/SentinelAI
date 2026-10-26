@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.database.session import get_db
 from backend.models.models import HoneypotSensor
 from backend.schemas.sensors import HoneypotSensorRead, SensorStateUpdate
@@ -21,7 +21,7 @@ async def start_sensor(id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail=f"Sensor with ID {id} not found")
         
     sensor.state = "ONLINE"
-    sensor.last_heartbeat = datetime.utcnow()
+    sensor.last_heartbeat = datetime.now(timezone.utc).replace(tzinfo=None)
     db.commit()
     db.refresh(sensor)
     return sensor

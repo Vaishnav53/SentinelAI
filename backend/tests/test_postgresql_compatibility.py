@@ -178,3 +178,24 @@ def test_sqlite_aggregation_backward_compatibility(db):
     service = AttackerProfilingService(db)
     attackers = service.get_all_attackers()
     assert isinstance(attackers, list)
+
+
+def test_is_postgres_session_dialect_detection(db):
+    """Verify is_postgres_session accurately detects PostgreSQL vs SQLite dialect."""
+    from backend.database.session import is_postgres_session
+    from unittest.mock import MagicMock
+
+    # Active test session is SQLite
+    assert is_postgres_session(db) is False
+
+    # Mock PostgreSQL session
+    mock_pg_session = MagicMock()
+    mock_pg_session.bind.dialect.name = "postgresql"
+    assert is_postgres_session(mock_pg_session) is True
+
+    # Mock PostgreSQL session where bind is on get_bind()
+    mock_get_bind_session = MagicMock()
+    mock_get_bind_session.bind = None
+    mock_get_bind_session.get_bind.return_value.dialect.name = "postgresql"
+    assert is_postgres_session(mock_get_bind_session) is True
+

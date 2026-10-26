@@ -1,6 +1,9 @@
 import logging
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 from backend.models.models import NormalizedLog, CorrelatedIncident, AuditLog
@@ -13,7 +16,7 @@ class CorrelationEngine:
 
     def process_log(self, log: NormalizedLog):
         """Analyze a new normalized log and match threat correlation rules."""
-        now = datetime.utcnow()
+        now = utc_now()
         lookback_window = now - timedelta(minutes=10)
 
         # Rule 1: Brute-Force to Login Success
@@ -146,7 +149,7 @@ class CorrelationEngine:
         source_ip: Optional[str]
     ):
         """Write to database and broadcast WebSocket notification payload."""
-        now = datetime.utcnow()
+        now = utc_now()
         lookback = now - timedelta(minutes=15)
         
         # Check if an active incident for this IP/title already exists in last 15 minutes

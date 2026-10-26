@@ -10,6 +10,8 @@ import WAFManager from '../pages/waf/WAFManager';
 import SandboxDashboard from '../pages/sandbox/SandboxDashboard';
 import AttackerProfiles from '../pages/attackers/AttackerProfiles';
 import PlaybooksConsole from '../pages/playbooks/PlaybooksConsole';
+import CorrelationDashboard from '../pages/correlation/CorrelationDashboard';
+import SettingsPage from '../pages/settings/Settings';
 
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import Login from '../pages/auth/Login';
@@ -95,6 +97,18 @@ const router = createBrowserRouter([
       {
         path: 'reports',
         element: <Reports />
+      },
+      {
+        path: 'correlation',
+        element: <CorrelationDashboard />
+      },
+      {
+        path: 'settings',
+        element: <SettingsPage />
+      },
+      {
+        path: 'users',
+        element: <SettingsPage />
       }
     ]
   }

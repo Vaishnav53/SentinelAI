@@ -87,10 +87,10 @@ def test_waf_observed_sources_and_honeypot_enforcement():
     with create_test_auth_client() as client:
         db = SessionLocal()
         try:
-            from datetime import datetime
+            from datetime import datetime, timezone
             from backend.models.models import HoneypotActivityLog
             log_entry = HoneypotActivityLog(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
                 source_ip="192.168.22.33",
                 action_type="LOGIN_PROBE",
                 result="DETECTED",

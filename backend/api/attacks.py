@@ -2,12 +2,13 @@ from fastapi import APIRouter, Depends, Query, HTTPException, WebSocket, WebSock
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
+import time
 import asyncio
 import random
 import json
 import logging
-from backend.database.session import get_db, SessionLocal
+from backend.database.session import get_db, SessionLocal, is_postgres_session
 from backend.models.models import AttackEvent, HoneypotSensor, SentinelUser
 from backend.api.dependencies import get_current_user
 from backend.schemas.attacks import (
@@ -75,7 +76,7 @@ def _generate_simulated_attack_event() -> Optional[dict]:
         intel = service.enrich_ip(src_ip)
 
         new_event = AttackEvent(
-            external_id=f"SIM-{int(datetime.utcnow().timestamp())}",
+            external_id=f"SIM-{int(time.time())}",
             attack_type=attack_type,
             severity=sev,
             status="NEW",
@@ -95,14 +96,14 @@ def _generate_simulated_attack_event() -> Optional[dict]:
                 "latitude": intel.get("latitude", 0.0),
                 "longitude": intel.get("longitude", 0.0)
             }),
-            created_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None)
         )
         db.add(new_event)
 
         # Update http sensor heartbeat
         sensor = db.query(HoneypotSensor).filter(HoneypotSensor.name == "HTTP Honeypot").first()
         if sensor:
-            sensor.last_heartbeat = datetime.utcnow()
+            sensor.last_heartbeat = datetime.now(timezone.utc).replace(tzinfo=None)
             sensor.state = "ONLINE"
 
         db.commit()
@@ -266,7 +267,7 @@ def get_attack_stats(
     
     # Simple Mock Timeline metrics for Recharts
     # Dialect-portable timeline query (PostgreSQL to_char vs SQLite strftime)
-    if db.bind and db.bind.dialect.name == "postgresql":
+    if is_postgres_session(db):
         date_col = func.to_char(AttackEvent.created_at, "YYYY-MM-DD")
     else:
         date_col = func.strftime("%Y-%m-%d", AttackEvent.created_at)
@@ -368,7 +369,7 @@ async def perform_incident_action(
             "description": "Telemetry event ingested from honeypot sensor."
         }]
 
-    now_str = datetime.utcnow().isoformat()
+    now_str = datetime.now(timezone.utc).isoformat()
     action_type = payload.action.lower()
 
     if action_type == "add_note":

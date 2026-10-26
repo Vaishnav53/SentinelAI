@@ -1,11 +1,11 @@
-# SentinelAI — Autonomous Cyber Defense & SOC Platform
+# SentinelAI — AI Cyber Defense Platform
 
 <p align="center">
   <img src="docs/assets/branding/banner.svg" alt="SentinelAI Banner" width="100%">
 </p>
 
 <p align="center">
-  <a href="https://github.com/Vaishnav53/SentinelAI/actions"><img src="https://img.shields.io/badge/Tests-51%20Passing-brightgreen?style=for-the-badge&logo=pytest&logoColor=white" alt="Tests Badge"></a>
+  <a href="https://github.com/Vaishnav53/SentinelAI/actions"><img src="https://img.shields.io/badge/Tests-64%20Passing-brightgreen?style=for-the-badge&logo=pytest&logoColor=white" alt="Tests Badge"></a>
   <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python Badge">
   <img src="https://img.shields.io/badge/FastAPI-0.110%2B-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI Badge">
   <img src="https://img.shields.io/badge/React-19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React Badge">
@@ -51,7 +51,7 @@ Modern enterprise SOCs face severe operational hurdles:
 * **3D Global Threat Globe**: Interactive Three.js holographic projection visualizing geographical source-to-target threat vectors.
 * **Bi-Directional WebSocket Feeds**: Low-latency event streaming via `/api/attacks/ws` with automatic client reconnection.
 
-### 2. Live Threat Attack Feed & Triage (`/attacks`)
+### 2. Attack Events Feed & Triage (`/attacks`)
 * **Unified Telemetry Ingress**: Normalized ingestion pipeline for decoy events, firewall interceptions, and honeypot hits.
 * **Multi-Criteria Filtering**: Filter by severity level, targeted protocol (`HTTP`, `SSH`, `FTP`, `TELNET`), status (`NEW`, `INVESTIGATING`, `RESOLVED`), and analyst assignment.
 * **Payload Deep Dive**: Inspect ingested HTTP query strings, request bodies, traversal attempts, and SSH authentication attempts.
@@ -75,7 +75,7 @@ Modern enterprise SOCs face severe operational hurdles:
 * **Binding Interface Toggle**: Switch seamlessly between **Local Loopback (`127.0.0.1`)** for safe local experimentation and **LAN Broadcast (`0.0.0.0`)** for network-wide telemetry capture.
 * **Firewall Rule Generator**: Generates copy-pasteable PowerShell inbound firewall commands for safe port management.
 
-### 6. AI Security Copilot & 7-Action Investigator (`/agent`)
+### 6. AI Agent & Security Copilot (`/agent`)
 * **Dual-Mode Workspace**:
   * **Telemetry Copilot Tab**: Natural language interface for querying platform telemetry, explaining threat concepts, and recommending defensive postures.
   * **Investigator Tab**: Deep contextual incident triaging featuring **7 Structured AI Investigation Actions**:
@@ -234,7 +234,7 @@ sequenceDiagram
 | **Realtime Transport** | WebSockets (`websockets`) | Low-latency bi-directional threat streaming |
 | **AI Streaming** | Server-Sent Events (SSE) | Unbuffered streaming responses for LLM reasoning |
 | **AI Inference** | Groq Cloud API | High-speed LLM inference (`openai/gpt-oss-120b`) |
-| **Testing** | Pytest (51 Passing Tests) | Comprehensive API contracts, RBAC, WAF, and DB tests |
+| **Testing** | Pytest (64 Passing Tests) + Vitest (9 Passing Tests) | Comprehensive API contracts, RBAC, WAF, Threat Intel, and Frontend state tests |
 | **Containerization** | Docker (`Dockerfile.backend`) | Containerized backend deployment on `python:3.11-slim` |
 
 ---
@@ -336,7 +336,7 @@ SentinelAI/
 │   │   ├── decoy_sandbox.py      # Artifact scanning and hashing service
 │   │   ├── honeypot.py           # Aetheris decoy listeners and socket handlers
 │   │   └── playbook_engine.py    # Automated remediation playbook runner
-│   └── tests/                    # Pytest automated test suite (51 tests)
+│   └── tests/                    # Pytest automated test suite (64 tests)
 ├── frontend/                     # React 19 / Vite Single Page Application
 │   ├── src/
 │   │   ├── api/                  # Axios HTTP client with credential interceptors
@@ -449,6 +449,7 @@ npm run dev
 | `SENTINEL_ADMIN_EMAIL` | `admin@sentinel.ai` | No | Bootstrap administrator email |
 | `GROQ_API_KEY` | *(None)* | Recommended | Groq Cloud API key for streaming AI Copilot |
 | `DEFAULT_GROQ_MODEL` | `openai/gpt-oss-120b` | No | Default Groq model identifier |
+| `ENABLE_ATTACK_SIMULATOR` | `false` | No | Controls background threat attack simulator (disabled by default) |
 | `LOG_LEVEL` | `INFO` | No | Console/file logging verbosity (`DEBUG`, `INFO`) |
 
 ### Frontend (`frontend/.env`)
@@ -464,29 +465,47 @@ npm run dev
 
 SentinelAI includes comprehensive test coverage across backend route boundaries, database dialects, authentication workflows, WAF rules, and frontend bundling.
 
-### Run Backend Pytest Suite (51 Tests)
+### Run Backend Pytest Suite (64 Tests)
 ```bash
 # From repository root:
 .\backend\.venv\Scripts\python.exe -m pytest backend/tests/
 ```
 ```text
 ============================== test session starts ==============================
-collected 51 items
+collected 64 items
 
-backend/tests/test_agent.py ........                                     [ 15%]
-backend/tests/test_attacks.py ......                                     [ 27%]
-backend/tests/test_auth.py .......                                        [ 41%]
-backend/tests/test_groq_agent.py ...                                      [ 47%]
-backend/tests/test_honeypot.py ....                                       [ 54%]
-backend/tests/test_playbooks.py ....                                      [ 62%]
-backend/tests/test_postgresql_compatibility.py .....                      [ 72%]
-backend/tests/test_rbac.py ....                                           [ 80%]
-backend/tests/test_reports.py ....                                        [ 88%]
-backend/tests/test_sandbox.py ...                                         [ 94%]
-backend/tests/test_waf.py ...                                             [100%]
+backend/tests/test_attacks_simulator.py ...........                      [ 17%]
+backend/tests/test_auth.py .                                             [ 18%]
+backend/tests/test_config.py ..                                          [ 21%]
+backend/tests/test_correlation.py .                                      [ 23%]
+backend/tests/test_db.py ...                                             [ 28%]
+backend/tests/test_errors.py ....                                        [ 34%]
+backend/tests/test_groq_agent.py ......                                  [ 43%]
+backend/tests/test_health.py ..                                          [ 46%]
+backend/tests/test_honeypot.py ..........                                [ 62%]
+backend/tests/test_playbooks.py ..                                       [ 65%]
+backend/tests/test_postgresql_compatibility.py ..........                [ 81%]
+backend/tests/test_rbac.py ......                                        [ 90%]
+backend/tests/test_reports.py .                                          [ 92%]
+backend/tests/test_sandbox.py ..                                         [ 95%]
+backend/tests/test_waf.py ...                                            [100%]
 
-====================== 51 passed, 575 warnings in 40.45s =======================
+======================= 64 passed, 2 warnings in 59.29s =======================
 Exit Code: 0 (100% Passing)
+```
+
+### Run Frontend Vitest Suite (9 Tests)
+```bash
+cd frontend
+npx vitest run src/pages/attackers/attackerDeepLink.test.js
+```
+```text
+ RUN  v4.1.9 D:/Documents/SentinelAI/frontend
+
+ ✓ src/pages/attackers/attackerDeepLink.test.js (9 tests)
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
 ```
 
 ### Validate Frontend Production Build & Linting

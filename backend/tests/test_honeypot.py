@@ -126,7 +126,7 @@ def test_honeypot_api_router_endpoints(client):
     assert unauth_resp.status_code == 401
 
 def test_honeypot_event_detail_by_id_and_missing_event():
-    from datetime import datetime
+    from datetime import datetime, timezone
     from backend.database.session import SessionLocal
     from backend.tests.conftest import create_test_auth_client
 
@@ -146,7 +146,7 @@ def test_honeypot_event_detail_by_id_and_missing_event():
                 payload="username=admin' OR '1'='1",
                 user_agent="PytestClient/1.0",
                 sensor_id="HTTP Honeypot",
-                created_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc).replace(tzinfo=None)
             )
             db.add(test_event)
             db.commit()
