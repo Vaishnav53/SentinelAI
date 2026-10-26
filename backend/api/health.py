@@ -18,10 +18,12 @@ def check_db_readiness(response: Response, db: Session):
         }
     except Exception as e:
         response.status_code = 503
+        is_prod = settings.APP_ENV in ("production", "prod")
+        error_msg = "Database connection unavailable" if is_prod else str(e)
         return {
             "status": "NOT_READY",
             "database": "DISCONNECTED",
-            "error": str(e),
+            "error": error_msg,
             "environment": settings.APP_ENV,
             "version": "0.1.0"
         }
@@ -51,7 +53,9 @@ def get_services_health(response: Response, db: Session = Depends(get_db)):
         db_status = ServiceStatusDetail(status="ONLINE", details="Connected successfully")
     except Exception as e:
         response.status_code = 503
-        db_status = ServiceStatusDetail(status="OFFLINE", details=f"Database unreachable: {str(e)}")
+        is_prod = settings.APP_ENV in ("production", "prod")
+        details_msg = "Database connection unavailable" if is_prod else f"Database unreachable: {str(e)}"
+        db_status = ServiceStatusDetail(status="OFFLINE", details=details_msg)
         
     # 2. Groq AI Status Check
     groq_status = ServiceStatusDetail(
